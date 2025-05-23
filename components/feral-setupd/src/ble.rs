@@ -452,7 +452,7 @@ async fn get_relayer_info() -> Result<String, Box<dyn Error + Send + Sync>> {
     // miss the very first `relayer_configured` signal sent by `connectd`.
     println!("BLE: Preparing to wait for relayer topic");
     let recv_task = task::spawn_blocking(|| {
-        dbus_utils::receive(
+        dbus_utils::receive_signal(
             constant::DBUS_CONNECTD_OBJECT,
             constant::DBUS_CONNECTD_INTERFACE,
             constant::DBUS_EVENT_RELAYER_CONFIGURED,
@@ -463,7 +463,7 @@ async fn get_relayer_info() -> Result<String, Box<dyn Error + Send + Sync>> {
     // Now emit the `wifi_connected` event (this waits for its own ack).
     println!("BLE: Sending wifi_connected event");
     task::spawn_blocking(|| {
-        dbus_utils::send(
+        dbus_utils::send_signal(
             constant::DBUS_SETUPD_OBJECT,
             constant::DBUS_SETUPD_INTERFACE,
             constant::DBUS_EVENT_WIFI_CONNECTED,

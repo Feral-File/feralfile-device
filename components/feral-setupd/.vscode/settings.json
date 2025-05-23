@@ -3,10 +3,13 @@
     "connectd",
     "dbus",
     "feralfile",
+    "monitord",
     "nmcli",
     "QRCODE",
     "reqwest",
+    "SETUPD",
     "ssids",
+    "SYSMONITORD",
     "zbus"
   ]
 }

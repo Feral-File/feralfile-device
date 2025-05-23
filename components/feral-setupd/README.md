@@ -1,20 +1,22 @@
 # Flow
 
-- Startup
+```mermaid
+---
+config:
+  theme: mc
+  layout: dagre
+  look: neo
+title: Program state
+---
+stateDiagram
+  direction TB
+  [*] --> Startup
+  Startup --> QRCode:no cache, no internet
+  Startup --> QRCode:has cache, no internet
+  Startup --> Artwork:has cache, has internet
+  QRCode --> Artwork:connect wifi
+  QRCode --> Artwork:internet is available
+  QRCode --> Artwork:request to hide QRCode
+  Artwork --> QRCode:request to show QRCode
 
-  - Has topic id & location id cache => show daily
-  - Don't have topic id & location cache =>
-    - Broadcast bluetooth
-    - Show QRCode
-    - Setup wifi
-    - Receive topic id & location id
-    - Send to mobile + navigate to daily
-
-- While running
-  - Request to connect second device (from connectd)
-    - Broadcast bluetooth
-    - Show QRCode
-    - Send topic id & location id cache to mobile
-    - Show daily
-  - Request to show daily (from connectd)
-    - Show daily
+```

@@ -1,4 +1,5 @@
-use dbus::blocking::Connection;
+use dbus::arg::Append;
+use dbus::blocking::{BlockingSender, Connection};
 use dbus::channel::Sender;
 use dbus::message::Message;
 use std::error::Error;
@@ -14,7 +15,7 @@ pub type ListenCallback = Box<dyn Fn(Message) + Send + Sync>;
 /// whose member name is the original `member` plus `_ack`.
 /// If the ack is not received within `ACK_TIMEOUT`, the signal is resent.
 /// The operation is attempted up to `MAX_RETRIES` times.
-pub fn send(
+pub fn send_signal(
     object_path: &str,
     interface: &str,
     member: &str,
@@ -78,7 +79,7 @@ pub fn send(
 /// Waits up to `timeout_ms` milliseconds for a signal, immediately emits
 /// a `<member>_ack` signal back to the same object/interface, then returns
 /// the payload of the received message.
-pub fn receive(
+pub fn receive_signal(
     object_path: &str,
     interface: &str,
     member: &str,
@@ -155,7 +156,7 @@ fn receive_internal(
     Ok(msg)
 }
 
-pub fn listen(
+pub fn listen_for_signal(
     object_path: &str,
     interface: &str,
     member: &str,
@@ -190,4 +191,36 @@ pub fn listen(
             }
         }
     });
+}
+
+/// Sends a blocking D‑Bus method call and returns the reply `Message`.
+///
+/// * `destination` – well‑known or unique bus name of the service to call.
+/// * `object_path` – object path exposed by that service.
+/// * `interface` – interface that defines the method.
+/// * `member` – the method (member) name.
+/// * `payload` – single string argument to pass to the method.
+///
+/// The function waits up to `constant::DBUS_ACK_TIMEOUT` milliseconds for the
+/// reply and returns the raw `Message` so the caller can extract whatever
+/// return values it needs.
+pub fn call_method<T: Send + Sync + Append>(
+    destination: &str,
+    object_path: &str,
+    interface: &str,
+    member: &str,
+    payload: T,
+    timeout_ms: u64,
+) -> Result<Message, Box<dyn Error + Send + Sync>> {
+    // Establish a connection on the session bus
+    let conn = Connection::new_session()?;
+
+    // Build the method‑call message and attach the payload
+    let mut msg = Message::new_method_call(destination, object_path, interface, member)?;
+    msg = msg.append1(payload);
+
+    // Send the message and block until we get the reply (or timeout)
+    let reply = conn.send_with_reply_and_block(msg, Duration::from_millis(timeout_ms))?;
+
+    Ok(reply)
 }

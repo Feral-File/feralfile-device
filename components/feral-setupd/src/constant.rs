@@ -6,6 +6,7 @@ pub const TIMEZONE_CMD: &str = "/home/feralfile/scripts/feral-timesyncd.sh";
 pub const TIMEZONE_INSTRUCTION: &str = "set-time";
 pub const SSID_CACHE_TTL: u64 = 5 * 60 * 1000; // 5 minutes
 pub const BLE_SHUTDOWN_DELAY: u64 = 1000; // 1 second
+pub const NETWORK_CHANGED_DELAY: u64 = 1; // 1 millisecond
 
 // Bluetooth configuration
 pub const SERVICE_UUID: Uuid = Uuid::from_u128(0xf7826da64fa24e988024bc5b71e0893e_u128);
@@ -21,19 +22,27 @@ pub const DEVICE_ID_PREFIX: &str = "FF-X1-";
 // Chrome configuration
 pub const CDP_URL: &str = "http://127.0.0.1:9222/json";
 pub const CDP_ID_START: u64 = 1_000_000;
-pub const DAILY_URL: &str =
+pub const WEBAPP_URL: &str =
     "https://feat-handle-cdp-request.feralfile-display-prod.pages.dev?platform=ff-device";
 pub const QRCODE_URL_PREFIX: &str = "file:///opt/feral/ui/launcher/index.html?step=qr&device_id=";
 
 // D-Bus configuration
 pub const DBUS_SETUPD_OBJECT: &str = "/com/feralfile/setupd";
 pub const DBUS_CONNECTD_OBJECT: &str = "/com/feralfile/connectd";
+pub const DBUS_SYSMONITORD_OBJECT: &str = "/com/feralfile/sysmonitord";
+pub const DBUS_SYSMONITORD_DESTINATION: &str = "com.feralfile.sysmonitord";
+
 pub const DBUS_SETUPD_INTERFACE: &str = "com.feralfile.setupd.general";
 pub const DBUS_CONNECTD_INTERFACE: &str = "com.feralfile.connectd.general";
+pub const DBUS_SYSMONITORD_INTERFACE: &str = "com.feralfile.sysmonitord";
+
 pub const DBUS_EVENT_WIFI_CONNECTED: &str = "wifi_connected";
 pub const DBUS_EVENT_RELAYER_CONFIGURED: &str = "relayer_configured";
 pub const DBUS_EVENT_QRCODE_SWITCH: &str = "show_pairing_qr_code";
+pub const DBUS_CONNECTIVITY_METHOD: &str = "GetConnectivityStatus";
+
 pub const DBUS_CONNECTD_TIMEOUT: u64 = 30 * 1000; // 30 seconds
 pub const DBUS_MAX_RETRIES: usize = 6;
 pub const DBUS_ACK_TIMEOUT: u64 = 5 * 1000; // 5 seconds
+pub const DBUS_INTERNET_CHECK_TIMEOUT: u64 = 5 * 1000; // 5 seconds
 pub const DBUS_LISTEN_WAKE_UP_INTERVAL: u64 = 1000; // 1 second

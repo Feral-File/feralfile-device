@@ -8,6 +8,11 @@ sync-connectd:
 	@echo "📡 Syncing connectd..."
 	@./scripts/sync-to-x4.sh ../feral-connectd /home/feralfile/feral-connectd
 
+.PHONY: sync-sys-monitord
+sync-sys-monitord:
+	@echo "📡 Syncing sys-monitord..."
+	@./scripts/sync-to-x4.sh ../feral-sys-monitord /home/feralfile/feral-sys-monitord
+
 .PHONY: sync-launcher-ui
 sync-launcher-ui:
 	@echo "📡 Syncing launcher-ui..."
