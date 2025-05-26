@@ -538,10 +538,35 @@ func (c *CommandHandler) handleMouseMoveEvent(ctx context.Context, args []byte) 
 	// Convert relative positions to absolute positions
 	absolutePositions := make([]map[string]float64, 0, len(cursorArgs.CursorOffsets))
 
-	for _, offset := range cursorArgs.CursorOffsets {
-		// Update cursor position with the relative offset
-		c.cursorPositionX += (offset.DX * c.movingScaleFactor)
-		c.cursorPositionY += (offset.DY * c.movingScaleFactor)
+	for i, offset := range cursorArgs.CursorOffsets {
+		// Calculate the magnitude of this offset
+		magnitude := math.Sqrt(offset.DX*offset.DX + offset.DY*offset.DY)
+
+		var clampedDX, clampedDY float64
+
+		// Only clamp obvious outliers (very large jumps)
+		if magnitude > 150 {
+			// This is likely a catch-up jump, clamp aggressively
+			maxOffset := 25.0
+			clampedDX = math.Max(-maxOffset, math.Min(maxOffset, offset.DX))
+			clampedDY = math.Max(-maxOffset, math.Min(maxOffset, offset.DY))
+
+			c.logger.Debug("Clamping outlier offset",
+				zap.Int("index", i),
+				zap.Float64("magnitude", magnitude),
+				zap.Float64("originalDX", offset.DX),
+				zap.Float64("originalDY", offset.DY),
+				zap.Float64("clampedDX", clampedDX),
+				zap.Float64("clampedDY", clampedDY))
+		} else {
+			// Normal movement, use original values
+			clampedDX = offset.DX
+			clampedDY = offset.DY
+		}
+
+		// Update cursor position with the offset
+		c.cursorPositionX += (clampedDX * c.movingScaleFactor)
+		c.cursorPositionY += (clampedDY * c.movingScaleFactor)
 
 		// Ensure position stays within screen bounds
 		c.cursorPositionX = math.Max(0, math.Min(c.cursorPositionX, c.screenWidth))
