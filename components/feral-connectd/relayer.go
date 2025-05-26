@@ -33,6 +33,7 @@ const (
 	RELAYER_CMD_SYS_METRICS          RelayerCmd = "deviceMetrics"
 	RELAYER_CMD_SCREEN_ROTATION      RelayerCmd = "rotate"
 	RELAYER_CMD_SHUTDOWN             RelayerCmd = "shutdown"
+	RELAYER_CMD_DEVICE_STATUS        RelayerCmd = "getDeviceStatus"
 )
 
 func (c RelayerCmd) CDPCmd() bool {
@@ -43,7 +44,8 @@ func (c RelayerCmd) CDPCmd() bool {
 		c != RELAYER_CMD_MOUSE_DRAG_EVENT &&
 		c != RELAYER_CMD_MOUSE_TAP_EVENT &&
 		c != RELAYER_CMD_SCREEN_ROTATION &&
-		c != RELAYER_CMD_SHUTDOWN
+		c != RELAYER_CMD_SHUTDOWN &&
+		c != RELAYER_CMD_DEVICE_STATUS
 }
 
 type RelayerPayload struct {
