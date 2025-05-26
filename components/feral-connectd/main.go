@@ -59,7 +59,7 @@ func main() {
 	}
 
 	// Load state
-	state, err := LoadState(logger)
+	_, err = LoadState(logger)
 	if err != nil {
 		logger.Fatal("Failed to load state", zap.Error(err))
 	}
@@ -82,7 +82,7 @@ func main() {
 	defer relayerClient.Close()
 
 	// Connect to Relayer if ready
-	if state.Relayer.IsReady() {
+	if RelayerChanReady() {
 		err = relayerClient.RetryableConnect(ctx)
 		if err != nil {
 			logger.Fatal("Failed to connect to relayer", zap.Error(err))
@@ -97,11 +97,6 @@ func main() {
 		logger.Fatal("DBus init failed", zap.Error(err))
 	}
 	defer dbusClient.Stop()
-
-	err = dbusClient.Export(NewConnectdDBus(ctx, relayerClient), DBUS_PATH, DBUS_INTERFACE)
-	if err != nil {
-		logger.Fatal("Failed to export DBus interface", zap.Error(err))
-	}
 
 	// Initialize command handler
 	cmd := NewCommandHandler(cdpClient, dbusClient, logger)

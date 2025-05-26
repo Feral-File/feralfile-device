@@ -1,13 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"go.uber.org/zap"
 )
 
@@ -18,21 +20,40 @@ const (
 var (
 	stateLock sync.Mutex
 	state     *State
-
-	errRelayerChanNotReady = errors.New("relayer channel is not ready")
 )
 
-type RelayerState struct {
-	TopicID string `json:"topicId"`
-}
-
-func (r *RelayerState) IsReady() bool {
-	return r.TopicID != ""
-}
-
 type State struct {
-	ConnectedDevice *Device       `json:"connectedDevice"`
-	Relayer         *RelayerState `json:"relayer"`
+	ConnectedDevice *Device `json:"connectedDevice"`
+	Relayer         struct {
+		TopicID string `json:"topicId"`
+	} `json:"relayer"`
+}
+
+func (c *State) WaitForRelayerChanReady(ctx context.Context) bool {
+	bo := backoff.NewExponentialBackOff()
+	bo.InitialInterval = 2 * time.Second
+	bo.Multiplier = 2
+	bo.RandomizationFactor = 0.5
+	bo.MaxElapsedTime = 30 * time.Second
+
+	err := backoff.Retry(func() error {
+		if RelayerChanReady() {
+			return nil
+		}
+		return fmt.Errorf("relayer channel is not ready")
+	}, bo)
+
+	return err == nil
+}
+
+func RelayerChanReady() bool {
+	stateLock.Lock()
+	defer stateLock.Unlock()
+
+	if state == nil {
+		return false
+	}
+	return state.Relayer.TopicID != ""
 }
 
 // LoadState loads state from file or creates a new one if file doesn't exist
