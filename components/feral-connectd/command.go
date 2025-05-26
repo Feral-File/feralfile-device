@@ -247,7 +247,16 @@ func (c *CommandHandler) handleScreenRotation(ctx context.Context, args []byte) 
 
 	c.screenInitialized = false
 
-	return CmdOK, nil
+	orientationReplyMsg := "landscape"
+	switch newRotation {
+	case "90":
+		orientationReplyMsg = "portraitReverse"
+	case "180":
+		orientationReplyMsg = "landscapeReverse"
+	case "270":
+		orientationReplyMsg = "portrait"
+	}
+	return map[string]string{"orientation": orientationReplyMsg}, nil
 }
 
 func (c *CommandHandler) handleKeyboardEvent(ctx context.Context, args []byte) (interface{}, error) {
