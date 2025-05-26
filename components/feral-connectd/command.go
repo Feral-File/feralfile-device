@@ -105,8 +105,8 @@ func (c *CommandHandler) Execute(ctx context.Context, cmd Command) (interface{},
 		return c.lastSysMetrics, nil
 	case RELAYER_CMD_SHUTDOWN:
 		result, err = c.shutdown(ctx)
-	case RELAYER_CMD_DEVICE_INFO:
-		result, err = c.deviceInfo(ctx, bytes)
+	case RELAYER_CMD_DEVICE_STATUS:
+		result, err = c.deviceStatus(ctx, bytes)
 	default:
 		return nil, fmt.Errorf("invalid command: %s", cmd)
 	}
@@ -153,7 +153,7 @@ func (c *CommandHandler) showPairingQRCode(ctx context.Context, args []byte) (in
 	return CmdOK, nil
 }
 
-func (c *CommandHandler) deviceInfo(ctx context.Context, args []byte) (interface{}, error) {
+func (c *CommandHandler) deviceStatus(ctx context.Context, args []byte) (interface{}, error) {
 	// Create response structure
 	response := struct {
 		ScreenRotation   string `json:"screenRotation,omitempty"`
@@ -204,10 +204,12 @@ func (c *CommandHandler) deviceInfo(ctx context.Context, args []byte) (interface
 
 		lines := strings.Split(string(output), "\n")
 		for _, line := range lines {
-			if strings.Contains(line, "wifi") {
-				parts := strings.Split(line, ":")
-				if len(parts) > 0 {
-					connectedWifi = parts[0]
+			parts := strings.Split(line, ":")
+			if len(parts) >= 3 && parts[2] == "activated" {
+				// Check if device name starts with 'wl' (wireless) or contains 'wifi'
+				deviceName := parts[1]
+				if strings.HasPrefix(deviceName, "wl") || strings.Contains(deviceName, "wifi") {
+					connectedWifi = parts[0] // Network name
 					break
 				}
 			}
