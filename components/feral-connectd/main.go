@@ -82,7 +82,7 @@ func main() {
 	defer relayerClient.Close()
 
 	// Connect to Relayer if ready
-	if state.RelayerChanReady() {
+	if state.Relayer.IsReady() {
 		err = relayerClient.RetryableConnect(ctx)
 		if err != nil {
 			logger.Fatal("Failed to connect to relayer", zap.Error(err))
@@ -97,6 +97,11 @@ func main() {
 		logger.Fatal("DBus init failed", zap.Error(err))
 	}
 	defer dbusClient.Stop()
+
+	err = dbusClient.Export(NewConnectdDBus(ctx, relayerClient), DBUS_PATH, DBUS_INTERFACE)
+	if err != nil {
+		logger.Fatal("Failed to export DBus interface", zap.Error(err))
+	}
 
 	// Initialize command handler
 	cmd := NewCommandHandler(cdpClient, dbusClient, logger)

@@ -50,38 +50,6 @@ func (m *Mediator) handleDBusSignal(
 	}
 
 	switch payload.Member {
-	case DBUS_SETUPD_EVENT_WIFI_CONNECTED:
-		// Connect to the relayer
-		err := m.relayer.RetryableConnect(ctx)
-		if err != nil {
-			m.logger.Error("Failed to connect to relayer", zap.Error(err))
-		}
-
-		// Wait for the relayer to be connected
-		if !GetState().WaitForRelayerChanReady(ctx) {
-			m.logger.Error("Relayer channel is not ready")
-			return nil, fmt.Errorf("relayer channel is not ready")
-		}
-
-		// Send the topicID to the setupd
-		relayerConf := GetState().Relayer
-		err = m.dbus.RetryableSend(ctx, godbus.DBusPayload{
-			Interface: DBUS_INTERFACE,
-			Path:      DBUS_PATH,
-			Member:    DBUS_SETUPD_EVENT_RELAYER_CONFIGURED,
-			Body: []interface{}{
-				relayerConf.TopicID,
-			},
-		})
-		if err != nil {
-			m.logger.Error("Failed to send DBus signal", zap.Error(err), zap.String("interface", DBUS_INTERFACE.String()), zap.String("path", DBUS_PATH.String()), zap.String("member", DBUS_SETUPD_EVENT_RELAYER_CONFIGURED.String()))
-			return nil, err
-		}
-
-		return []interface{}{
-			relayerConf.TopicID,
-		}, nil
-
 	case DBUS_SYS_MONITORD_EVENT_SYSMETRICS:
 		if len(payload.Body) != 1 {
 			m.logger.Error("Invalid number of arguments", zap.Int("expected", 1), zap.Int("actual", len(payload.Body)))
