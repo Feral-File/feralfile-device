@@ -26,6 +26,16 @@ class AnsiColors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+# Mapping of full file URLs to user-friendly names
+FILE_NAME_MAP = {
+    "file:///home/soaktest/36-point/index.html?edition_number=0&artwork_number=1&blockchain=bitmark#02_hex_hole_open": "36-point",
+    "file:///home/soaktest/e-volved-formula-23/index.html": "E-volved-formula-23",
+    "file:///home/soaktest/TransparentGrit/index.html": "TransparentGrit",
+    "file:///home/soaktest/uneasy-dream/index.html": "Uneasy-dream",
+    "file:///home/soaktest/autoplay_10bits.html": "MoMA Unsupervised 4K H.265 10 bits",
+    "file:///home/soaktest/autoplay_8bits.html": "MoMA Unsupervised 4K H.265 8 bits",
+}
+
 def get_color_for_value(value, high_is_bad=True, green_thresh=30, yellow_thresh=70):
     """Returns an ANSI color code based on value thresholds."""
     if USE_RICH: # Rich handles styling itself, this is for direct ANSI
@@ -71,6 +81,20 @@ def format_value_rich(value, unit="", high_is_bad=True, green_thresh=30, yellow_
     except ValueError:
         return Text(str(value) + unit)
 
+def format_duration(seconds):
+    seconds = int(seconds)
+    d = seconds // 86400
+    h = (seconds % 86400) // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    if d > 0:
+        return f"{d}d {h}h {m}m"
+    elif h > 0:
+        return f"{h}h {m}m"
+    elif m > 0:
+        return f"{m}m {s}s"
+    else:
+        return f"{s}s"
 
 def main_summary(json_file_path):
     try:
@@ -102,7 +126,7 @@ def main_summary(json_file_path):
         ("avg_dropped_frames_pct", "Drop Frame", "%", True, 5, 15),
         ("failures_cpu_overheat", "CPU Fail", "", True, 0, 0.5), # 0 is green, >0 is red
         ("failures_chromium_unresponsive", "Chr Fail", "", True, 0, 0.5),
-        ("actual_duration_vs_target_pct", "Run Time", "%", False, 98, 99.9), # Percentage of target duration achieved
+        ("actual_duration_pretty", "Run Time", "", False, 0, 0),
     ]
     
     # Prepare data for table and overall average calculation
@@ -115,7 +139,7 @@ def main_summary(json_file_path):
         
         # Shorten file URL
         file_url_full = res.get("file_url", "Unknown File")
-        file_data["file_url_short"] = file_url_full.split('/')[-1] if '/' in file_url_full else file_url_full
+        file_data["file_url_short"] = FILE_NAME_MAP.get(file_url_full, file_url_full.split('/')[-1])
 
         file_data["avg_cpu_chromium_pct"] = metrics.get("cu", 0.0)
         file_data["avg_cpu_system_pct"] = metrics.get("su", 0.0)
@@ -132,9 +156,7 @@ def main_summary(json_file_path):
         file_data["failures_chromium_unresponsive"] = failures.get("chromium_unresponsive", 0)
 
         actual_dur = res.get("actual_duration_seconds", 0)
-        target_dur = res.get("target_duration_seconds", 1) # Avoid div by zero
-        file_data["actual_duration_vs_target_pct"] = (actual_dur / target_dur * 100) if target_dur > 0 else 0
-
+        file_data["actual_duration_pretty"] = format_duration(actual_dur)
 
         all_files_data.append(file_data)
 
@@ -250,7 +272,6 @@ def main_summary(json_file_path):
     failure_summary_title = "\nTotal Failures Summary:"
     failure_summary_cpu = f"CPU Overheats: {total_cpu_fails}"
     failure_summary_chrome = f"Chromium Unresponsive: {total_chrome_fails}"
-
     if USE_RICH:
         console.print(Align.center(Text(failure_summary_title, style="bold yellow")))
         console.print(Align.center(Text(failure_summary_cpu, style="red" if total_cpu_fails > 0 else "green")))

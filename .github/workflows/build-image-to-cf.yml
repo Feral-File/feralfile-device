@@ -113,6 +113,7 @@ jobs:
           if [ "${{ inputs.soak-test }}" == "false" ]; then
             rm -rf /build/archiso-radxa-x4/airootfs/home/soaktest
             rm -f /build/archiso-radxa-x4/efiboot/loader/entries/archiso-x86_64-linux-soak-test.conf
+            rm -f /build/archiso-radxa-x4/airootfs/usr/local/bin/websocat
           else 
             cat >> /build/archiso-radxa-x4/packages.x86_64 << EOF
           # soak test tools

@@ -7,7 +7,15 @@
 # Logs average metrics and failures to a JSON file.
 # Handles CPU overheat and Chromium unresponsiveness by restarting Chromium.
 ################################################################################
-set -uo pipefail # -e off, script handles errors
+set -euo pipefail
+
+stop_requested=0
+handle_signal() {
+  stop_requested=1
+  log_warn "⏹  Signal received, cleaning up..."
+  kill_chromium
+}
+trap handle_signal INT TERM HUP
 
 # --- Configuration ------------------------------------------------------------
 # !!! IMPORTANT: UPDATE THESE PATHS !!!
@@ -21,13 +29,13 @@ FILES_TO_TEST=(
 )
 
 RESULTS_JSON_FILE="soak_results.json"
-SUMMARY_SCRIPT_PATH="./summary.py" # Path to your Python summary script
+SUMMARY_SCRIPT_PATH="/home/soaktest/summary.py" # Path to your Python summary script
 
-FILE_TARGET_DURATION_SECONDS=$((15)) # 5 hours per file
-#FILE_TARGET_DURATION_SECONDS=$((2 * 60)) # For testing: 2 minutes per file
+FILE_TARGET_DURATION_SECONDS=$((5 * 60 * 60)) # 5 hours per file
+#FILE_TARGET_DURATION_SECONDS=$((3 * 60)) # For testing: 3 minutes per file
 
 LOOP_SAMPLING_DELAY_SECONDS=5       # Interval for collecting metrics
-CHROMIUM_START_DELAY_SECONDS=10     # Time to wait for Chromium to launch and CDP to be ready
+CHROMIUM_START_DELAY_SECONDS=5     # Time to wait for Chromium to launch and CDP to be ready
 CHROMIUM_CMD="chromium"             # Command to launch Chromium
 
 DEBUG_PORT=9222
@@ -86,10 +94,8 @@ change_url_cdp() {
     log_error "CDP: Could not get WebSocket URL to change URL."
     return 1
   fi
-  local cdp_cmd_id
-  cdp_cmd_id=$(date +%s%N) # Unique ID for the command
   log_info "CDP: Navigating to $new_url"
-  printf '{"id":%s,"method":"Page.navigate","params":{"url":"%s"}}\n' "$cdp_cmd_id" "$new_url" |
+  printf '{"id":100,"method":"Page.navigate","params":{"url":"%s"}}\n' "$new_url" |
     websocat -n1 "$ws" >/dev/null
   sleep 5 # Give page time to start loading
   return 0
@@ -420,25 +426,18 @@ start_chromium() {
 kill_chromium() {
   if [ -n "$ROOT_PID" ] && kill -0 "$ROOT_PID" 2>/dev/null; then
     log_info "Stopping Chromium (PID $ROOT_PID)..."
-    # Try to close gracefully via CDP first (optional, can be complex)
-    # For simplicity, directly killing:
-    kill -TERM "$ROOT_PID" &>/dev/null # SIGTERM first
+    kill -TERM "$ROOT_PID" &>/dev/null || true
     sleep 2
-    if kill -0 "$ROOT_PID" 2>/dev/null; then
-      kill -KILL "$ROOT_PID" &>/dev/null # SIGKILL if still alive
-    fi
-    wait "$ROOT_PID" 2>/dev/null # Wait for process to terminate
+    kill -0 "$ROOT_PID" 2>/dev/null && kill -KILL "$ROOT_PID" &>/dev/null || true
+    wait "$ROOT_PID" 2>/dev/null || true
   fi
-  # Clean up any children that might have been left (orphaned)
+
   if [ -n "$C_PIDS" ]; then
-      for pid_to_kill in $C_PIDS; do
-          if kill -0 "$pid_to_kill" 2>/dev/null; then
-              kill -KILL "$pid_to_kill" &>/dev/null
-          fi
-      done
+    for pid_to_kill in $C_PIDS; do
+      kill -0 "$pid_to_kill" 2>/dev/null && kill -KILL "$pid_to_kill" &>/dev/null || true
+    done
   fi
-  # Additional cleanup: find processes by debug port and kill them
-  lsof -ti :$DEBUG_PORT 2>/dev/null | xargs -r kill -9 &>/dev/null
+  lsof -ti :$DEBUG_PORT 2>/dev/null | xargs -r kill -9 &>/dev/null || true
 
   ROOT_PID=""
   C_PIDS=""
@@ -494,12 +493,9 @@ log_file_results_to_json() {
 
 # --- Main Test Logic ----------------------------------------------------------
 main() {
-  trap 'kill_chromium; exit 0' SIGINT
-
   if ! command -v jq &>/dev/null; then log_error "jq is not installed. Exiting."; exit 1; fi
   if ! command -v "$CHROMIUM_CMD" &>/dev/null; then log_error "$CHROMIUM_CMD is not installed or not in PATH. Exiting."; exit 1; fi
   if ! command -v websocat &>/dev/null; then log_error "websocat is not installed. Exiting."; exit 1; fi
-  if [ ! -f "$SUMMARY_SCRIPT_PATH" ]; then log_warn "Summary script $SUMMARY_SCRIPT_PATH not found. Will skip summary."; fi
   if ! command -v sigrok-cli &>/dev/null; then
     log_warn "sigrok-cli not found. External power meter readings will be zero."
   elif [ ! -e /dev/ttyACM0 ]; then # Adjust device path if needed
@@ -511,10 +507,6 @@ main() {
 
   # Start Chromium once, initially with about:blank or first file
   local initial_url="about:blank"
-  if [ ${#FILES_TO_TEST[@]} -gt 0 ]; then
-    initial_url="${FILES_TO_TEST[0]}" # Start with the first test file directly
-  fi
-
   if ! start_chromium "$initial_url"; then
     log_error "Initial Chromium launch failed. Exiting."
     exit 1
@@ -524,6 +516,7 @@ main() {
   overall_start_time=$(date +%s)
 
   for current_file_url in "${FILES_TO_TEST[@]}"; do
+    if (( stop_requested == 1 )); then break; fi
     local current_file_basename
     current_file_basename=$(basename "$current_file_url")
     log_info "--- Starting Test for: $current_file_basename ---"
@@ -565,7 +558,7 @@ main() {
     consecutive_cdp_failures_file=0
 
     # Inner loop for the current file's duration
-    while true; do
+    while (( stop_requested == 0 )); do
       local current_loop_time elapsed_this_file
       current_loop_time=$(date +%s)
       elapsed_this_file=$((current_loop_time - file_run_start_time))
@@ -586,6 +579,7 @@ main() {
         fi
         last_cdp_ok_time=$(date +%s)
         consecutive_cdp_failures_file=0
+        if (( stop_requested == 1 )); then break; fi
         sleep "$LOOP_SAMPLING_DELAY_SECONDS" # Wait before next cycle
         continue
       fi
@@ -619,6 +613,7 @@ main() {
         fi
         last_cdp_ok_time=$(date +%s)
         consecutive_cdp_failures_file=0
+        if (( stop_requested == 1 )); then break; fi
         sleep "$LOOP_SAMPLING_DELAY_SECONDS"
         continue
       fi
@@ -635,6 +630,7 @@ main() {
         fi
         last_cdp_ok_time=$(date +%s)
         consecutive_cdp_failures_file=0
+        if (( stop_requested == 1 )); then break; fi
         sleep "$LOOP_SAMPLING_DELAY_SECONDS"
         continue
       fi
@@ -666,7 +662,7 @@ main() {
       sum_metrics_file[su]=$(bc -l <<<"${sum_metrics_file[su]}+$sys_cpu_usage")
       sum_metrics_file[cf]=$((sum_metrics_file[cf] + cpu_f))
       sum_metrics_file[ct]=$(bc -l <<<"${sum_metrics_file[ct]}+$cpu_t")
-      sum_metrics_file[gu]=$(bc -l <<<"${sum_metrics_file[gu}+$gpu_b")
+      sum_metrics_file[gu]=$(bc -l <<<"${sum_metrics_file[gu]}+$gpu_b")
       sum_metrics_file[gf]=$((sum_metrics_file[gf] + gpu_f))
       sum_metrics_file[cm]=$((sum_metrics_file[cm] + ch_mem_mb))
       sum_metrics_file[cmp]=$(bc -l <<<"${sum_metrics_file[cmp]}+$ch_mem_pct")
@@ -694,7 +690,7 @@ main() {
       if (( samples_count_file % 12 == 0 )); then # Print every minute (12 * 5s = 60s)
          log_info "Status for $current_file_basename (Sample $samples_count_file): CPU(Chr):$(pct $ch_cpu_usage) Sys:$(pct $sys_cpu_usage) Freq:${cpu_f}MHz Temp:$(tmp $cpu_t) | GPU Busy:$(pct $gpu_b) Freq:${gpu_f}MHz | FPS:$fps_val"
       fi
-      
+      if (( stop_requested == 1 )); then break; fi
       sleep "$LOOP_SAMPLING_DELAY_SECONDS"
     done # End of inner loop for file duration
 
@@ -742,22 +738,6 @@ main() {
   overall_end_time=$(date +%s)
   overall_duration_s=$((overall_end_time - overall_start_time))
   log_info "All soak tests finished. Total script duration: $((overall_duration_s / 60)) minutes ($overall_duration_s seconds)."
-
-  # --- Call Python Summary Script ---
-  if [ -f "$SUMMARY_SCRIPT_PATH" ] && command -v python3 &>/dev/null; then
-    log_info "Generating summary report using $SUMMARY_SCRIPT_PATH..."
-    python3 "$SUMMARY_SCRIPT_PATH" "$RESULTS_JSON_FILE"
-  else
-    log_warn "Could not generate summary. Python3 or $SUMMARY_SCRIPT_PATH not found."
-    log_info "Results are saved in $RESULTS_JSON_FILE"
-  fi
-
-  # --- Prompt for Shutdown ---
-  echo ""
-  read -n 1 -s -r -p "All tests finished. Results saved to $RESULTS_JSON_FILE. Press any key to shutdown the system..."
-  echo # Newline after keypress
-  log_info "Shutting down system now..."
-  sudo shutdown -h now
 }
 
 # Run main function
