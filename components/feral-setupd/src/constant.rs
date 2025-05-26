@@ -44,5 +44,5 @@ pub const DBUS_CONNECTIVITY_METHOD: &str = "GetConnectivityStatus";
 pub const DBUS_CONNECTD_TIMEOUT: u64 = 30 * 1000; // 30 seconds
 pub const DBUS_MAX_RETRIES: usize = 6;
 pub const DBUS_ACK_TIMEOUT: u64 = 5 * 1000; // 5 seconds
-pub const DBUS_INTERNET_CHECK_TIMEOUT: u64 = 5 * 1000; // 5 seconds
+pub const DBUS_INTERNET_CHECK_TIMEOUT: u64 = 1 * 1000; // 3 seconds
 pub const DBUS_LISTEN_WAKE_UP_INTERVAL: u64 = 1000; // 1 second

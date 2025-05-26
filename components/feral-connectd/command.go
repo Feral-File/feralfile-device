@@ -86,19 +86,9 @@ func (c *CommandHandler) Execute(ctx context.Context, cmd Command) (interface{},
 	case RELAYER_CMD_MOUSE_TAP_EVENT:
 		result, err = c.handleMouseTapEvent(ctx, bytes)
 	case RELAYER_CMD_SYS_METRICS:
-		c.Lock()
-		defer c.Unlock()
-		var sysMetrics map[string]interface{}
-		if c.lastSysMetrics != nil {
-			err = json.Unmarshal(c.lastSysMetrics, &sysMetrics)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal last sys metrics: %s", err)
-			}
-		}
-		return sysMetrics, nil
+		result, err = c.getSysMetrics()
 	case RELAYER_CMD_SCREEN_ROTATION:
 		result, err = c.handleScreenRotation(ctx, bytes)
-		return c.lastSysMetrics, nil
 	case RELAYER_CMD_SHUTDOWN:
 		result, err = c.shutdown(ctx)
 	default:
@@ -519,4 +509,19 @@ func (c *CommandHandler) shutdown(ctx context.Context) (interface{}, error) {
 	}
 
 	return CmdOK, nil
+}
+
+func (c *CommandHandler) getSysMetrics() (interface{}, error) {
+	c.Lock()
+	defer c.Unlock()
+
+	var sysMetrics map[string]interface{}
+	if c.lastSysMetrics != nil {
+		err := json.Unmarshal(c.lastSysMetrics, &sysMetrics)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal last sys metrics: %s", err)
+		}
+	}
+
+	return sysMetrics, nil
 }
