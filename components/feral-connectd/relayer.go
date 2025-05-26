@@ -126,7 +126,7 @@ func (r *RelayerClient) RetryableConnect(ctx context.Context) error {
 		attempts++
 		r.logger.Info("Connecting to Relayer", zap.String("endpoint", r.config.Endpoint), zap.Int("attempts", attempts))
 
-		err := r.connect(ctx)
+		err := r.Connect(ctx)
 		if err == errRelayerAlreadyConnected {
 			return nil
 		}
@@ -146,8 +146,8 @@ func (r *RelayerClient) RetryableConnect(ctx context.Context) error {
 	return nil
 }
 
-// connect connects to the Relayer server and listens for messages
-func (r *RelayerClient) connect(ctx context.Context) error {
+// Connect connects to the Relayer server and listens for messages
+func (r *RelayerClient) Connect(ctx context.Context) error {
 	// Ensure the relayer is not connected
 	r.Lock()
 	if r.conn != nil {
@@ -163,16 +163,16 @@ func (r *RelayerClient) connect(ctx context.Context) error {
 		connectURL += fmt.Sprintf("/api/connection?apiKey=%s", r.config.APIKey)
 	}
 
-	if RelayerChanReady() {
-		connectURL += fmt.Sprintf("&topicID=%s", GetState().Relayer.TopicID)
+	topicID := GetState().Relayer.TopicID
+	if topicID != "" {
+		connectURL += fmt.Sprintf("&topicID=%s", topicID)
 	}
 
 	dialer := websocket.DefaultDialer
 	dialer.HandshakeTimeout = 5 * time.Second
 
 	r.Lock()
-	conn, _, err := dialer.Dial(connectURL, nil)
-
+	conn, _, err := dialer.DialContext(ctx, connectURL, nil)
 	if err != nil {
 		r.Unlock()
 		return err
