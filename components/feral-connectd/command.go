@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
@@ -101,6 +104,8 @@ func (c *CommandHandler) Execute(ctx context.Context, cmd Command) (interface{},
 		return c.lastSysMetrics, nil
 	case RELAYER_CMD_SHUTDOWN:
 		result, err = c.shutdown(ctx)
+	case RELAYER_CMD_DEVICE_INFO:
+		result, err = c.deviceInfo(ctx, bytes)
 	default:
 		return nil, fmt.Errorf("invalid command: %s", cmd)
 	}
@@ -145,6 +150,123 @@ func (c *CommandHandler) showPairingQRCode(ctx context.Context, args []byte) (in
 			Body:      []interface{}{cmdArgs.Show},
 		})
 	return CmdOK, nil
+}
+
+func (c *CommandHandler) deviceInfo(ctx context.Context, args []byte) (interface{}, error) {
+	// Create response structure
+	response := struct {
+		ScreenRotation   string `json:"screenRotation,omitempty"`
+		ConnectedWifi    string `json:"connectedWifi,omitempty"`
+		InstalledVersion string `json:"installedVersion,omitempty"`
+		LatestVersion    string `json:"latestVersion,omitempty"`
+	}{}
+
+	// Get screen rotation
+	configPath := "/home/feralfile/.config/screen-orientation"
+	configData, err := os.ReadFile(configPath)
+	if err == nil && len(configData) > 0 {
+		savedRotation := strings.TrimSpace(string(configData))
+		orientationMap := map[string]string{
+			"normal": "landscape",
+			"90":     "portraitReverse",
+			"180":    "landscapeReverse",
+			"270":    "portrait",
+		}
+		if orientation, ok := orientationMap[savedRotation]; ok {
+			response.ScreenRotation = orientation
+		}
+	}
+
+	// Get WiFi information
+	cmd := exec.CommandContext(ctx, "nmcli", "-t", "-f", "NAME,DEVICE,STATE", "connection", "show", "--active")
+	output, err := cmd.Output()
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "wifi") {
+				parts := strings.Split(line, ":")
+				if len(parts) > 0 {
+					response.ConnectedWifi = parts[0]
+					break
+				}
+			}
+		}
+	}
+
+	// Get installed version and other config from x1-config.json
+	configFile := "/home/feralfile/x1-config.json"
+	configBytes, err := os.ReadFile(configFile)
+	if err != nil {
+		return response, nil
+	}
+
+	var config struct {
+		Version          string `json:"version"`
+		Branch           string `json:"branch"`
+		DistributionAcc  string `json:"distribution_acc"`
+		DistributionPass string `json:"distribution_pass"`
+	}
+
+	if err := json.Unmarshal(configBytes, &config); err != nil {
+		return response, nil
+	}
+
+	response.InstalledVersion = config.Version
+
+	// Get latest version from API using the same approach as feral-updater.sh
+	if config.Branch == "" || config.DistributionAcc == "" || config.DistributionPass == "" {
+		return response, nil
+	}
+
+	// Nested function to fetch latest version
+	fetchLatestVersion := func(branch, account, pass string) (string, error) {
+		otaAPI := "https://feralfile-device-distribution.bitmark-development.workers.dev/api/latest"
+		apiURL := fmt.Sprintf("%s/%s", otaAPI, branch)
+
+		// Create HTTP client with 2-second timeout
+		client := &http.Client{
+			Timeout: 2 * time.Second,
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+		if err != nil {
+			return "", err
+		}
+
+		// Set basic auth
+		req.SetBasicAuth(account, pass)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("API returned status %d", resp.StatusCode)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", err
+		}
+
+		var apiResponse struct {
+			LatestVersion string `json:"latest_version"`
+		}
+
+		if err := json.Unmarshal(body, &apiResponse); err != nil {
+			return "", err
+		}
+
+		return apiResponse.LatestVersion, nil
+	}
+
+	if latestVersion, err := fetchLatestVersion(config.Branch, config.DistributionAcc, config.DistributionPass); err == nil {
+		response.LatestVersion = latestVersion
+	}
+
+	return response, nil
 }
 
 func (c *CommandHandler) handleScreenRotation(ctx context.Context, args []byte) (interface{}, error) {
