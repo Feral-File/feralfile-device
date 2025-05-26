@@ -38,16 +38,49 @@ restart-bluetooth:
 	@echo "🔄 Restarting bluetooth service..."
 	@./scripts/restart-bluetooth.sh
 
-LOGFILE  := ./app.log
-PIDFILE  := ./app.pid
-.PHONY: start-silent
-start-silent:
-	@cd /home/feralfile/feral-connectd && go build && nohup ./feral-connectd >$(LOGFILE) 2>&1 & echo $$! > $(PIDFILE)
-	@echo "Started feral-connectd; pid=$$(cat $(PIDFILE))"
-	@cd /home/feralfile/feral-setupd && cargo build && nohup ./target/debug/feral-setupd >$(LOGFILE) 2>&1 & echo $$! > $(PIDFILE)
-	@echo "Started feral-setupd; pid=$$(cat $(PIDFILE))"
+# ───────────────────────────────────────────────────────────────────────────────
+# Paths
+ROOT             := /home/feralfile
+CONNECTD_DIR     := $(ROOT)/feral-connectd
+SETUPD_DIR       := $(ROOT)/feral-setupd
+MONITORD_DIR     := $(ROOT)/feral-sys-monitord
+LOGDIR           := $(CURDIR)/logs
 
-.PHONY: stop-silent
-stop-silent:
-	@cd /home/feralfile/feral-connectd && kill $$(cat $(PIDFILE))
-	@cd /home/feralfile/feral-setupd && kill $$(cat $(PIDFILE))
+# ───────────────────────────────────────────────────────────────────────────────
+create-log-dir:
+	@mkdir -p $(LOGDIR)
+
+start-silent-monitord: create-log-dir
+	@echo "Building & starting feral-sys-monitord…"
+	@cd $(MONITORD_DIR) && go build
+	@nohup $(MONITORD_DIR)/feral-sys-monitord \
+	    >>$(LOGDIR)/feral-sys-monitord.log 2>&1 & \
+	    echo "  ↳ PID $$!"
+
+start-silent-connectd: create-log-dir
+	@echo "Building & starting feral-connectd…"
+	@cd $(CONNECTD_DIR) && go build
+	@nohup $(CONNECTD_DIR)/feral-connectd \
+	    >>$(LOGDIR)/feral-connectd.log 2>&1 & \
+	    echo "  ↳ PID $$!"
+
+start-silent-setupd: create-log-dir
+	@echo "Building & starting feral-setupd…"
+	@cd $(SETUPD_DIR) && cargo build --quiet
+	@nohup $(SETUPD_DIR)/target/debug/feral-setupd \
+	    >>$(LOGDIR)/feral-setupd.log 2>&1 & \
+	    echo "  ↳ PID $$!"
+
+start-silent-all: create-log-dir
+	make start-silent-monitord
+	make start-silent-connectd
+	@sleep 2
+	make start-silent-setupd
+
+stop-silent-all:
+	@echo "Stopping all feral-* processes…"
+	@pkill -f feral- || true
+	@echo "Done."
+
+.PHONY: start-silent-monitord start-silent-connectd start-silent-setupd
+.PHONY: start-silent-all stop-silent-all

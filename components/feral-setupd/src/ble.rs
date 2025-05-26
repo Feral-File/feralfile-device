@@ -4,7 +4,7 @@ use crate::encoding;
 use crate::wifi_utils;
 use crate::wifi_utils::SSIDsCacher;
 use bluer::{
-    Session,
+    Adapter, Session,
     adv::Advertisement,
     adv::AdvertisementHandle,
     gatt::local::{
@@ -38,22 +38,23 @@ pub type ConnectWifiCallback = Option<Box<dyn Fn(&str) + Send + Sync>>;
 pub type GetInfoCallback = Option<Box<dyn Fn() -> Vec<String> + Send + Sync>>;
 
 #[derive(Default)]
-struct BLEState {
+struct Inner {
     device_id: String,
     advertised: bool,
+    adapter: Option<Adapter>,
     adv_handle: Option<AdvertisementHandle>,
     app_handle: Option<ApplicationHandle>,
 }
 
 pub struct BLE {
-    state: Mutex<BLEState>,
+    inner: Mutex<Inner>,
 }
 
 impl BLE {
     pub fn new() -> Self {
         let device_id = encoding::get_device_id();
         Self {
-            state: Mutex::new(BLEState {
+            inner: Mutex::new(Inner {
                 device_id,
                 ..Default::default()
             }),
@@ -67,8 +68,8 @@ impl BLE {
         get_info_cb: GetInfoCallback,
         ssids_cacher: Arc<SSIDsCacher>,
     ) -> Result<(), Box<dyn Error>> {
-        let mut st = self.state.lock().await;
-        if st.advertised {
+        let mut inner = self.inner.lock().await;
+        if inner.advertised {
             return Ok(());
         }
 
@@ -79,17 +80,17 @@ impl BLE {
         println!(
             "BLE: Adapter {} powered on for {}",
             adapter.name(),
-            st.device_id
+            inner.device_id
         );
 
         // Start advertising our service UUID
         let adv = Advertisement {
             service_uuids: vec![constant::SERVICE_UUID].into_iter().collect(),
             discoverable: Some(true),
-            local_name: Some(st.device_id.clone()),
+            local_name: Some(inner.device_id.clone()),
             ..Default::default()
         };
-        st.adv_handle = Some(adapter.advertise(adv).await?);
+        let adv_handle = adapter.advertise(adv).await?;
         println!("BLE: Advertising GATT service {}", constant::SERVICE_UUID);
 
         // Group into a GATT service and register it
@@ -106,37 +107,55 @@ impl BLE {
             services: vec![svc],
             ..Default::default()
         };
-        st.app_handle = Some(adapter.serve_gatt_application(app).await?);
+        let app_handle = adapter.serve_gatt_application(app).await?;
         println!("BLE: GATT app registered; ready to receive commands");
 
-        st.advertised = true;
+        inner.adapter = Some(adapter);
+        inner.adv_handle = Some(adv_handle);
+        inner.app_handle = Some(app_handle);
+        inner.advertised = true;
         Ok(())
     }
 
     pub async fn stop(&self) -> Result<(), Box<dyn Error>> {
-        let (adv, app) = {
-            let mut st = self.state.lock().await;
-            if !st.advertised {
+        let (adv, app, adapter) = {
+            let mut inner = self.inner.lock().await;
+            if !inner.advertised {
                 return Ok(());
             }
-            st.advertised = false;
-            (st.adv_handle.take(), st.app_handle.take())
+            inner.advertised = false;
+            (
+                inner.adv_handle.take(),
+                inner.app_handle.take(),
+                inner.adapter.take(),
+            )
         };
-        drop(app);
-        if adv.is_some() {
+        // Disconnect all devices (to make sure BlueZ doesn't block adv unregistration)
+        if let Some(adapter) = adapter {
+            for addr in adapter.device_addresses().await? {
+                println!("BLE: Disconnecting device {:?}", addr);
+                let dev = adapter.device(addr)?;
+                println!(
+                    "BLE: Device {:?} is connected: {:?}",
+                    addr,
+                    dev.is_connected().await?
+                );
+                if dev.is_connected().await? {
+                    let _ = dev.disconnect().await; // ignore errors
+                }
+            }
             drop(adv);
-            // BlueRust needs a delay to ask bluez to stop advertising
+            drop(app);
             tokio::time::sleep(std::time::Duration::from_millis(
                 constant::BLE_SHUTDOWN_DELAY,
             ))
             .await;
         }
-
         Ok(())
     }
 
     pub async fn get_device_id(&self) -> String {
-        let st = self.state.lock().await;
+        let st = self.inner.lock().await;
         st.device_id.clone()
     }
 
