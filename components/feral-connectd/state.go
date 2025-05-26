@@ -50,10 +50,7 @@ func LoadState(logger *zap.Logger) (*State, error) {
 	if os.IsNotExist(err) || len(data) == 0 {
 		// File doesn't exist, return empty state
 		logger.Info("State file does not exist, returning empty state object")
-		return &State{
-			Relayer:         &RelayerState{},
-			ConnectedDevice: &Device{},
-		}, nil
+		return &State{}, nil
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to read state file: %w", err)
 	}
@@ -105,10 +102,7 @@ func GetState() *State {
 	defer stateLock.Unlock()
 
 	if state == nil {
-		state = &State{
-			Relayer:         &RelayerState{},
-			ConnectedDevice: &Device{},
-		}
+		state = &State{}
 	}
 	return state
 }
