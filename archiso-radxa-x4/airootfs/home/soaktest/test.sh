@@ -105,9 +105,8 @@ get_cpu_usages() {
       for pid in $C_PIDS; do
         if [ -r "/proc/$pid/stat" ]; then
           local t
-          t=$(awk '{print $14 + $15}' "/proc/$pid/stat" 2>/dev/null)
-          t=${t:-0}
-          sum_pids_time=$((sum_pids_time + (t:-0) ))
+          t=$(awk '{print $14 + $15}' "/proc/$pid/stat")
+          sum_pids_time=$((sum_pids_time + t ))
         fi
       done
     fi
@@ -364,7 +363,7 @@ calc_1pct_low_fps_for_file() {
 
   local sum_low_fps=0
   for (( i=0; i<n_low; i++ )); do
-    sum_low_fps=$(bc -l <<< "$sum_low_fps + ${sorted_fps[i]:-0}")
+    sum_low_fps=$(bc -l <<< "$sum_low_fps + ${sorted_fps[i]}")
   done
 
   if (( n_low > 0 )); then
@@ -663,31 +662,31 @@ main() {
       read pm_v pm_i pm_w pm_wpct <<< "$(get_power_meter_readings)"
 
       # --- Accumulate Data ---
-      sum_metrics_file[cu]=$(bc -l <<<"${sum_metrics_file[cu]:-0}+$ch_cpu_usage")
-      sum_metrics_file[su]=$(bc -l <<<"${sum_metrics_file[su]:-0}+$sys_cpu_usage")
-      sum_metrics_file[cf]=$((sum_metrics_file[cf]:-0 + cpu_f))
-      sum_metrics_file[ct]=$(bc -l <<<"${sum_metrics_file[ct]:-0}+$cpu_t")
-      sum_metrics_file[gu]=$(bc -l <<<"${sum_metrics_file[gu]:-0}+$gpu_b")
-      sum_metrics_file[gf]=$((sum_metrics_file[gf]:-0 + gpu_f))
-      sum_metrics_file[cm]=$((sum_metrics_file[cm]:-0 + ch_mem_mb))
-      sum_metrics_file[cmp]=$(bc -l <<<"${sum_metrics_file[cmp]:-0}+$ch_mem_pct")
-      sum_metrics_file[sm]=$((sum_metrics_file[sm]:-0 + sys_mem_used_mb))
-      sum_metrics_file[smp]=$(bc -l <<<"${sum_metrics_file[smp]:-0}+$sys_mem_pct")
-      sum_metrics_file[fps]=$(bc -l <<<"${sum_metrics_file[fps]:-0}+$fps_val")
-      sum_metrics_file[ju]=$(bc -l <<<"${sum_metrics_file[ju]:-0}+$js_used_mb")
-      sum_metrics_file[jt]=$(bc -l <<<"${sum_metrics_file[jt]:-0}+$js_total_mb")
-      sum_metrics_file[jpct]=$(bc -l <<<"${sum_metrics_file[jpct]:-0}+$js_pct")
-      sum_metrics_file[cw]=$(bc -l <<<"${sum_metrics_file[cw]:-0}+$core_w")
-      sum_metrics_file[cwpct1]=$(bc -l <<<"${sum_metrics_file[cwpct1]:-0}+$core_w_pl1")
-      sum_metrics_file[cwpct2]=$(bc -l <<<"${sum_metrics_file[cwpct2]:-0}+$core_w_pl2")
-      sum_metrics_file[gw]=$(bc -l <<<"${sum_metrics_file[gw]:-0}+$gpu_w")
-      sum_metrics_file[gwpct1]=$(bc -l <<<"${sum_metrics_file[gwpct1]:-0}+$gpu_w_pl1")
-      sum_metrics_file[gwpct2]=$(bc -l <<<"${sum_metrics_file[gwpct2]:-0}+$gpu_w_pl2")
-      sum_metrics_file[df]=$(bc -l <<<"${sum_metrics_file[df]:-0}+$drop_f_pct")
-      sum_metrics_file[v]=$(bc -l <<<"${sum_metrics_file[v]:-0}+$pm_v")
-      sum_metrics_file[i]=$(bc -l <<<"${sum_metrics_file[i]:-0}+$pm_i")
-      sum_metrics_file[w]=$(bc -l <<<"${sum_metrics_file[w]:-0}+$pm_w")
-      sum_metrics_file[wpct]=$(bc -l <<<"${sum_metrics_file[wpct]:-0}+$pm_wpct")
+      sum_metrics_file[cu]=$(bc -l <<<"${sum_metrics_file[cu]}+$ch_cpu_usage")
+      sum_metrics_file[su]=$(bc -l <<<"${sum_metrics_file[su]}+$sys_cpu_usage")
+      sum_metrics_file[cf]=$((sum_metrics_file[cf] + cpu_f))
+      sum_metrics_file[ct]=$(bc -l <<<"${sum_metrics_file[ct]}+$cpu_t")
+      sum_metrics_file[gu]=$(bc -l <<<"${sum_metrics_file[gu}+$gpu_b")
+      sum_metrics_file[gf]=$((sum_metrics_file[gf] + gpu_f))
+      sum_metrics_file[cm]=$((sum_metrics_file[cm] + ch_mem_mb))
+      sum_metrics_file[cmp]=$(bc -l <<<"${sum_metrics_file[cmp]}+$ch_mem_pct")
+      sum_metrics_file[sm]=$((sum_metrics_file[sm] + sys_mem_used_mb))
+      sum_metrics_file[smp]=$(bc -l <<<"${sum_metrics_file[smp]}+$sys_mem_pct")
+      sum_metrics_file[fps]=$(bc -l <<<"${sum_metrics_file[fps]}+$fps_val")
+      sum_metrics_file[ju]=$(bc -l <<<"${sum_metrics_file[ju]}+$js_used_mb")
+      sum_metrics_file[jt]=$(bc -l <<<"${sum_metrics_file[jt]}+$js_total_mb")
+      sum_metrics_file[jpct]=$(bc -l <<<"${sum_metrics_file[jpct]}+$js_pct")
+      sum_metrics_file[cw]=$(bc -l <<<"${sum_metrics_file[cw]}+$core_w")
+      sum_metrics_file[cwpct1]=$(bc -l <<<"${sum_metrics_file[cwpct1]}+$core_w_pl1")
+      sum_metrics_file[cwpct2]=$(bc -l <<<"${sum_metrics_file[cwpct2]}+$core_w_pl2")
+      sum_metrics_file[gw]=$(bc -l <<<"${sum_metrics_file[gw]}+$gpu_w")
+      sum_metrics_file[gwpct1]=$(bc -l <<<"${sum_metrics_file[gwpct1]}+$gpu_w_pl1")
+      sum_metrics_file[gwpct2]=$(bc -l <<<"${sum_metrics_file[gwpct2]}+$gpu_w_pl2")
+      sum_metrics_file[df]=$(bc -l <<<"${sum_metrics_file[df]}+$drop_f_pct")
+      sum_metrics_file[v]=$(bc -l <<<"${sum_metrics_file[v]}+$pm_v")
+      sum_metrics_file[i]=$(bc -l <<<"${sum_metrics_file[i]}+$pm_i")
+      sum_metrics_file[w]=$(bc -l <<<"${sum_metrics_file[w]}+$pm_w")
+      sum_metrics_file[wpct]=$(bc -l <<<"${sum_metrics_file[wpct]}+$pm_wpct")
       
       samples_count_file=$((samples_count_file + 1))
 
