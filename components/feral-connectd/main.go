@@ -82,7 +82,7 @@ func main() {
 	defer relayerClient.Close()
 
 	// Connect to Relayer if ready
-	if state.Relayer.IsReady() {
+	if state.Relayer != nil && state.Relayer.IsReady() {
 		err = relayerClient.RetryableConnect(ctx)
 		if err != nil {
 			logger.Fatal("Failed to connect to relayer", zap.Error(err))
