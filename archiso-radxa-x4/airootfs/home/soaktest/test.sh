@@ -494,7 +494,7 @@ log_file_results_to_json() {
 
 # --- Main Test Logic ----------------------------------------------------------
 main() {
-  trap 'kill_chromium; log_error "Script interrupted. Chromium shut down."; exit 1' SIGINT SIGTERM
+  trap 'kill_chromium; exit 0' SIGINT
 
   if ! command -v jq &>/dev/null; then log_error "jq is not installed. Exiting."; exit 1; fi
   if ! command -v "$CHROMIUM_CMD" &>/dev/null; then log_error "$CHROMIUM_CMD is not installed or not in PATH. Exiting."; exit 1; fi

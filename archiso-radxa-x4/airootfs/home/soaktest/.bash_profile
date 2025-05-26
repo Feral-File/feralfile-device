@@ -3,6 +3,11 @@ if grep -Fqa 'accessibility=' /proc/cmdline &> /dev/null; then
     setopt SINGLE_LINE_ZLE
 fi
 
+sudo systemctl disable --now "feral-sys-monitord.service"
+sudo systemctl disable --now "feral-connectd.service"
+sudo systemctl disable --now "feral-setupd.service"
+sudo systemctl disable --now chromium-kiosk.service"
+
 sudo chown soaktest:soaktest /home/soaktest
 
 sudo chmod 755 /home/soaktest/.automated_script.sh
