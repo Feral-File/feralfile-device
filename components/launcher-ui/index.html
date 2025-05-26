@@ -161,87 +161,26 @@
             }
         });
 
-        let currentConnectionCheckInterval = null;
-
         function handleCDPRequest({ command, params }) {
             if (command === 'navigateWhenOnline') {
                 const url = params.url;
                 if (!url) {
-                    console.log('[navigateWhenOnline] Error: URL is required');
                     return { ok: false, error: 'URL is required' };
                 }
                 
-                async function checkConnection() {
-                    console.log('[navigateWhenOnline] Checking connection...');
-                    try {
-                        // Try connecting to Cloudflare
-                        console.log('[navigateWhenOnline] Trying Cloudflare (1.1.1.1)...');
-                        const cloudflarePromise = fetch('https://1.1.1.1', { 
-                            mode: 'no-cors',
-                            cache: 'no-cache',
-                            timeout: 300
-                        });
-
-                        // Try connecting to Google
-                        console.log('[navigateWhenOnline] Trying Google (8.8.8.8)...');
-                        const googlePromise = fetch('https://8.8.8.8', { 
-                            mode: 'no-cors',
-                            cache: 'no-cache',
-                            timeout: 300
-                        });
-
-                        // Wait for either connection to succeed
-                        await Promise.race([cloudflarePromise, googlePromise]);
-                        console.log('[navigateWhenOnline] Connection successful!');
-                        return true;
-                    } catch (error) {
-                        console.log('[navigateWhenOnline] Connection failed:', error);
-                        return false;
-                    }
-                }
-
-                async function startConnectionCheck(onOnline) {
-                    console.log('[navigateWhenOnline] Starting connection check...');
-                    if (currentConnectionCheckInterval) {
-                        console.log('[navigateWhenOnline] Clearing previous interval');
-                        clearInterval(currentConnectionCheckInterval);
-                        currentConnectionCheckInterval = null;
-                    }
-
-                    const checkInterval = setInterval(async () => {
-                        console.log('[navigateWhenOnline] Interval check triggered');
-                        const isConnected = await checkConnection();
-                        if (isConnected) {
-                            console.log('[navigateWhenOnline] Connection detected, clearing interval');
-                            clearInterval(checkInterval);
-                            currentConnectionCheckInterval = null;
-                            onOnline();
-                        }
-                    }, 5000);
-
-                    currentConnectionCheckInterval = checkInterval;
-                    console.log('[navigateWhenOnline] Interval set to check every 5 seconds');
-
-                    console.log('[navigateWhenOnline] Performing initial connection check');
-                    const isConnected = await checkConnection();
-                    if (isConnected) {
-                        console.log('[navigateWhenOnline] Initial connection successful, clearing interval');
-                        clearInterval(checkInterval);
-                        currentConnectionCheckInterval = null;
-                        onOnline();
-                        return { ok: true };
-                    }
-
-                    console.log('[navigateWhenOnline] Initial connection failed, waiting for next check');
+                // Check if online
+                if (navigator.onLine) {
+                    window.location.replace(url);
+                    return { ok: true };
+                } else {
+                    // Wait for online event
+                    window.addEventListener('online', function handler() {
+                        window.location.replace(url);
+                        window.removeEventListener('online', handler);
+                    });
                     return { ok: true, message: 'Waiting for internet connection' };
                 }
-
-                return startConnectionCheck(() => {
-                    console.log('[navigateWhenOnline] Connection established, navigating to:', url);
-                    window.location.replace(url);
-                });
             } else {
-                console.log('[navigateWhenOnline] Unknown command:', command);
                 return { ok:false, error: `Unknown command: ${command}` };
             }
         }
