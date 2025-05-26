@@ -27,7 +27,7 @@ func NewSysMonitordDBus(connectivity *Connectivity) *SysMonitordDBus {
 
 func (s *SysMonitordDBus) GetConnectivityStatus(refresh bool) (bool, *dbus.Error) {
 	if refresh {
-		connected, err := s.connectivity.CheckConnectivity()
+		connected, err := s.connectivity.CheckConnectivity(RPC_PING_TIMEOUT)
 		if err != nil {
 			return false, dbus.NewError(err.Error(), []interface{}{})
 		}

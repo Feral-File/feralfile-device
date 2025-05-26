@@ -16,7 +16,8 @@ const (
 	PING_INTERVAL = 30 * time.Second
 
 	// Connection timeout
-	PING_TIMEOUT = 5 * time.Second
+	BACKGROUND_PING_TIMEOUT = 5 * time.Second
+	RPC_PING_TIMEOUT        = 2 * time.Second
 )
 
 var PING_TARGET_ADDRESS = []string{
@@ -111,7 +112,7 @@ func (c *Connectivity) background() {
 		c.logger.Info("Connectivity background goroutine started")
 
 		// Check initial connectivity
-		connected, err := c.CheckConnectivity()
+		connected, err := c.CheckConnectivity(BACKGROUND_PING_TIMEOUT)
 		if err != nil {
 			c.logger.Warn("Connectivity check failed", zap.Error(err))
 		}
@@ -130,7 +131,7 @@ func (c *Connectivity) background() {
 				return
 			case <-ticker.C:
 				c.logger.Info("Checking connectivity")
-				connected, err := c.CheckConnectivity()
+				connected, err := c.CheckConnectivity(BACKGROUND_PING_TIMEOUT)
 				if err != nil {
 					c.logger.Warn("Connectivity check failed", zap.Error(err))
 					continue
@@ -148,8 +149,8 @@ func (c *Connectivity) background() {
 }
 
 // CheckConnectivity attempts to connect to the PING_TARGET address to check connectivity
-func (c *Connectivity) CheckConnectivity() (bool, error) {
-	ctx, cancel := context.WithTimeout(c.ctx, PING_TIMEOUT+time.Second)
+func (c *Connectivity) CheckConnectivity(timeout time.Duration) (bool, error) {
+	ctx, cancel := context.WithTimeout(c.ctx, timeout+1*time.Second)
 	defer cancel()
 
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -159,8 +160,11 @@ func (c *Connectivity) CheckConnectivity() (bool, error) {
 	for _, target := range PING_TARGET_ADDRESS {
 		target := target
 		eg.Go(func() error {
-			dialer := net.Dialer{Timeout: PING_TIMEOUT}
+			before := time.Now()
+			dialer := net.Dialer{Timeout: timeout}
 			conn, err := dialer.DialContext(egCtx, "tcp", target)
+			after := time.Now()
+			c.logger.Debug("Connectivity check result", zap.String("target", target), zap.Duration("duration", after.Sub(before)), zap.Error(err))
 			if conn != nil {
 				conn.Close()
 			}
