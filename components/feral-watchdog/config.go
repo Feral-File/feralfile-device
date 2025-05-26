@@ -21,7 +21,6 @@ var (
 
 // Config represents the configuration for the watchdog daemon
 type Config struct {
-	sync.Mutex
 	CDPEndpoint string `json:"cdp_endpoint"`
 }
 

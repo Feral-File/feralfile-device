@@ -59,7 +59,7 @@ func main() {
 	}
 
 	// Load state
-	state, err := LoadState(logger)
+	_, err = LoadState(logger)
 	if err != nil {
 		logger.Fatal("Failed to load state", zap.Error(err))
 	}
@@ -82,7 +82,7 @@ func main() {
 	defer relayerClient.Close()
 
 	// Connect to Relayer if ready
-	if state.RelayerChanReady() {
+	if RelayerChanReady() {
 		err = relayerClient.RetryableConnect(ctx)
 		if err != nil {
 			logger.Fatal("Failed to connect to relayer", zap.Error(err))

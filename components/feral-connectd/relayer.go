@@ -163,9 +163,8 @@ func (r *RelayerClient) connect(ctx context.Context) error {
 		connectURL += fmt.Sprintf("/api/connection?apiKey=%s", r.config.APIKey)
 	}
 
-	state := GetState()
-	if state.RelayerChanReady() {
-		connectURL += fmt.Sprintf("&topicID=%s", state.Relayer.TopicID)
+	if RelayerChanReady() {
+		connectURL += fmt.Sprintf("&topicID=%s", GetState().Relayer.TopicID)
 	}
 
 	dialer := websocket.DefaultDialer

@@ -18,7 +18,6 @@ var (
 
 // Configuration for all components
 type Config struct {
-	sync.Mutex
 	CDPConfig     *CDPConfig     `json:"cdp"`
 	RelayerConfig *RelayerConfig `json:"relayer"`
 }

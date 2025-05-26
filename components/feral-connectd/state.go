@@ -23,7 +23,6 @@ var (
 )
 
 type State struct {
-	sync.Mutex
 	ConnectedDevice *Device `json:"connectedDevice"`
 	Relayer         struct {
 		TopicID string `json:"topicId"`
@@ -38,7 +37,7 @@ func (c *State) WaitForRelayerChanReady(ctx context.Context) bool {
 	bo.MaxElapsedTime = 30 * time.Second
 
 	err := backoff.Retry(func() error {
-		if c.RelayerChanReady() {
+		if RelayerChanReady() {
 			return nil
 		}
 		return fmt.Errorf("relayer channel is not ready")
@@ -47,11 +46,14 @@ func (c *State) WaitForRelayerChanReady(ctx context.Context) bool {
 	return err == nil
 }
 
-func (c *State) RelayerChanReady() bool {
-	c.Lock()
-	defer c.Unlock()
+func RelayerChanReady() bool {
+	stateLock.Lock()
+	defer stateLock.Unlock()
 
-	return c.Relayer.TopicID != ""
+	if state == nil {
+		return false
+	}
+	return state.Relayer.TopicID != ""
 }
 
 // LoadState loads state from file or creates a new one if file doesn't exist
@@ -88,8 +90,8 @@ func LoadState(logger *zap.Logger) (*State, error) {
 }
 
 func (s *State) Save() error {
-	s.Lock()
-	defer s.Unlock()
+	stateLock.Lock()
+	defer stateLock.Unlock()
 
 	// Ensure directory exists
 	stateDir := filepath.Dir(STATE_FILE)
