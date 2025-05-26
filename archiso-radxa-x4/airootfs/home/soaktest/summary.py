@@ -119,7 +119,6 @@ def main_summary(json_file_path):
         ("avg_cpu_system_pct", "CPU Sys", "%", True, 40, 80),
         ("avg_cpu_temp_c", "CPU Temp", "°C", True, 60, 75),
         ("avg_cpu_freq_mhz", "CPU Freq", "MHz", False, 0, 0), # No color coding for freq generally
-        ("avg_gpu_busy_pct", "GPU Busy", "%", True, 40, 80),
         ("avg_fps", "Avg FPS", "FPS", False, 30, 50, 55, 45), # low_is_bad, red_thresh, yellow_thresh, (good_fps, mid_fps)
         ("one_pct_low_fps", "1% Low FPS", "FPS", False, 25, 45, 50, 40),
         ("avg_chrome_mem_mb", "Chr Mem", "MB", True, 0, 0), # No color coding, just info
@@ -145,7 +144,6 @@ def main_summary(json_file_path):
         file_data["avg_cpu_system_pct"] = metrics.get("su", 0.0)
         file_data["avg_cpu_temp_c"] = metrics.get("ct", 0.0)
         file_data["avg_cpu_freq_mhz"] = metrics.get("cf", 0.0)
-        file_data["avg_gpu_busy_pct"] = metrics.get("gu", 0.0)
         file_data["avg_fps"] = metrics.get("fps", 0.0)
         file_data["one_pct_low_fps"] = metrics.get("one_pct_low_fps", 0.0)
         file_data["avg_chrome_mem_mb"] = metrics.get("cm", 0.0)
