@@ -27,13 +27,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize dependencies
     let chrome = Arc::new(CDP::connect(constant::CDP_URL).await?);
     let ble_service = Arc::new(BLE::new());
+    let internet = match internet_availability() {
+        Ok(internet) => internet,
+        Err(e) => {
+            println!("MAIN: Error checking internet availability: {:?}", e);
+            println!("MAIN: Set internet availability: false");
+            false
+        }
+    };
     let app_state = Arc::new(AppState {
         device_id: ble_service.get_device_id().await,
         app_cache: Cache::new(constant::CACHE_FILEPATH),
-        internet: AtomicBool::new(internet_availability()?),
+        internet: AtomicBool::new(internet),
     });
-    // TODO: remove this after testing
-    // app_state.internet.store(false, Ordering::Relaxed);
 
     // Start bluetooth advertising with callbacks
     let connect_wifi_cb = create_wifi_connected_cb(app_state.clone(), chrome.clone());
