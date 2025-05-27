@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -81,14 +82,6 @@ func main() {
 	relayerClient := NewRelayerClient(config.RelayerConfig, logger)
 	defer relayerClient.Close()
 
-	// Connect to Relayer if ready
-	if state.Relayer.IsReady() {
-		err = relayerClient.RetryableConnect(ctx)
-		if err != nil {
-			logger.Fatal("Failed to connect to relayer", zap.Error(err))
-		}
-	}
-
 	// Initialize DBus client
 	mo := dbus.WithMatchPathNamespace(dbus.ObjectPath("/com/feralfile"))
 	dbusClient := godbus.NewDBusClient(ctx, logger, DBUS_NAME, mo)
@@ -111,6 +104,20 @@ func main() {
 	mediator.Start()
 	defer mediator.Stop()
 
+	// Get connectivity status and connect to relayer if ready
+	connected, err := getConnectivityStatus(ctx, dbusClient, logger)
+	if err != nil {
+		logger.Warn("Failed to get connectivity status", zap.Error(err))
+	} else {
+		logger.Info("Connectivity status", zap.Bool("connected", connected))
+	}
+	if connected && state.Relayer.IsReady() {
+		err = relayerClient.RetryableConnect(ctx)
+		if err != nil {
+			logger.Fatal("Failed to connect to relayer", zap.Error(err))
+		}
+	}
+
 	// send ready notification to systemd
 	sent, err := daemon.SdNotify(false, daemon.SdNotifyReady)
 	if err != nil {
@@ -121,4 +128,30 @@ func main() {
 	}
 
 	<-ctx.Done()
+}
+
+func getConnectivityStatus(ctx context.Context, dbus *godbus.DBusClient, logger *zap.Logger) (bool, error) {
+	logger.Info("Getting connectivity status")
+	resp, err := dbus.Call(
+		ctx,
+		MONITORD_DBUS_NAME,
+		MONITORD_DBUS_PATH,
+		MONITORD_DBUS_INTERFACE,
+		MONITORD_DBUS_METHOD_GET_CONNECTIVITY_STATUS,
+		true,
+	)
+	if err != nil {
+		return false, err
+	}
+
+	if len(resp) != 1 {
+		return false, fmt.Errorf("expected 1 response, got %d", len(resp))
+	}
+
+	connected, ok := resp[0].(bool)
+	if !ok {
+		return false, fmt.Errorf("expected bool, got %T", resp[0])
+	}
+
+	return connected, nil
 }

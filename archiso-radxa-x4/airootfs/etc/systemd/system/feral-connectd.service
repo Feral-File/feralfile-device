@@ -1,7 +1,7 @@
 [Unit]
 Description=Feral File Connectd
-After=chromium-kiosk.service network.target
-Requires=chromium-kiosk.service
+After=chromium-kiosk.service sys-monitord.service
+Requires=chromium-kiosk.service sys-monitord.service
 Wants=network.target
 # Add a check for CDP readiness
 ExecStartPre=/bin/sh -c 'while ! curl -s http://127.0.0.1:9222/json | grep -q "\"type\": \"page\""; do sleep 0.5; done'

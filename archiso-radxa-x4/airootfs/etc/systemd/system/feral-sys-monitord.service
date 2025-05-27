@@ -1,6 +1,5 @@
 [Unit]
 Description=Feral File System Monitord
-After=network.target
 Wants=network.target
 
 [Service]
