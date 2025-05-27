@@ -167,7 +167,7 @@ pub fn listen_for_signal(
     let object_path = object_path.to_string();
     let interface = interface.to_string();
     let member = member.to_string();
-    tokio::task::spawn_blocking(move || {
+    task::spawn_blocking(move || {
         let conn = Connection::new_session().expect("DBUS: failed to create connection");
         let rule = format!(
             "type='signal',interface='{}',member='{}',path='{}'",
@@ -210,7 +210,7 @@ pub fn call_method<T: Send + Sync + Append>(
     object_path: &str,
     interface: &str,
     member: &str,
-    payload: T,
+    payload: Option<T>,
     timeout_ms: u64,
 ) -> Result<Message, Box<dyn Error + Send + Sync>> {
     // Establish a connection on the session bus
@@ -218,7 +218,9 @@ pub fn call_method<T: Send + Sync + Append>(
 
     // Build the method‑call message and attach the payload
     let mut msg = Message::new_method_call(destination, object_path, interface, member)?;
-    msg = msg.append1(payload);
+    if let Some(payload) = payload {
+        msg = msg.append1(payload);
+    }
 
     // Send the message and block until we get the reply (or timeout)
     let reply = conn.send_with_reply_and_block(msg, Duration::from_millis(timeout_ms))?;
@@ -234,7 +236,7 @@ pub fn internet_availability() -> bool {
         constant::DBUS_SYSMONITORD_OBJECT,
         constant::DBUS_SYSMONITORD_INTERFACE,
         constant::DBUS_CONNECTIVITY_METHOD,
-        true, // payload
+        Some(true), // payload
         constant::DBUS_INTERNET_CHECK_TIMEOUT,
     ) {
         Ok(response) => {
@@ -260,39 +262,28 @@ pub fn on_internet_available<F: Fn() + Send + Sync + 'static>(cb: F, stop: Arc<A
     });
 }
 
-pub async fn get_relayer_info() -> Result<String, Box<dyn Error + Send + Sync>> {
+pub fn get_relayer_info() -> Result<String, Box<dyn Error + Send + Sync>> {
     let start_time = Instant::now();
 
-    // Start listening **before** we announce the Wi‑Fi connection so we don't
-    // miss the very first `relayer_configured` signal sent by `connectd`.
-    println!("BLE: Preparing to wait for relayer topic");
-    let recv_task = task::spawn_blocking(|| {
-        receive_signal(
-            constant::DBUS_CONNECTD_OBJECT,
-            constant::DBUS_CONNECTD_INTERFACE,
-            constant::DBUS_EVENT_RELAYER_CONFIGURED,
-            constant::DBUS_CONNECTD_TIMEOUT,
-        )
-    });
-
-    // Now emit the `wifi_connected` event (this waits for its own ack).
-    println!("BLE: Sending wifi_connected event");
-    task::spawn_blocking(|| {
-        send_signal(
-            constant::DBUS_SETUPD_OBJECT,
-            constant::DBUS_SETUPD_INTERFACE,
-            constant::DBUS_EVENT_WIFI_CONNECTED,
-            "", // empty payload
-        )
-    })
-    .await??;
-
-    // Await the relayer information we were already listening for.
-    let msg = recv_task.await??;
-    let topic_id = msg.read1::<String>()?;
-    println!(
-        "BLE: Relayer info received in {:?} ms",
-        start_time.elapsed().as_millis()
-    );
-    Ok(topic_id)
+    match call_method(
+        constant::DBUS_CONNECTD_DESTINATION,
+        constant::DBUS_CONNECTD_OBJECT,
+        constant::DBUS_CONNECTD_INTERFACE,
+        constant::DBUS_RELAYER_TOPIC_ID_METHOD,
+        Option::<bool>::None, // payload
+        constant::DBUS_RELAYER_CHECK_TIMEOUT,
+    ) {
+        Ok(response) => {
+            let topic_id = response.read1::<String>()?;
+            println!(
+                "DBUS: Relayer info received in {:?} ms",
+                start_time.elapsed().as_millis()
+            );
+            Ok(topic_id)
+        }
+        Err(e) => {
+            eprintln!("DBUS: Error getting relayer info: {}", e);
+            Err(e)
+        }
+    }
 }

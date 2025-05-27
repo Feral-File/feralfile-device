@@ -112,7 +112,7 @@ fn create_wifi_connected_cb(
                 return None;
             }
 
-            let topic_id = match dbus_utils::get_relayer_info().await {
+            let topic_id = match dbus_utils::get_relayer_info() {
                 Ok(info) => info,
                 Err(e) => {
                     eprintln!("BLE: can't get relayer data from connectd: {}", e);
