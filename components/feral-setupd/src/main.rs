@@ -14,12 +14,21 @@ use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::signal::unix::{SignalKind, signal as unix_signal};
-use tokio::{task, time, time::Duration};
+use tokio::sync::Mutex;
+use tokio::task;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Page {
+    None,
+    QRCode,
+    WebApp,
+}
 
 struct AppState {
     device_id: String,
     app_cache: Cache,
     internet: AtomicBool,
+    page: Mutex<Page>,
 }
 
 #[tokio::main]
@@ -27,18 +36,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize dependencies
     let chrome = Arc::new(CDP::connect(constant::CDP_URL).await?);
     let ble_service = Arc::new(BLE::new());
-    let internet = match internet_availability() {
-        Ok(internet) => internet,
-        Err(e) => {
-            println!("MAIN: Error checking internet availability: {:?}", e);
-            println!("MAIN: Set internet availability: false");
-            false
-        }
-    };
     let app_state = Arc::new(AppState {
         device_id: ble_service.get_device_id().await,
         app_cache: Cache::new(constant::CACHE_FILEPATH),
-        internet: AtomicBool::new(internet),
+        internet: AtomicBool::new(dbus_utils::internet_availability()),
+        page: Mutex::new(Page::None),
     });
 
     // Start bluetooth advertising with callbacks
@@ -56,23 +58,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    // Startup flow:
-    // Show Webapp if we have both cache & internet
+    let has_internet = app_state.internet.load(Ordering::Relaxed);
     let has_cache = app_state.app_cache.get(cache::TOPIC_ID).is_some();
-    let has_internet = app_state.internet.load(Ordering::Acquire);
-    if has_cache && has_internet {
-        println!("MAIN: has cache & internet, showing webapp");
-        show_webapp(&chrome).await?;
+    if !has_cache {
+        // First time using the app, just show the QRCode
+        let _ = show_qrcode(&app_state, &chrome, false).await;
     } else {
-        // If we don't have either, show the QRCode for user to set up again
-        // But in case there is cache without internet,
-        // We auto redirect to the webapp if the user fixes the internet
-        let auto_redirect = has_cache && !has_internet;
-        println!(
-            "MAIN: cache = {}, internet = {}, auto_redirect = {}",
-            has_cache, has_internet, auto_redirect
-        );
-        show_qrcode(&app_state, &chrome, auto_redirect).await?;
+        // Second time using the app
+        if has_internet {
+            // All good, show webapp
+            let _ = show_webapp(&app_state, &chrome).await;
+        } else {
+            // No internet, show QRCode and wait for user to fix it
+            let _ = show_qrcode(&app_state, &chrome, true).await;
+        }
     }
 
     // Listen for QRCode switch signal
@@ -104,26 +103,36 @@ fn create_wifi_connected_cb(
     app_state: Arc<AppState>,
     chromium: Arc<CDP>,
 ) -> ble::ConnectWifiCallback {
-    Some(Box::new(move |topic_id: &str| {
-        // TODO: we assume that the internet is available when the wifi is connected
-        // We should check the internet availability again
-        app_state.app_cache.set(cache::TOPIC_ID, topic_id);
-        app_state.app_cache.save(constant::CACHE_FILEPATH);
-        app_state.internet.store(true, Ordering::Relaxed);
+    Box::new(move || {
+        let app_state = app_state.clone();
         let chromium = chromium.clone();
-        task::spawn(async move {
-            time::sleep(Duration::from_millis(constant::NETWORK_CHANGED_DELAY)).await;
-            // TODO: using navigate_when_online here is safer
-            // As wifi might be available but the internet is not
-            // So user can just scan the QRCode again and fix the internet
-            // But later, if we can detect the internet availability and deal with it,
-            // We can use show_webapp instead to avoid duplicated code
-            match chromium.navigate_when_online(constant::WEBAPP_URL).await {
-                Ok(_) => println!("MAIN: Navigated to webapp"),
-                Err(e) => println!("MAIN: Error navigating to webapp: {}", e),
+        Box::pin(async move {
+            let internet = dbus_utils::internet_availability();
+            if !internet {
+                return None;
+            }
+
+            let topic_id = match dbus_utils::get_relayer_info().await {
+                Ok(info) => info,
+                Err(e) => {
+                    eprintln!("BLE: can't get relayer data from connectd: {}", e);
+                    return None;
+                }
             };
-        });
-    }))
+
+            app_state.app_cache.set(cache::TOPIC_ID, &topic_id);
+            app_state.app_cache.save(constant::CACHE_FILEPATH);
+            app_state.internet.store(true, Ordering::Relaxed);
+            let chromium = chromium.clone();
+            task::spawn(async move {
+                match chromium.navigate_when_online(constant::WEBAPP_URL).await {
+                    Ok(_) => println!("MAIN: Navigated to webapp"),
+                    Err(e) => println!("MAIN: Error navigating to webapp: {}", e),
+                };
+            });
+            Some(topic_id)
+        })
+    })
 }
 
 fn create_get_info_cb(app_state: Arc<AppState>) -> ble::GetInfoCallback {
@@ -153,7 +162,7 @@ fn create_qrcode_switch_cb(
             if qrcode_requested {
                 let _ = show_qrcode(&app_state, &chromium, false).await;
             } else {
-                let _ = show_webapp(&chromium).await;
+                let _ = show_webapp(&app_state, &chromium).await;
             }
         });
     })
@@ -190,57 +199,42 @@ async fn wait_for_shutdown() {
     }
 }
 
-fn internet_availability() -> Result<bool, Box<dyn Error>> {
-    match dbus_utils::call_method(
-        constant::DBUS_SYSMONITORD_DESTINATION,
-        constant::DBUS_SYSMONITORD_OBJECT,
-        constant::DBUS_SYSMONITORD_INTERFACE,
-        constant::DBUS_CONNECTIVITY_METHOD,
-        true, // payload
-        constant::DBUS_INTERNET_CHECK_TIMEOUT,
-    ) {
-        Ok(response) => {
-            let status = response.read1::<bool>().unwrap();
-            Ok(status)
-        }
-        Err(e) => {
-            println!("MAIN: Error checking internet availability: {}", e);
-            Err(e)
-        }
-    }
-}
-
 async fn show_qrcode(
     app_state: &Arc<AppState>,
     chrome: &Arc<CDP>,
-    auto_redirect: bool,
+    redirect_when_online: bool,
 ) -> Result<(), Box<dyn Error>> {
     let qrcode_url = build_qrcode_url(&app_state);
+    // QRCode url is dynamically built
+    // So we always navigate to make sure the url is correct
+    let mut page = app_state.page.lock().await;
     match chrome.navigate(&qrcode_url).await {
-        Ok(_) => println!("MAIN: Navigated to {}", qrcode_url),
+        Ok(_) => {
+            println!("MAIN: Navigated to {}", qrcode_url);
+            *page = Page::QRCode;
+        }
         Err(e) => {
             println!("MAIN: Error navigating to qrcode: {}", e);
             return Err(e);
         }
     };
-    if auto_redirect {
-        match chrome.navigate_when_online(constant::WEBAPP_URL).await {
-            Ok(_) => println!(
-                "MAIN: successfully set up auto redirect to {}",
-                constant::WEBAPP_URL
-            ),
-            Err(e) => {
-                println!("MAIN: Error setting up auto redirect: {}", e);
-                return Err(e);
-            }
-        };
+    if redirect_when_online {
+        // Redirect to webapp when internet is available
     }
     Ok(())
 }
 
-async fn show_webapp(chrome: &Arc<CDP>) -> Result<(), Box<dyn Error>> {
+async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<CDP>) -> Result<(), Box<dyn Error>> {
+    let mut page = app_state.page.lock().await;
+    // For webapp, we only navigate if the page is not it already
+    if *page == Page::WebApp {
+        return Ok(());
+    }
     match chrome.navigate(constant::WEBAPP_URL).await {
-        Ok(_) => println!("MAIN: Navigated to {}", constant::WEBAPP_URL),
+        Ok(_) => {
+            println!("MAIN: Navigated to {}", constant::WEBAPP_URL);
+            *page = Page::WebApp;
+        }
         Err(e) => {
             println!("MAIN: Error navigating to webapp: {}", e);
             return Err(e);

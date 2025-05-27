@@ -1,5 +1,4 @@
 use crate::constant;
-use crate::dbus_utils;
 use crate::encoding;
 use crate::wifi_utils;
 use crate::wifi_utils::SSIDsCacher;
@@ -23,6 +22,7 @@ use bluer::{
 };
 use futures_util::future::FutureExt;
 use std::error::Error;
+use std::pin::Pin;
 use std::process::Command;
 use std::sync::Arc;
 use std::time::Instant;
@@ -31,10 +31,12 @@ use tokio::task;
 
 const SUCCESS_CODE: &[u8] = &[0];
 const ERR_CODE_WRONG_WIFI_PWD: &[u8] = &[1];
+const ERR_CODE_NO_INTERNET: &[u8] = &[2];
 const ERR_CODE_UNKNOWN_ERROR: &[u8] = &[255];
 
 pub type BTConnectedCallback = Option<Box<dyn Fn() + Send + Sync>>;
-pub type ConnectWifiCallback = Option<Box<dyn Fn(&str) + Send + Sync>>;
+pub type ConnectWifiCallback =
+    Box<dyn Fn() -> Pin<Box<dyn Future<Output = Option<String>> + Send>> + Send + Sync>;
 pub type GetInfoCallback = Option<Box<dyn Fn() -> Vec<String> + Send + Sync>>;
 
 #[derive(Default)]
@@ -319,7 +321,7 @@ async fn handle_connect_wifi(
     // Attempt connection
     // If it fails, notify central with error code
     let start_time = Instant::now();
-    let topic_id: String;
+    let cb_response: String;
     let mut payload = Vec::with_capacity(3); // to reply to central
     payload.push(reply_id.as_bytes());
     if let Err(e) = wifi_utils::connect(ssid, pass) {
@@ -343,21 +345,13 @@ async fn handle_connect_wifi(
             ssid,
             start_time.elapsed().as_millis()
         );
-        topic_id = match get_relayer_info().await {
-            Ok(info) => info,
-            Err(e) => {
-                eprintln!("BLE: can't get relayer data from connectd: {}", e);
-                return Ok(());
-            }
-        };
-        println!("BLE: Relay‑server topic: {}", topic_id);
-
-        if let Some(cb) = cb.as_ref() {
-            cb(&topic_id);
+        if let Some(response) = cb().await {
+            cb_response = response;
+            payload.push(SUCCESS_CODE);
+            payload.push(cb_response.as_bytes());
+        } else {
+            payload.push(ERR_CODE_NO_INTERNET);
         }
-
-        payload.push(SUCCESS_CODE);
-        payload.push(topic_id.as_bytes());
     }
 
     let mut guard = notifier.lock().await;
@@ -443,41 +437,4 @@ async fn handle_set_time(
         _ => (),
     };
     Ok(())
-}
-
-async fn get_relayer_info() -> Result<String, Box<dyn Error + Send + Sync>> {
-    let start_time = Instant::now();
-
-    // Start listening **before** we announce the Wi‑Fi connection so we don't
-    // miss the very first `relayer_configured` signal sent by `connectd`.
-    println!("BLE: Preparing to wait for relayer topic");
-    let recv_task = task::spawn_blocking(|| {
-        dbus_utils::receive_signal(
-            constant::DBUS_CONNECTD_OBJECT,
-            constant::DBUS_CONNECTD_INTERFACE,
-            constant::DBUS_EVENT_RELAYER_CONFIGURED,
-            constant::DBUS_CONNECTD_TIMEOUT,
-        )
-    });
-
-    // Now emit the `wifi_connected` event (this waits for its own ack).
-    println!("BLE: Sending wifi_connected event");
-    task::spawn_blocking(|| {
-        dbus_utils::send_signal(
-            constant::DBUS_SETUPD_OBJECT,
-            constant::DBUS_SETUPD_INTERFACE,
-            constant::DBUS_EVENT_WIFI_CONNECTED,
-            "", // empty payload
-        )
-    })
-    .await??;
-
-    // Await the relayer information we were already listening for.
-    let msg = recv_task.await??;
-    let topic_id = msg.read1::<String>()?;
-    println!(
-        "BLE: Relayer info received in {:?} ms",
-        start_time.elapsed().as_millis()
-    );
-    Ok(topic_id)
 }

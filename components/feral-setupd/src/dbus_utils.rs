@@ -6,6 +6,7 @@ use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+use tokio::task;
 
 use crate::constant;
 
@@ -223,4 +224,75 @@ pub fn call_method<T: Send + Sync + Append>(
     let reply = conn.send_with_reply_and_block(msg, Duration::from_millis(timeout_ms))?;
 
     Ok(reply)
+}
+
+/// Checks if the internet is available by calling the `connectivity` method
+/// on the `sys-monitord` service.
+pub fn internet_availability() -> bool {
+    match call_method(
+        constant::DBUS_SYSMONITORD_DESTINATION,
+        constant::DBUS_SYSMONITORD_OBJECT,
+        constant::DBUS_SYSMONITORD_INTERFACE,
+        constant::DBUS_CONNECTIVITY_METHOD,
+        true, // payload
+        constant::DBUS_INTERNET_CHECK_TIMEOUT,
+    ) {
+        Ok(response) => {
+            let status = response.read1::<bool>().unwrap();
+            status
+        }
+        Err(e) => {
+            println!("DBUS: Error checking internet availability: {}", e);
+            false
+        }
+    }
+}
+
+pub fn on_internet_available<F: Fn() + Send + Sync + 'static>(cb: F, stop: Arc<AtomicBool>) {
+    tokio::task::spawn_blocking(move || {
+        while !stop.load(Ordering::Relaxed) {
+            let internet = internet_availability();
+            if internet {
+                cb();
+                break;
+            }
+        }
+    });
+}
+
+pub async fn get_relayer_info() -> Result<String, Box<dyn Error + Send + Sync>> {
+    let start_time = Instant::now();
+
+    // Start listening **before** we announce the Wi‑Fi connection so we don't
+    // miss the very first `relayer_configured` signal sent by `connectd`.
+    println!("BLE: Preparing to wait for relayer topic");
+    let recv_task = task::spawn_blocking(|| {
+        receive_signal(
+            constant::DBUS_CONNECTD_OBJECT,
+            constant::DBUS_CONNECTD_INTERFACE,
+            constant::DBUS_EVENT_RELAYER_CONFIGURED,
+            constant::DBUS_CONNECTD_TIMEOUT,
+        )
+    });
+
+    // Now emit the `wifi_connected` event (this waits for its own ack).
+    println!("BLE: Sending wifi_connected event");
+    task::spawn_blocking(|| {
+        send_signal(
+            constant::DBUS_SETUPD_OBJECT,
+            constant::DBUS_SETUPD_INTERFACE,
+            constant::DBUS_EVENT_WIFI_CONNECTED,
+            "", // empty payload
+        )
+    })
+    .await??;
+
+    // Await the relayer information we were already listening for.
+    let msg = recv_task.await??;
+    let topic_id = msg.read1::<String>()?;
+    println!(
+        "BLE: Relayer info received in {:?} ms",
+        start_time.elapsed().as_millis()
+    );
+    Ok(topic_id)
 }

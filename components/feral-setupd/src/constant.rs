@@ -6,7 +6,6 @@ pub const TIMEZONE_CMD: &str = "/home/feralfile/scripts/feral-timesyncd.sh";
 pub const TIMEZONE_INSTRUCTION: &str = "set-time";
 pub const SSID_CACHE_TTL: u64 = 5 * 60 * 1000; // 5 minutes
 pub const BLE_SHUTDOWN_DELAY: u64 = 1000; // 1 second
-pub const NETWORK_CHANGED_DELAY: u64 = 1; // 1 millisecond
 
 // Bluetooth configuration
 pub const SERVICE_UUID: Uuid = Uuid::from_u128(0xf7826da64fa24e988024bc5b71e0893e_u128);

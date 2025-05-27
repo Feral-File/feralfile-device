@@ -19,17 +19,17 @@ sync-launcher-ui:
 	@./scripts/sync-to-x4.sh ../launcher-ui /opt/feral/ui/launcher/
 
 .PHONY: fresh-debug
-fresh-debug: restart-bluetooth
+fresh-debug:
 	@echo "🔍 Running fresh debug build..."
 	@./scripts/fresh-debug.sh
 
 .PHONY: resume-debug
-resume-debug: restart-bluetooth
+resume-debug:
 	@echo "🔍 Running resume debug build..."
 	@./scripts/resume-debug.sh
 
 .PHONY: fresh-release
-fresh-release: restart-bluetooth
+fresh-release:
 	@echo "🔍 Running fresh release build..."
 	@./scripts/fresh-release.sh
 

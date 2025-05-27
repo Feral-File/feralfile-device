@@ -20,3 +20,20 @@ stateDiagram
   Artwork --> QRCode:request to show QRCode
 
 ```
+
+```mermaid
+flowchart
+  AppStart[App Start] --> UserScanned{User scanned}
+
+  UserScanned --> |Yes| HasInternet{Has Internet}
+  UserScanned --> |No| QRCode
+
+  HasInternet --> |Yes| WebApp(Web App)
+  HasInternet --> |No| QRCode
+
+  QRCode --> ConnectWifi[Connect Wifi]
+  ConnectWifi --> HasInternet2{Has Internet}
+  HasInternet2 --> |No| QRCode
+  HasInternet2 --> |Yes| RelayerID(Get Relayer ID<br/>user_scanned=true)
+  RelayerID --> WebApp
+```
