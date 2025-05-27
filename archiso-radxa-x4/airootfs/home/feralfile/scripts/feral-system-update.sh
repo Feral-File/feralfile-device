@@ -97,6 +97,8 @@ systemctl preset-all --preset-mode=enable-only
 
 # Set up pacman
 echo "Setting up pacman..."
+systemctl restart NetworkManager
+sleep 3
 pacman-key --init
 pacman-key --populate archlinux
 pacman -Syy
