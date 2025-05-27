@@ -51,6 +51,7 @@ jobs:
           if [ "${{ inputs.soak-test }}" == "false" ]; then
             rm -rf /build/archiso-radxa-x4/airootfs/home/soaktest
             rm -f /build/archiso-radxa-x4/efiboot/loader/entries/archiso-x86_64-linux-soak-test.conf
+            rm -f /build/archiso-radxa-x4/airootfs/usr/local/bin/websocat
           else 
             cat >> /build/archiso-radxa-x4/packages.x86_64 << EOF
           # soak test tools
@@ -61,6 +62,41 @@ jobs:
           python-rich
           EOF
           fi 
+
+      - name: Update start-kiosk.sh
+        if: ${{ (inputs.is_development == true) || (github.event.inputs.is_development == true) }}
+        run: |
+          # Remove --kiosk flag from start-kiosk.sh
+          sed -i 's/--kiosk//' /build/archiso-radxa-x4/airootfs/home/feralfile/scripts/start-kiosk.sh
+
+      - name: Add development tools to packages list
+        if: ${{ (inputs.is_development == true) || (github.event.inputs.is_development == true) }}
+        run: |
+          # Add Go and Rust to packages list
+          cat >> /build/archiso-radxa-x4/packages.x86_64 << EOF
+
+          # Development tools
+          go
+          rust
+          base-devel
+          EOF
+          
+          # Configure pacman to not ask for input
+          sed -i 's/#NoConfirm/NoConfirm/' /etc/pacman.conf 2>/dev/null || echo "NoConfirm" >> /etc/pacman.conf
+
+      - name: Setup source directory and copy components
+        if: ${{ (inputs.is_development == true) || (github.event.inputs.is_development == true) }}
+        run: |
+          # Create source directory
+          mkdir -p /build/archiso-radxa-x4/airootfs/home/feralfile/src
+          
+          # Create a file with repository information
+          echo "Branch: ${{ github.ref_name }}" > /build/archiso-radxa-x4/airootfs/home/feralfile/src/repo-info.txt
+          echo "Version: ${{ inputs.version || github.event.inputs.version }}" >> /build/archiso-radxa-x4/airootfs/home/feralfile/src/repo-info.txt
+          echo "Build Date: $(date)" >> /build/archiso-radxa-x4/airootfs/home/feralfile/src/repo-info.txt
+          
+          # Copy components directory with current checkout
+          cp -r components /build/archiso-radxa-x4/airootfs/home/feralfile/src/
 
       - name: Inject pacman.conf
         env:
@@ -115,7 +151,7 @@ jobs:
           cat > /build/archiso-radxa-x4/airootfs/home/feralfile/x1-config.json << EOF
           {
             "branch": "${{ github.ref_name }}",
-            "version": "${{ github.event.inputs.version }}",
+            "version": "${{ inputs.version || github.event.inputs.version }}",
             "distribution_acc": "${{ secrets.DISTRIBUTION_AUTH_USER }}",
             "distribution_pass": "${{ secrets.DISTRIBUTION_AUTH_PASSWORD }}"
           }
@@ -140,7 +176,8 @@ jobs:
           mkarchiso -v -w /build/work -o /build/out /build/archiso-radxa-x4
           ISO_FILE=$(find /build/out -name "*.iso" | head -n 1)
           if [ -f "$ISO_FILE" ]; then
-            NEW_NAME="radxa-x4-arch-${{ github.event.inputs.version }}.iso"
+            IMAGE_TYPE="${{ (inputs.is_development == 'true' || github.event.inputs.is_development == 'true') && 'dev-' || '' }}"
+            NEW_NAME="radxa-x4-arch-${IMAGE_TYPE}${{ inputs.version || github.event.inputs.version }}.iso"
             mv "$ISO_FILE" "/build/out/$NEW_NAME"
             echo "ISO created: /build/out/$NEW_NAME"
           else
@@ -165,16 +202,18 @@ jobs:
       - name: Compress and Upload Image
         run: |
           cd /build/out
-          ISO_FILE="radxa-x4-arch-${{ github.event.inputs.version }}.iso"
-          zip -j "radxa-x4-arch-${{ github.event.inputs.version }}.zip" "$ISO_FILE"
-          rclone copyto "radxa-x4-arch-${{ github.event.inputs.version }}.zip" \
-            "r2:${{vars.CLOUDFLARE_R2_BUCKET_NAME}}/${{ github.ref_name }}/radxa-x4-arch-${{ github.event.inputs.version }}.zip" \
+          IMAGE_TYPE="${{ (inputs.is_development == 'true' || github.event.inputs.is_development == 'true') && 'dev-' || '' }}"
+          ISO_FILE="radxa-x4-arch-${IMAGE_TYPE}${{ inputs.version || github.event.inputs.version }}.iso"
+          ZIP_FILE="radxa-x4-arch-${IMAGE_TYPE}${{ inputs.version || github.event.inputs.version }}.zip"
+          zip -j "$ZIP_FILE" "$ISO_FILE"
+          rclone copyto "$ZIP_FILE" \
+            "r2:${{vars.CLOUDFLARE_R2_BUCKET_NAME}}/${{ github.ref_name }}/$ZIP_FILE" \
             --s3-upload-cutoff=100M \
             --s3-chunk-size=100M \
             --transfers=7 \
             --verbose \
             --stats=1s
-          echo "Image successfully uploaded to R2"
+          echo "Image successfully uploaded to R2: ${ZIP_FILE}"
 
       - name: Cleanup
         if: always()
