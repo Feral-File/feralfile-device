@@ -26,24 +26,24 @@ pub const WEBAPP_URL: &str =
 pub const QRCODE_URL_PREFIX: &str = "file:///opt/feral/ui/launcher/index.html?step=qr&device_id=";
 
 // D-Bus configuration
-pub const DBUS_SETUPD_OBJECT: &str = "/com/feralfile/setupd";
+// pub const DBUS_SETUPD_OBJECT: &str = "/com/feralfile/setupd";
 pub const DBUS_CONNECTD_OBJECT: &str = "/com/feralfile/connectd";
 pub const DBUS_SYSMONITORD_OBJECT: &str = "/com/feralfile/sysmonitord";
 
 pub const DBUS_SYSMONITORD_DESTINATION: &str = "com.feralfile.sysmonitord";
 pub const DBUS_CONNECTD_DESTINATION: &str = "com.feralfile.connectd";
 
-pub const DBUS_SETUPD_INTERFACE: &str = "com.feralfile.setupd.general";
+// pub const DBUS_SETUPD_INTERFACE: &str = "com.feralfile.setupd.general";
 pub const DBUS_CONNECTD_INTERFACE: &str = "com.feralfile.connectd.general";
 pub const DBUS_SYSMONITORD_INTERFACE: &str = "com.feralfile.sysmonitord";
 
-pub const DBUS_EVENT_WIFI_CONNECTED: &str = "wifi_connected";
-pub const DBUS_EVENT_RELAYER_CONFIGURED: &str = "relayer_configured";
+// pub const DBUS_EVENT_WIFI_CONNECTED: &str = "wifi_connected";
+// pub const DBUS_EVENT_RELAYER_CONFIGURED: &str = "relayer_configured";
 pub const DBUS_EVENT_QRCODE_SWITCH: &str = "show_pairing_qr_code";
 pub const DBUS_CONNECTIVITY_METHOD: &str = "GetConnectivityStatus";
 pub const DBUS_RELAYER_TOPIC_ID_METHOD: &str = "GetRelayerTopicID";
 
-pub const DBUS_CONNECTD_TIMEOUT: u64 = 30 * 1000; // 30 seconds
+// pub const DBUS_CONNECTD_TIMEOUT: u64 = 30 * 1000; // 30 seconds
 pub const DBUS_MAX_RETRIES: usize = 6;
 pub const DBUS_ACK_TIMEOUT: u64 = 5 * 1000; // 5 seconds
 pub const DBUS_INTERNET_CHECK_TIMEOUT: u64 = 1 * 1000; // 1 second

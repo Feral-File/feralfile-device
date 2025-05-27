@@ -34,7 +34,7 @@ pub struct CDP {
 
 impl CDP {
     /// Asynchronously create a new CDP client by fetching the WebSocket URL and connecting.
-    pub async fn connect(cdp_url: &str) -> Result<Self, Box<dyn Error>> {
+    pub async fn connect(cdp_url: &str) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let ws_url = Self::get_ws_url(cdp_url).await?;
         let socket = Self::connect_ws(&ws_url).await?;
 
@@ -50,40 +50,20 @@ impl CDP {
     }
 
     /// Asynchronously navigate the page to the given URL via CDP.
-    pub async fn navigate(&self, url: &str) -> Result<(), Box<dyn Error>> {
+    pub async fn navigate(&self, url: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
         println!("CDP: Navigating to {}", url);
         self.send_cmd("Page.navigate", json!({ "url": url }))
             .await?;
         Ok(())
     }
 
-    pub async fn navigate_when_online(&self, url: &str) -> Result<(), Box<dyn Error>> {
-        // Create the command object as a JSON string
-        let command_obj = json!({
-            "command": "navigateWhenOnline",
-            "params": {
-                "url": url
-            }
-        });
-        
-        // Convert the command to a string
-        let command_str = command_obj.to_string();
-        let expr = format!("window.handleCDPRequest({})", command_str);
-        self.send_cmd(
-            "Runtime.evaluate",
-            json!({
-                "expression": expr,
-                "awaitPromise": true,
-                "returnByValue": true
-            }),
-        )
-        .await?;
-        Ok(())
-    }
-
     /// Send any CDP command and wait for the matching reply.
     /// Logs the full response and returns the `"result"` value (or an error).
-    async fn send_cmd(&self, method: &str, params: Value) -> Result<Value, Box<dyn Error>> {
+    async fn send_cmd(
+        &self,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
         // Send the command with a unique ID.
         let id = self.current_id.fetch_add(1, Ordering::Relaxed) + 1;
         let body = json!({
@@ -127,7 +107,7 @@ impl CDP {
     }
 
     /// Fetch the WebSocket debug URL from the CDP HTTP endpoint.
-    async fn get_ws_url(cdp_url: &str) -> Result<String, Box<dyn Error>> {
+    async fn get_ws_url(cdp_url: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
         let targets: Vec<Target> = reqwest::get(cdp_url).await?.json().await?;
         let ws_url = targets
             .into_iter()
@@ -146,7 +126,7 @@ impl CDP {
     /// Establish an asynchronous WebSocket connection to the CDP.
     async fn connect_ws(
         ws_url: &str,
-    ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn Error>> {
+    ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn Error + Send + Sync>> {
         let (socket, _response) = connect_async(ws_url).await?;
         Ok(socket)
     }

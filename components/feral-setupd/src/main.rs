@@ -24,6 +24,7 @@ enum Page {
     WebApp,
 }
 
+#[derive(Debug)]
 struct AppState {
     device_id: String,
     app_cache: Cache,
@@ -32,9 +33,16 @@ struct AppState {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Initialize dependencies
-    let chrome = Arc::new(CDP::connect(constant::CDP_URL).await?);
+    let chrome = match CDP::connect(constant::CDP_URL).await {
+        Ok(chrome) => chrome,
+        Err(e) => {
+            eprintln!("MAIN: Error connecting to CDP: {}", e);
+            return Err(format!("Error connecting to CDP: {}", e).into());
+        }
+    };
+    let chrome = Arc::new(chrome);
     let ble_service = Arc::new(BLE::new());
     let app_state = Arc::new(AppState {
         device_id: ble_service.get_device_id().await,
@@ -42,6 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         internet: AtomicBool::new(dbus_utils::internet_availability()),
         page: Mutex::new(Page::None),
     });
+    println!("MAIN: App state initialized: {:?}", app_state);
 
     // Start bluetooth advertising with callbacks
     let connect_wifi_cb = create_wifi_connected_cb(app_state.clone(), chrome.clone());
@@ -53,8 +62,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     {
         Ok(_) => println!("MAIN: Bluetooth advertising started successfully"),
         Err(e) => {
-            println!("MAIN: Error starting Bluetooth advertising: {}", e);
-            return Err(e);
+            eprintln!("MAIN: Error starting Bluetooth advertising: {}", e);
+            return Err(format!("Error starting Bluetooth advertising: {}", e).into());
         }
     }
 
@@ -123,12 +132,8 @@ fn create_wifi_connected_cb(
             app_state.app_cache.set(cache::TOPIC_ID, &topic_id);
             app_state.app_cache.save(constant::CACHE_FILEPATH);
             app_state.internet.store(true, Ordering::Relaxed);
-            let chromium = chromium.clone();
             task::spawn(async move {
-                match chromium.navigate_when_online(constant::WEBAPP_URL).await {
-                    Ok(_) => println!("MAIN: Navigated to webapp"),
-                    Err(e) => println!("MAIN: Error navigating to webapp: {}", e),
-                };
+                let _ = show_webapp(&app_state, &chromium).await;
             });
             Some(topic_id)
         })
@@ -203,7 +208,7 @@ async fn show_qrcode(
     app_state: &Arc<AppState>,
     chrome: &Arc<CDP>,
     redirect_when_online: bool,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     let qrcode_url = build_qrcode_url(&app_state);
     // QRCode url is dynamically built
     // So we always navigate to make sure the url is correct
@@ -219,12 +224,27 @@ async fn show_qrcode(
         }
     };
     if redirect_when_online {
-        // Redirect to webapp when internet is available
+        let stop_listening = Arc::new(AtomicBool::new(false));
+        let app_state = app_state.clone();
+        let chrome = chrome.clone();
+        dbus_utils::on_internet_available(
+            move || {
+                let app_state = app_state.clone();
+                let chrome = chrome.clone();
+                task::spawn(async move {
+                    let _ = show_webapp(&app_state, &chrome).await;
+                });
+            },
+            stop_listening,
+        );
     }
     Ok(())
 }
 
-async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<CDP>) -> Result<(), Box<dyn Error>> {
+async fn show_webapp(
+    app_state: &Arc<AppState>,
+    chrome: &Arc<CDP>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut page = app_state.page.lock().await;
     // For webapp, we only navigate if the page is not it already
     if *page == Page::WebApp {

@@ -16,6 +16,7 @@ pub type ListenCallback = Box<dyn Fn(Message) + Send + Sync>;
 /// whose member name is the original `member` plus `_ack`.
 /// If the ack is not received within `ACK_TIMEOUT`, the signal is resent.
 /// The operation is attempted up to `MAX_RETRIES` times.
+#[allow(dead_code)]
 pub fn send_signal(
     object_path: &str,
     interface: &str,
@@ -80,6 +81,7 @@ pub fn send_signal(
 /// Waits up to `timeout_ms` milliseconds for a signal, immediately emits
 /// a `<member>_ack` signal back to the same object/interface, then returns
 /// the payload of the received message.
+#[allow(dead_code)]
 pub fn receive_signal(
     object_path: &str,
     interface: &str,
@@ -250,7 +252,8 @@ pub fn internet_availability() -> bool {
     }
 }
 
-pub fn on_internet_available<F: Fn() + Send + Sync + 'static>(cb: F, stop: Arc<AtomicBool>) {
+#[allow(dead_code)]
+pub fn on_internet_available<F: FnOnce() + Send + Sync + 'static>(cb: F, stop: Arc<AtomicBool>) {
     tokio::task::spawn_blocking(move || {
         while !stop.load(Ordering::Relaxed) {
             let internet = internet_availability();

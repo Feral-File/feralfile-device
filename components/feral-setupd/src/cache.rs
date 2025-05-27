@@ -4,6 +4,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::sync::Mutex;
 
+#[derive(Debug)]
 pub struct Cache {
     data: Mutex<HashMap<String, String>>,
 }
