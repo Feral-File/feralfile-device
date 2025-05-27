@@ -164,7 +164,7 @@ cat <<EOF > /mnt/etc/passwd
 root:x:0:0:root:/root:/bin/bash
 feralfile:x:1000:1000::/home/feralfile:/bin/bash
 EOF
-cat <<EOF > /mnt/etc/shadow
+cat <<'EOF' > /mnt/etc/shadow
 root::14871::::::
 feralfile:$6$a6jSJzCP96jaanAM$vsQaqviv7xT4KOvAXjs810KO.u.liA1TpaWO9HUwAFmA8v2cVPGUs3QrvpOYGCTymKRxRbEoXrA0bVMwNvSXA.:14871::::::
 EOF

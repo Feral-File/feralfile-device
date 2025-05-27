@@ -59,7 +59,10 @@ rsync -aAX --delete --info=progress2 \
   --exclude={"/dev/*","/proc/*","/boot/*","/root/*","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/live-efi/*","/lost+found","/etc/machine-id","/etc/ssh/ssh_host_*","/etc/NetworkManager/system-connections/*","/var/lib/systemd/random-seed","/home/feralfile/.config/*","/home/feralfile/.logs/*","/home/feralfile/.state/*"} \
   "$SFS_MOUNT"/ /
 
-cat <<EOF > /mnt/etc/group
+rm -rf /home/soaktest
+rm -f /usr/local/bin/websocat
+
+cat <<EOF > /etc/group
 root:x:0:
 wheel:x:10:feralfile
 audio:x:92:feralfile
@@ -67,7 +70,7 @@ video:x:91:feralfile
 input:x:97:feralfile
 feralfile:x:1000:
 EOF
-cat <<EOF > /mnt/etc/gshadow
+cat <<EOF > /etc/gshadow
 root:::
 wheel:::feralfile
 audio:::feralfile
@@ -75,11 +78,11 @@ video:::feralfile
 input:::feralfile
 feralfile:::
 EOF
-cat <<EOF > /mnt/etc/passwd
+cat <<EOF > /etc/passwd
 root:x:0:0:root:/root:/bin/bash
 feralfile:x:1000:1000::/home/feralfile:/bin/bash
 EOF
-cat <<EOF > /mnt/etc/shadow
+cat <<'EOF' > /etc/shadow
 root::14871::::::
 feralfile:$6$a6jSJzCP96jaanAM$vsQaqviv7xT4KOvAXjs810KO.u.liA1TpaWO9HUwAFmA8v2cVPGUs3QrvpOYGCTymKRxRbEoXrA0bVMwNvSXA.:14871::::::
 EOF
