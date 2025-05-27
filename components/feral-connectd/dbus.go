@@ -24,8 +24,6 @@ const (
 	DBUS_SETUPD_EVENT_SHOW_PAIRING_QR_CODE      godbus.Member = "show_pairing_qr_code"
 	DBUS_SYS_MONITORD_EVENT_SYSMETRICS          godbus.Member = "sysmetrics"
 	DBUS_SYS_MONITORD_EVENT_CONNECTIVITY_CHANGE godbus.Member = "connectivity_change"
-
-	RPC_TIMEOUT = 5 * time.Second
 )
 
 type ConnectdDBus struct {
@@ -47,7 +45,7 @@ func (c *ConnectdDBus) GetRelayerTopicID() (string, *dbus.Error) {
 	}
 
 	// Context for timeout
-	deadlineCtx, cancel := context.WithTimeout(c.ctx, RPC_TIMEOUT)
+	deadlineCtx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
 	defer cancel()
 
 	// Channel to signal when the topicID is received

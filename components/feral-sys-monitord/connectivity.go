@@ -13,7 +13,8 @@ import (
 
 const (
 	// Ping interval in seconds
-	PING_INTERVAL = 30 * time.Second
+	SLOW_PING_INTERVAL = 30 * time.Second
+	FAST_PING_INTERVAL = 3 * time.Second
 
 	// Connection timeout
 	BACKGROUND_PING_TIMEOUT = 5 * time.Second
@@ -33,24 +34,26 @@ type Connectivity struct {
 	ctx           context.Context
 	logger        *zap.Logger
 	handlers      []ConnectivityHandler
-	done          chan struct{}
-	lastConnected bool
+	doneChan      chan struct{}
+	lastConnected *bool
 }
 
 func NewConnectivity(ctx context.Context, logger *zap.Logger) *Connectivity {
 	return &Connectivity{
-		ctx:           ctx,
-		logger:        logger,
-		handlers:      []ConnectivityHandler{},
-		done:          make(chan struct{}),
-		lastConnected: false,
+		ctx:      ctx,
+		logger:   logger,
+		handlers: []ConnectivityHandler{},
+		doneChan: make(chan struct{}),
 	}
 }
 
 func (c *Connectivity) GetLastConnected() bool {
 	c.Lock()
 	defer c.Unlock()
-	return c.lastConnected
+	if c.lastConnected == nil {
+		return false
+	}
+	return *c.lastConnected
 }
 
 func (c *Connectivity) Start() {
@@ -58,12 +61,21 @@ func (c *Connectivity) Start() {
 	c.background()
 }
 
+func (c *Connectivity) restart() {
+	c.Stop()
+	c.doneChan = make(chan struct{})
+	c.Start()
+}
+
 func (c *Connectivity) Stop() {
+	c.Lock()
+	defer c.Unlock()
+
 	select {
-	case <-c.done:
+	case <-c.doneChan:
 		c.logger.Info("Connectivity Watcher already stopped")
 	default:
-		close(c.done)
+		close(c.doneChan)
 	}
 	c.logger.Info("Connectivity Watcher stopped")
 }
@@ -98,7 +110,7 @@ func (c *Connectivity) notifyHandlers(ctx context.Context, connected bool) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-c.done:
+			case <-c.doneChan:
 				return
 			default:
 				h(ctx, connected)
@@ -116,17 +128,32 @@ func (c *Connectivity) background() {
 		if err != nil {
 			c.logger.Warn("Connectivity check failed", zap.Error(err))
 		}
-		c.notifyHandlers(c.ctx, connected)
+		c.Lock()
+		lastConnected := c.lastConnected
+		c.lastConnected = &connected
+		c.Unlock()
 
-		ticker := time.NewTicker(PING_INTERVAL)
+		if lastConnected == nil || connected != *lastConnected {
+			c.notifyHandlers(c.ctx, connected)
+		}
+
+		// determine the interval based on the initial connectivity
+		interval := SLOW_PING_INTERVAL
+		if !connected {
+			interval = FAST_PING_INTERVAL
+		}
+
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+
+		c.logger.Debug("Ticker started", zap.Duration("interval secs", interval/time.Second))
 
 		for {
 			select {
 			case <-c.ctx.Done():
 				c.logger.Info("Connectivity background goroutine stopped")
 				return
-			case <-c.done:
+			case <-c.doneChan:
 				c.logger.Info("Connectivity Watcher stopped")
 				return
 			case <-ticker.C:
@@ -137,11 +164,16 @@ func (c *Connectivity) background() {
 					continue
 				}
 				c.Lock()
-				if connected != c.lastConnected {
-					c.notifyHandlers(c.ctx, connected)
-					c.lastConnected = connected
-				}
+				lastConnected := c.lastConnected
+				c.lastConnected = &connected
 				c.Unlock()
+
+				if lastConnected != nil && connected != *lastConnected {
+					c.notifyHandlers(c.ctx, connected)
+
+					// restart the background goroutine when connectivity changes
+					c.restart()
+				}
 				c.logger.Info("Connectivity check result", zap.Bool("connected", connected))
 			}
 		}
@@ -173,7 +205,7 @@ func (c *Connectivity) CheckConnectivity(timeout time.Duration) (bool, error) {
 			case resultChan <- err == nil:
 			case <-egCtx.Done():
 				return nil
-			case <-c.done:
+			case <-c.doneChan:
 				return nil
 			case <-c.ctx.Done():
 				return nil
