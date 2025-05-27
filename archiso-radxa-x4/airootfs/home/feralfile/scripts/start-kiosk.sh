@@ -7,8 +7,6 @@ if [ -f /home/feralfile/.config/screen-orientation ]; then
 fi
 
 # Set Wayland/wlroots environment variables
-export WLR_NO_DIRECT_SCANOUT=1
-export WLR_DRM_NO_MODIFIERS=0
 export WLR_DRM_FORMATS="XR24/I915_FORMAT_MOD_Y_TILED;XR24/I915_FORMAT_MOD_Yf_TILED"
 
 # Start cage with bash, which will wait, rotate the screen, and start Chromium

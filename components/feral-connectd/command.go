@@ -4,14 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 var CmdOK = struct {
@@ -91,6 +95,8 @@ func (c *CommandHandler) Execute(ctx context.Context, cmd Command) (interface{},
 		result, err = c.handleScreenRotation(ctx, bytes)
 	case RELAYER_CMD_SHUTDOWN:
 		result, err = c.shutdown(ctx)
+	case RELAYER_CMD_DEVICE_STATUS:
+		result, err = c.deviceStatus(ctx, bytes)
 	default:
 		return nil, fmt.Errorf("invalid command: %s", cmd)
 	}
@@ -135,6 +141,161 @@ func (c *CommandHandler) showPairingQRCode(ctx context.Context, args []byte) (in
 			Body:      []interface{}{cmdArgs.Show},
 		})
 	return CmdOK, nil
+}
+
+func (c *CommandHandler) deviceStatus(ctx context.Context, args []byte) (interface{}, error) {
+	// Create response structure
+	response := struct {
+		ScreenRotation   string `json:"screenRotation,omitempty"`
+		ConnectedWifi    string `json:"connectedWifi,omitempty"`
+		InstalledVersion string `json:"installedVersion,omitempty"`
+		LatestVersion    string `json:"latestVersion,omitempty"`
+	}{}
+
+	// Use errgroup for parallel execution
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Channels to collect results safely
+	var screenRotation, connectedWifi, installedVersion, latestVersion string
+
+	// Get screen rotation
+	g.Go(func() error {
+		// Default to landscape
+		screenRotation = "landscape"
+
+		configPath := "/home/feralfile/.config/screen-orientation"
+		configData, err := os.ReadFile(configPath)
+		if err != nil {
+			return nil
+		}
+
+		if len(configData) > 0 {
+			savedRotation := strings.TrimSpace(string(configData))
+			orientationMap := map[string]string{
+				"normal": "landscape",
+				"90":     "portraitReverse",
+				"180":    "landscapeReverse",
+				"270":    "portrait",
+			}
+			if orientation, ok := orientationMap[savedRotation]; ok {
+				screenRotation = orientation
+			}
+		}
+		return nil
+	})
+
+	// Get WiFi information
+	g.Go(func() error {
+		cmd := exec.CommandContext(ctx, "nmcli", "-t", "-f", "NAME,DEVICE,STATE", "connection", "show", "--active")
+		output, err := cmd.Output()
+		if err != nil {
+			return nil // Don't fail if nmcli command fails
+		}
+
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			parts := strings.Split(line, ":")
+			if len(parts) >= 3 && parts[2] == "activated" {
+				// Check if device name starts with 'wl' (wireless) or contains 'wifi'
+				deviceName := parts[1]
+				if strings.HasPrefix(deviceName, "wl") || strings.Contains(deviceName, "wifi") {
+					connectedWifi = parts[0] // Network name
+					break
+				}
+			}
+		}
+		return nil
+	})
+
+	// Get installed version and latest version
+	g.Go(func() error {
+		configFile := "/home/feralfile/x1-config.json"
+		configBytes, err := os.ReadFile(configFile)
+		if err != nil {
+			return fmt.Errorf("failed to read config file: %w", err)
+		}
+
+		var config struct {
+			Version          string `json:"version"`
+			Branch           string `json:"branch"`
+			DistributionAcc  string `json:"distribution_acc"`
+			DistributionPass string `json:"distribution_pass"`
+		}
+
+		if err := json.Unmarshal(configBytes, &config); err != nil {
+			return fmt.Errorf("failed to parse config file: %w", err)
+		}
+
+		installedVersion = config.Version
+
+		// Get latest version from API if credentials are available
+		if config.Branch != "" && config.DistributionAcc != "" && config.DistributionPass != "" {
+			// Nested function to fetch latest version
+			fetchLatestVersion := func(branch, account, pass string) (string, error) {
+				otaAPI := "https://feralfile-device-distribution.bitmark-development.workers.dev/api/latest"
+				apiURL := fmt.Sprintf("%s/%s", otaAPI, branch)
+
+				// Create HTTP client with 2-second timeout
+				client := &http.Client{
+					Timeout: 2 * time.Second,
+				}
+
+				req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+				if err != nil {
+					return "", err
+				}
+
+				// Set basic auth
+				req.SetBasicAuth(account, pass)
+
+				resp, err := client.Do(req)
+				if err != nil {
+					return "", err
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode != http.StatusOK {
+					return "", fmt.Errorf("API returned status %d", resp.StatusCode)
+				}
+
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return "", err
+				}
+
+				var apiResponse struct {
+					LatestVersion string `json:"latest_version"`
+				}
+
+				if err := json.Unmarshal(body, &apiResponse); err != nil {
+					return "", err
+				}
+
+				return apiResponse.LatestVersion, nil
+			}
+
+			version, err := fetchLatestVersion(config.Branch, config.DistributionAcc, config.DistributionPass)
+			if err != nil {
+				return fmt.Errorf("failed to fetch latest version: %w", err)
+			}
+			latestVersion = version
+		}
+
+		return nil
+	})
+
+	// Wait for all goroutines to complete
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	// Safely assign results after all goroutines complete
+	response.ScreenRotation = screenRotation
+	response.ConnectedWifi = connectedWifi
+	response.InstalledVersion = installedVersion
+	response.LatestVersion = latestVersion
+
+	return response, nil
 }
 
 func (c *CommandHandler) handleScreenRotation(ctx context.Context, args []byte) (interface{}, error) {
@@ -237,7 +398,16 @@ func (c *CommandHandler) handleScreenRotation(ctx context.Context, args []byte) 
 
 	c.screenInitialized = false
 
-	return CmdOK, nil
+	orientationReplyMsg := "landscape"
+	switch newRotation {
+	case "90":
+		orientationReplyMsg = "portraitReverse"
+	case "180":
+		orientationReplyMsg = "landscapeReverse"
+	case "270":
+		orientationReplyMsg = "portrait"
+	}
+	return map[string]string{"orientation": orientationReplyMsg}, nil
 }
 
 func (c *CommandHandler) handleKeyboardEvent(ctx context.Context, args []byte) (interface{}, error) {
@@ -358,10 +528,35 @@ func (c *CommandHandler) handleMouseMoveEvent(ctx context.Context, args []byte) 
 	// Convert relative positions to absolute positions
 	absolutePositions := make([]map[string]float64, 0, len(cursorArgs.CursorOffsets))
 
-	for _, offset := range cursorArgs.CursorOffsets {
-		// Update cursor position with the relative offset
-		c.cursorPositionX += (offset.DX * c.movingScaleFactor)
-		c.cursorPositionY += (offset.DY * c.movingScaleFactor)
+	for i, offset := range cursorArgs.CursorOffsets {
+		// Calculate the magnitude of this offset
+		magnitude := math.Sqrt(offset.DX*offset.DX + offset.DY*offset.DY)
+
+		var clampedDX, clampedDY float64
+
+		// Only clamp obvious outliers (very large jumps)
+		if magnitude > 150 {
+			// This is likely a catch-up jump, clamp aggressively
+			maxOffset := 25.0
+			clampedDX = math.Max(-maxOffset, math.Min(maxOffset, offset.DX))
+			clampedDY = math.Max(-maxOffset, math.Min(maxOffset, offset.DY))
+
+			c.logger.Debug("Clamping outlier offset",
+				zap.Int("index", i),
+				zap.Float64("magnitude", magnitude),
+				zap.Float64("originalDX", offset.DX),
+				zap.Float64("originalDY", offset.DY),
+				zap.Float64("clampedDX", clampedDX),
+				zap.Float64("clampedDY", clampedDY))
+		} else {
+			// Normal movement, use original values
+			clampedDX = offset.DX
+			clampedDY = offset.DY
+		}
+
+		// Update cursor position with the offset
+		c.cursorPositionX += (clampedDX * c.movingScaleFactor)
+		c.cursorPositionY += (clampedDY * c.movingScaleFactor)
 
 		// Ensure position stays within screen bounds
 		c.cursorPositionX = math.Max(0, math.Min(c.cursorPositionX, c.screenWidth))
