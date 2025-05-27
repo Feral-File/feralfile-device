@@ -246,7 +246,7 @@ pub fn internet_availability() -> bool {
             status
         }
         Err(e) => {
-            println!("DBUS: Error checking internet availability: {}", e);
+            // println!("DBUS: Error checking internet availability: {}", e);
             false
         }
     }
