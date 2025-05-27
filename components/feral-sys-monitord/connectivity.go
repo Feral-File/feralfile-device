@@ -146,7 +146,7 @@ func (c *Connectivity) background() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
-		c.logger.Debug("Ticker started", zap.Duration("interval secs", interval/time.Second))
+		c.logger.Debug("Ticker started", zap.Duration("interval secs", interval))
 
 		for {
 			select {
