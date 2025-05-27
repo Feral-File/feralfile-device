@@ -1,6 +1,7 @@
 root:x:0:
-wheel:x:10:feralfile
-audio:x:92:feralfile
-video:x:91:feralfile
-input:x:97:feralfile
+wheel:x:10:feralfile,soaktest
+audio:x:92:feralfile,soaktest
+video:x:91:feralfile,soaktest
+input:x:97:feralfile,soaktest
 feralfile:x:1000:
+soaktest:x:1001:

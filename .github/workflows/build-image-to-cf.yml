@@ -7,6 +7,14 @@ on:
         description: 'Image version'
         required: true
         default: '0.0.1'
+      soak-test:
+        description: 'Include soak test'
+        required: true
+        type: choice
+        options:
+          - true
+          - false
+        default: false
       environment:
         description: "Environment to build"
         required: false
@@ -107,6 +115,20 @@ jobs:
         run: |
           mkdir -p /build
           cp -r archiso-radxa-x4 /build/
+          if [ "${{ inputs.soak-test }}" == "false" ]; then
+            rm -rf /build/archiso-radxa-x4/airootfs/home/soaktest
+            rm -f /build/archiso-radxa-x4/efiboot/loader/entries/archiso-x86_64-linux-soak-test.conf
+            rm -f /build/archiso-radxa-x4/airootfs/usr/local/bin/websocat
+          else 
+            cat >> /build/archiso-radxa-x4/packages.x86_64 << EOF
+          # soak test tools
+          foot
+          bc
+          stress-ng
+          mesa-utils
+          python-rich
+          EOF
+          fi 
 
       - name: Update start-kiosk.sh
         if: ${{ (inputs.is_development == true) || (github.event.inputs.is_development == true) }}
