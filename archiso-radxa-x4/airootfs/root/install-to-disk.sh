@@ -144,30 +144,6 @@ rm -f /mnt/home/*/.bash_history 2>/dev/null || true
 rm -rf /mnt/var/log/*
 rm -rf /mnt/var/tmp/*
 
-cat <<EOF > /mnt/etc/group
-root:x:0:
-wheel:x:10:feralfile
-audio:x:92:feralfile
-video:x:91:feralfile
-input:x:97:feralfile
-feralfile:x:1000:
-EOF
-cat <<EOF > /mnt/etc/gshadow
-root:::
-wheel:::feralfile
-audio:::feralfile
-video:::feralfile
-input:::feralfile
-feralfile:::
-EOF
-cat <<EOF > /mnt/etc/passwd
-root:x:0:0:root:/root:/bin/bash
-feralfile:x:1000:1000::/home/feralfile:/bin/bash
-EOF
-cat <<'EOF' > /mnt/etc/shadow
-root::14871::::::
-feralfile:$6$a6jSJzCP96jaanAM$vsQaqviv7xT4KOvAXjs810KO.u.liA1TpaWO9HUwAFmA8v2cVPGUs3QrvpOYGCTymKRxRbEoXrA0bVMwNvSXA.:14871::::::
-EOF
 # ─── Setup bootloader ──────────────────────────────────────────────────
 echo
 echo "Copying systemd-boot..."
@@ -227,6 +203,9 @@ pacman -Syy
 EOF
 else
 arch-chroot /mnt /bin/bash <<EOF
+echo "Removing soaktest account..."
+userdel soaktest
+
 echo "Overwriting mkinitcpio.conf HOOKS..."
 sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems)/' /etc/mkinitcpio.conf
 
