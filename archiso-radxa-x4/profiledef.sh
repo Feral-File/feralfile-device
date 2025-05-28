@@ -26,4 +26,5 @@ file_permissions=(
   ["/home/feralfile/scripts/boot-config-sync.sh"]="1000:1000:755"
   ["/home/feralfile/scripts/feral-timesyncd.sh"]="1000:1000:755"
   ["/home/feralfile/scripts/log-rotation.sh"]="1000:1000:755"
+  ["/home/feralfile/scripts/cdp-ready-check.sh"]="1000:1000:755"
 )
