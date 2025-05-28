@@ -245,7 +245,7 @@ pub fn internet_availability() -> bool {
             let status = response.read1::<bool>().unwrap();
             status
         }
-        Err(e) => {
+        Err(_) => {
             // println!("DBUS: Error checking internet availability: {}", e);
             false
         }

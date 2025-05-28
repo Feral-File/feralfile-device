@@ -71,6 +71,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let has_cache = app_state.app_cache.get(cache::TOPIC_ID).is_some();
     if !has_cache {
         // First time using the app, just show the QRCode
+        ssids_cacher.trigger_refresh();
         let _ = show_qrcode(&app_state, &chrome, false).await;
     } else {
         // Second time using the app
@@ -79,6 +80,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             let _ = show_webapp(&app_state, &chrome).await;
         } else {
             // No internet, show QRCode and wait for user to fix it
+            ssids_cacher.trigger_refresh();
             let _ = show_qrcode(&app_state, &chrome, true).await;
         }
     }
