@@ -4,22 +4,28 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
 )
 
 const (
-	STATUS_POLL_INTERVAL = 10 * time.Second
+	STATUS_POLL_INTERVAL      = 10 * time.Second
+	SYS_METRICS_POLL_INTERVAL = 5 * time.Second
 )
 
 // StatusPoller handles periodic polling of both player status via CDP and device status
 type StatusPoller struct {
+	sync.Mutex
 	cdp         *CDPClient
 	relayer     *RelayerClient
 	logger      *zap.Logger
 	stopChan    chan struct{}
 	refreshChan chan struct{}
+
+	// Store last system metrics
+	lastSysMetrics []byte
 }
 
 func NewStatusPoller(cdp *CDPClient, relayer *RelayerClient, logger *zap.Logger) *StatusPoller {
@@ -32,15 +38,44 @@ func NewStatusPoller(cdp *CDPClient, relayer *RelayerClient, logger *zap.Logger)
 	}
 }
 
+// SaveLastSysMetrics stores the latest system metrics
+func (s *StatusPoller) SaveLastSysMetrics(metrics []byte) {
+	s.Lock()
+	defer s.Unlock()
+	s.lastSysMetrics = metrics
+}
+
+// GetLastSysMetrics returns the last stored system metrics
+func (s *StatusPoller) GetLastSysMetrics() (map[string]interface{}, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	var sysMetrics map[string]interface{}
+	if s.lastSysMetrics != nil {
+		err := json.Unmarshal(s.lastSysMetrics, &sysMetrics)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal last sys metrics: %s", err)
+		}
+	}
+
+	return sysMetrics, nil
+}
+
 func (s *StatusPoller) Start(ctx context.Context) {
 	s.logger.Info("Starting status polling (player and device)")
 
-	ticker := time.NewTicker(STATUS_POLL_INTERVAL)
-	defer ticker.Stop()
+	// Ticker for player and device status (every 10 seconds)
+	statusTicker := time.NewTicker(STATUS_POLL_INTERVAL)
+	defer statusTicker.Stop()
+
+	// Ticker for sys metrics (every 5 seconds)
+	sysMetricsTicker := time.NewTicker(SYS_METRICS_POLL_INTERVAL)
+	defer sysMetricsTicker.Stop()
 
 	// Poll immediately on start
 	s.pollPlayerStatus(ctx)
 	s.pollDeviceStatus(ctx)
+	s.pollSysMetrics(ctx)
 
 	for {
 		select {
@@ -50,9 +85,11 @@ func (s *StatusPoller) Start(ctx context.Context) {
 		case <-s.stopChan:
 			s.logger.Info("Status polling stopped")
 			return
-		case <-ticker.C:
+		case <-statusTicker.C:
 			s.pollPlayerStatus(ctx)
 			s.pollDeviceStatus(ctx)
+		case <-sysMetricsTicker.C:
+			s.pollSysMetrics(ctx)
 		case <-s.refreshChan:
 			s.logger.Debug("Force refreshing status due to CDP command")
 			s.pollPlayerStatus(ctx)
@@ -139,4 +176,35 @@ func (s *StatusPoller) pollDeviceStatus(ctx context.Context) {
 	if err != nil {
 		s.logger.Error("Failed to send device status notification", zap.Error(err))
 	}
+}
+
+func (s *StatusPoller) pollSysMetrics(ctx context.Context) {
+	// Check if relayer is connected before polling
+	if !s.relayer.IsConnected() {
+		s.logger.Debug("Relayer not connected, skipping sys metrics poll")
+		return
+	}
+
+	s.logger.Debug("Polling sys metrics")
+
+	// Get sys metrics from our stored data
+	sysMetrics, err := s.GetLastSysMetrics()
+	if err != nil {
+		s.logger.Error("Failed to get sys metrics", zap.Error(err))
+		return
+	}
+
+	// Send the sys metrics as a notification
+	err = s.relayer.sendNotification(ctx, NOTIFICATION_TYPE_SYSTEM_METRICS, sysMetrics)
+	if err != nil {
+		s.logger.Error("Failed to send sys metrics notification", zap.Error(err))
+	}
+}
+
+// GetSysMetrics is a shared function that can be used by both StatusPoller and CommandHandler
+func GetSysMetrics(ctx context.Context) (map[string]interface{}, error) {
+	// This function will be called by the command handler
+	// We need to get the StatusPoller instance to access the metrics
+	// For now, we'll return an error indicating this needs to be refactored
+	return nil, fmt.Errorf("GetSysMetrics needs to be called through StatusPoller instance")
 }

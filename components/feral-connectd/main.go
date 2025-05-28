@@ -60,7 +60,7 @@ func main() {
 	}
 
 	// Load state
-	_, err = LoadState(logger)
+	state, err = LoadState(logger)
 	if err != nil {
 		logger.Fatal("Failed to load state", zap.Error(err))
 	}

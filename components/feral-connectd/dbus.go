@@ -10,6 +10,7 @@ import (
 
 	"github.com/feral-file/godbus"
 	"github.com/godbus/dbus/v5"
+	"go.uber.org/zap"
 )
 
 const (
@@ -110,6 +111,7 @@ func (c *ConnectdDBus) GetRelayerTopicID() (string, *dbus.Error) {
 		return GetState().Relayer.TopicID, nil
 	}
 	if err != nil {
+		c.relayer.logger.Error("Failed to connect to relayer", zap.Error(err))
 		return "", dbus.NewError(err.Error(), []interface{}{})
 	}
 

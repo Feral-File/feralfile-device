@@ -20,7 +20,7 @@ const (
 
 // notificationPersistConfig maps notification types to their persist record counts
 var notificationPersistConfig = map[NotificationType]int{
-	NOTIFICATION_TYPE_SYSTEM_METRICS: 10,
+	NOTIFICATION_TYPE_SYSTEM_METRICS: 5,
 	NOTIFICATION_TYPE_PLAYER_STATUS:  1,
 	NOTIFICATION_TYPE_DEVICE_STATUS:  1,
 }
@@ -80,10 +80,11 @@ func (m *Mediator) handleDBusSignal(
 		}
 
 		m.logger.Debug("Received sysmetrics", zap.String("metrics", string(body)))
-		m.cmd.saveLastSysMetrics(body)
 
-		// Send system metrics notification
-		m.relayer.sendNotification(ctx, NOTIFICATION_TYPE_SYSTEM_METRICS, body)
+		// Save to StatusPoller instead of CommandHandler
+		if m.statusPoller != nil {
+			m.statusPoller.SaveLastSysMetrics(body)
+		}
 
 	case DBUS_SYS_MONITORD_EVENT_CONNECTIVITY_CHANGE:
 		if len(payload.Body) != 1 {

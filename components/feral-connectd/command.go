@@ -37,7 +37,11 @@ type CommandHandler struct {
 	dbus   *godbus.DBusClient
 	logger *zap.Logger
 
-	lastSysMetrics []byte
+	// Remove lastSysMetrics from here as it's now in StatusPoller
+	// lastSysMetrics []byte
+
+	// Add reference to StatusPoller to get metrics
+	statusPoller *StatusPoller
 
 	// Mouse position tracking
 	cursorPositionX   float64
@@ -56,10 +60,9 @@ func NewCommandHandler(cdp *CDPClient, dbus *godbus.DBusClient, logger *zap.Logg
 	}
 }
 
-func (c *CommandHandler) saveLastSysMetrics(metrics []byte) {
-	c.Lock()
-	defer c.Unlock()
-	c.lastSysMetrics = metrics
+// SetStatusPoller sets the StatusPoller reference after initialization
+func (c *CommandHandler) SetStatusPoller(statusPoller *StatusPoller) {
+	c.statusPoller = statusPoller
 }
 
 func (c *CommandHandler) Execute(ctx context.Context, cmd Command) (interface{}, error) {
@@ -552,16 +555,9 @@ func (c *CommandHandler) shutdown(ctx context.Context) (interface{}, error) {
 }
 
 func (c *CommandHandler) getSysMetrics() (interface{}, error) {
-	c.Lock()
-	defer c.Unlock()
-
-	var sysMetrics map[string]interface{}
-	if c.lastSysMetrics != nil {
-		err := json.Unmarshal(c.lastSysMetrics, &sysMetrics)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal last sys metrics: %s", err)
-		}
+	if c.statusPoller == nil {
+		return nil, fmt.Errorf("status poller not initialized")
 	}
 
-	return sysMetrics, nil
+	return c.statusPoller.GetLastSysMetrics()
 }
