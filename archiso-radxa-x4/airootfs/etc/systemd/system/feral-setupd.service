@@ -1,6 +1,6 @@
 [Unit]
 Description=Feral File Setup Service
-After=chromium-kiosk.service bluetooth.service network.target feral-connectd.service
+After=bluetooth.service network.target feral-connectd.service chromium-ready.target
 Requires=chromium-kiosk.service bluetooth.service
 Wants=network.target
 

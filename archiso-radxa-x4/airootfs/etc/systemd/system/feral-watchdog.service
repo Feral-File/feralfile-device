@@ -1,6 +1,6 @@
 [Unit]
 Description=FeralFile Kiosk Watchdog Daemon
-After=chromium-kiosk.service feral-sys-monitord.service network.target
+After=feral-sys-monitord.service network.target chromium-ready.target
 Wants=network.target
 
 [Service]

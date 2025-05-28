@@ -1,6 +1,6 @@
 [Unit]
 Description=Feral File Connectd
-After=chromium-kiosk.service feral-sys-monitord.service
+After=feral-sys-monitord.service chromium-ready.target
 Requires=chromium-kiosk.service feral-sys-monitord.service
 Wants=network.target
 
