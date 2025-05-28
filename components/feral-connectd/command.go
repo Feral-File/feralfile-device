@@ -246,6 +246,9 @@ func (c *CommandHandler) handleScreenRotation(ctx context.Context, args []byte) 
 
 	c.screenInitialized = false
 
+	// Force refresh status poller
+	c.statusPoller.ForceRefresh()
+
 	orientationReplyMsg := "landscape"
 	switch newRotation {
 	case "90":

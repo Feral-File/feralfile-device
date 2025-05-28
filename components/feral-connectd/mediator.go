@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
@@ -162,6 +163,7 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 				m.logger.Error("Failed to send CDP request", zap.Error(err))
 				return err
 			}
+			time.Sleep(500 * time.Millisecond)
 
 			m.statusPoller.ForceRefresh()
 
