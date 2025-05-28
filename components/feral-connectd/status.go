@@ -149,7 +149,17 @@ func (s *StatusPoller) pollPlayerStatus(ctx context.Context) {
 	}
 
 	// Send the status as a notification
-	err = s.relayer.sendNotification(ctx, NOTIFICATION_TYPE_PLAYER_STATUS, result)
+	resultMap, ok := result.(map[string]interface{})
+	if !ok {
+		s.logger.Error("Failed to convert result to map", zap.Any("result", result))
+		return
+	}
+	message, ok := resultMap["message"]
+	if !ok {
+		s.logger.Error("Result map does not contain message key", zap.Any("result", result))
+		return
+	}
+	err = s.relayer.sendNotification(ctx, NOTIFICATION_TYPE_PLAYER_STATUS, message)
 	if err != nil {
 		s.logger.Error("Failed to send player status notification", zap.Error(err))
 	}
