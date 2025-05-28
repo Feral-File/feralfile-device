@@ -15,21 +15,23 @@ type NotificationType string
 const (
 	NOTIFICATION_TYPE_SYSTEM_METRICS NotificationType = "system_metrics"
 	NOTIFICATION_TYPE_PLAYER_STATUS  NotificationType = "player_status"
+	NOTIFICATION_TYPE_DEVICE_STATUS  NotificationType = "device_status"
 )
 
 // notificationPersistConfig maps notification types to their persist record counts
 var notificationPersistConfig = map[NotificationType]int{
 	NOTIFICATION_TYPE_SYSTEM_METRICS: 10,
 	NOTIFICATION_TYPE_PLAYER_STATUS:  1,
+	NOTIFICATION_TYPE_DEVICE_STATUS:  1,
 }
 
 type Mediator struct {
-	relayer    *RelayerClient
-	dbus       *godbus.DBusClient
-	cdp        *CDPClient
-	cmd        *CommandHandler
-	logger     *zap.Logger
-	playerComm *PlayerComm
+	relayer      *RelayerClient
+	dbus         *godbus.DBusClient
+	cdp          *CDPClient
+	cmd          *CommandHandler
+	logger       *zap.Logger
+	statusPoller *StatusPoller
 }
 
 func NewMediator(
@@ -160,7 +162,7 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 				return err
 			}
 
-			m.playerComm.ForceRefresh()
+			m.statusPoller.ForceRefresh()
 
 			return m.relayer.Send(ctx, result)
 		} else {
@@ -186,7 +188,7 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 	return nil
 }
 
-// SetPlayerComm sets the PlayerComm reference after initialization
-func (m *Mediator) SetPlayerComm(playerComm *PlayerComm) {
-	m.playerComm = playerComm
+// SetStatusPoller sets the StatusPoller reference after initialization
+func (m *Mediator) SetStatusPoller(statusPoller *StatusPoller) {
+	m.statusPoller = statusPoller
 }

@@ -118,15 +118,15 @@ func main() {
 		}
 	}
 
-	// Initialize PlayerComm
-	player := NewPlayerComm(cdpClient, relayerClient, logger)
+	// Initialize StatusPoller
+	statusPoller := NewStatusPoller(cdpClient, relayerClient, logger)
 
-	// Set the PlayerComm reference in mediator for force refresh
-	mediator.SetPlayerComm(player)
+	// Set the StatusPoller reference in mediator for force refresh
+	mediator.SetStatusPoller(statusPoller)
 
-	// Start PlayerComm - it will handle relayer connection status internally
-	go player.Start(ctx)
-	defer player.Stop()
+	// Start StatusPoller - it will handle relayer connection status internally
+	go statusPoller.Start(ctx)
+	defer statusPoller.Stop()
 
 	// send ready notification to systemd
 	sent, err := daemon.SdNotify(false, daemon.SdNotifyReady)
@@ -150,6 +150,7 @@ func getConnectivityStatus(ctx context.Context, dbus *godbus.DBusClient, logger 
 		MONITORD_DBUS_METHOD_GET_CONNECTIVITY_STATUS,
 		true,
 	)
+	logger.Debug("Connectivity status", zap.Any("resp", resp), zap.Error(err))
 	if err != nil {
 		return false, err
 	}
