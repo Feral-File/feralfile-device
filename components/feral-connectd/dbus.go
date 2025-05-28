@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -39,9 +40,21 @@ func NewConnectdDBus(ctx context.Context, relayer *RelayerClient) *ConnectdDBus 
 }
 
 func (c *ConnectdDBus) GetRelayerTopicID() (string, *dbus.Error) {
-	topicID := GetState().Relayer.TopicID
+	state := GetState()
+	topicID := state.Relayer.TopicID
+
+	// Add debug logging to understand state
+	fmt.Printf("DEBUG: GetRelayerTopicID called. TopicID: '%s', IsEmpty: %v\n", topicID, topicID == "")
+
 	if topicID != "" {
 		return topicID, nil
+	}
+
+	// Check if state file exists for debugging
+	if _, err := os.Stat("/home/feralfile/.state/connectd.state"); err != nil {
+		fmt.Printf("DEBUG: State file does not exist or cannot be accessed: %v\n", err)
+	} else {
+		fmt.Printf("DEBUG: State file exists but topic ID is empty\n")
 	}
 
 	// Context for timeout

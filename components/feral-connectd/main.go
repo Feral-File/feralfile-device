@@ -118,8 +118,13 @@ func main() {
 		}
 	}
 
-	// Initialize and start Player
-	player := NewPlayerComm(cdpClient, mediator, logger)
+	// Initialize PlayerComm
+	player := NewPlayerComm(cdpClient, relayerClient, logger)
+
+	// Set the PlayerComm reference in mediator for force refresh
+	mediator.SetPlayerComm(player)
+
+	// Start PlayerComm - it will handle relayer connection status internally
 	go player.Start(ctx)
 	defer player.Stop()
 

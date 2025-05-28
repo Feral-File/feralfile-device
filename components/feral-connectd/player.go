@@ -15,16 +15,16 @@ const (
 
 type PlayerComm struct {
 	cdp         *CDPClient
-	mediator    *Mediator
+	relayer     *RelayerClient
 	logger      *zap.Logger
 	stopChan    chan struct{}
 	refreshChan chan struct{}
 }
 
-func NewPlayerComm(cdp *CDPClient, mediator *Mediator, logger *zap.Logger) *PlayerComm {
+func NewPlayerComm(cdp *CDPClient, relayer *RelayerClient, logger *zap.Logger) *PlayerComm {
 	return &PlayerComm{
 		cdp:         cdp,
-		mediator:    mediator,
+		relayer:     relayer,
 		logger:      logger,
 		stopChan:    make(chan struct{}),
 		refreshChan: make(chan struct{}, 10), // Buffered channel to prevent blocking
@@ -74,6 +74,12 @@ func (p *PlayerComm) ForceRefresh() {
 }
 
 func (p *PlayerComm) pollPlayerStatus(ctx context.Context) {
+	// Check if relayer is connected before polling
+	if !p.relayer.IsConnected() {
+		p.logger.Debug("Relayer not connected, skipping player status poll")
+		return
+	}
+
 	p.logger.Debug("Polling player status from Chromium")
 
 	// Create the payload in the same format as mediator
@@ -102,7 +108,7 @@ func (p *PlayerComm) pollPlayerStatus(ctx context.Context) {
 	}
 
 	// Send the status as a notification
-	err = p.mediator.sendNotification(ctx, NOTIFICATION_TYPE_PLAYER_STATUS, result)
+	err = p.relayer.sendNotification(ctx, NOTIFICATION_TYPE_PLAYER_STATUS, result)
 	if err != nil {
 		p.logger.Error("Failed to send player status notification", zap.Error(err))
 	}
