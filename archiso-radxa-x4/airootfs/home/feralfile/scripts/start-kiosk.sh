@@ -1,11 +1,5 @@
 #!/bin/bash
 
-chromium_down() {
-  echo "Stop chromium-ready.target..."
-  systemctl stop chromium-ready.target
-}
-trap chromium_down EXIT
-
 # Read saved rotation
 ROTATION="normal"
 if [ -f /home/feralfile/.config/screen-orientation ]; then
