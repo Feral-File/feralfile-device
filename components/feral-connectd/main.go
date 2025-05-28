@@ -118,6 +118,11 @@ func main() {
 		}
 	}
 
+	// Initialize and start Player
+	player := NewPlayerComm(cdpClient, mediator, logger)
+	go player.Start(ctx)
+	defer player.Stop()
+
 	// send ready notification to systemd
 	sent, err := daemon.SdNotify(false, daemon.SdNotifyReady)
 	if err != nil {

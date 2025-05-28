@@ -9,6 +9,20 @@ import (
 	"go.uber.org/zap"
 )
 
+// NotificationType represents the type of notification
+type NotificationType string
+
+const (
+	NOTIFICATION_TYPE_SYSTEM_METRICS NotificationType = "system_metrics"
+	NOTIFICATION_TYPE_PLAYER_STATUS  NotificationType = "player_status"
+)
+
+// notificationPersistConfig maps notification types to their persist record counts
+var notificationPersistConfig = map[NotificationType]int{
+	NOTIFICATION_TYPE_SYSTEM_METRICS: 10,
+	NOTIFICATION_TYPE_PLAYER_STATUS:  1,
+}
+
 type Mediator struct {
 	relayer *RelayerClient
 	dbus    *godbus.DBusClient
@@ -64,6 +78,9 @@ func (m *Mediator) handleDBusSignal(
 
 		m.logger.Debug("Received sysmetrics", zap.String("metrics", string(body)))
 		m.cmd.saveLastSysMetrics(body)
+
+		// Send system metrics notification
+		m.sendNotification(ctx, NOTIFICATION_TYPE_SYSTEM_METRICS, body)
 
 	case DBUS_SYS_MONITORD_EVENT_CONNECTIVITY_CHANGE:
 		if len(payload.Body) != 1 {
@@ -156,6 +173,7 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 
 			return m.relayer.Send(ctx,
 				map[string]interface{}{
+					"type":      "RPC",
 					"messageID": payload.MessageID,
 					"message":   result,
 				})
@@ -163,4 +181,33 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 	}
 
 	return nil
+}
+
+func (m *Mediator) sendNotification(ctx context.Context, notificationType NotificationType, message interface{}) error {
+	if !m.relayer.IsConnected() {
+		m.logger.Warn("Relayer not connected, skipping notification",
+			zap.String("type", string(notificationType)))
+		return nil
+	}
+
+	notification := map[string]interface{}{
+		"type":              "notification",
+		"notification_type": string(notificationType),
+		"message":           message,
+	}
+
+	// Get persist record count from the configuration map
+	if persistRecordCount, exists := notificationPersistConfig[notificationType]; exists {
+		notification["persist_record_count"] = persistRecordCount
+		m.logger.Debug("Sending notification",
+			zap.String("type", string(notificationType)),
+			zap.Int("persist_count", persistRecordCount),
+			zap.Any("message", message))
+	} else {
+		m.logger.Debug("Sending notification without persist config",
+			zap.String("type", string(notificationType)),
+			zap.Any("message", message))
+	}
+
+	return m.relayer.Send(ctx, notification)
 }
