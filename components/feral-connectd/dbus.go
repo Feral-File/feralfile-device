@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/feral-file/godbus"
 	"github.com/godbus/dbus/v5"
-	"go.uber.org/zap"
 )
 
 const (
@@ -41,21 +39,9 @@ func NewConnectdDBus(ctx context.Context, relayer *RelayerClient) *ConnectdDBus 
 }
 
 func (c *ConnectdDBus) GetRelayerTopicID() (string, *dbus.Error) {
-	state := GetState()
-	topicID := state.Relayer.TopicID
-
-	// Add debug logging to understand state
-	fmt.Printf("DEBUG: GetRelayerTopicID called. TopicID: '%s', IsEmpty: %v\n", topicID, topicID == "")
-
+	topicID := GetState().Relayer.TopicID
 	if topicID != "" {
 		return topicID, nil
-	}
-
-	// Check if state file exists for debugging
-	if _, err := os.Stat("/home/feralfile/.state/connectd.state"); err != nil {
-		fmt.Printf("DEBUG: State file does not exist or cannot be accessed: %v\n", err)
-	} else {
-		fmt.Printf("DEBUG: State file exists but topic ID is empty\n")
 	}
 
 	// Context for timeout
@@ -111,7 +97,6 @@ func (c *ConnectdDBus) GetRelayerTopicID() (string, *dbus.Error) {
 		return GetState().Relayer.TopicID, nil
 	}
 	if err != nil {
-		c.relayer.logger.Error("Failed to connect to relayer", zap.Error(err))
 		return "", dbus.NewError(err.Error(), []interface{}{})
 	}
 

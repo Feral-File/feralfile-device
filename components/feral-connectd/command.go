@@ -37,7 +37,6 @@ type CommandHandler struct {
 	dbus   *godbus.DBusClient
 	logger *zap.Logger
 
-	// Remove lastSysMetrics from here as it's now in StatusPoller
 	lastSysMetrics []byte
 
 	// Add reference to StatusPoller to get metrics
