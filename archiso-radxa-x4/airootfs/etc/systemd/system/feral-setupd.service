@@ -1,6 +1,7 @@
 [Unit]
 Description=Feral File Setup Service
-PartOf=chromium-ready.target
+BindsTo=feral-connectd.service
+After=feral-connectd.service
 Requires=bluetooth.service
 
 [Service]
@@ -13,6 +14,3 @@ Restart=always
 RestartSec=5s
 StandardOutput=append:/home/feralfile/.logs/setupd.log
 StandardError=append:/home/feralfile/.logs/setupd.log
-
-[Install]
-WantedBy=multi-user.target

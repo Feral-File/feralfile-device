@@ -16,6 +16,3 @@ RestartSec=5
 WatchdogSec=30s
 StandardOutput=append:/home/feralfile/.logs/connectd.log
 StandardError=append:/home/feralfile/.logs/connectd.log
-
-[Install]
-WantedBy=multi-user.target
