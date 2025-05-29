@@ -4,17 +4,33 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
 )
 
+// NotificationType represents the type of notification
+type NotificationType string
+
+const (
+	NOTIFICATION_TYPE_PLAYER_STATUS NotificationType = "player_status"
+	NOTIFICATION_TYPE_DEVICE_STATUS NotificationType = "device_status"
+)
+
+// notificationPersistConfig maps notification types to their persist record counts
+var notificationPersistConfig = map[NotificationType]int{
+	NOTIFICATION_TYPE_PLAYER_STATUS: 1,
+	NOTIFICATION_TYPE_DEVICE_STATUS: 1,
+}
+
 type Mediator struct {
-	relayer *RelayerClient
-	dbus    *godbus.DBusClient
-	cdp     *CDPClient
-	cmd     *CommandHandler
-	logger  *zap.Logger
+	relayer      *RelayerClient
+	dbus         *godbus.DBusClient
+	cdp          *CDPClient
+	cmd          *CommandHandler
+	logger       *zap.Logger
+	statusPoller *StatusPoller
 }
 
 func NewMediator(
@@ -141,6 +157,9 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 				m.logger.Error("Failed to send CDP request", zap.Error(err))
 				return err
 			}
+			time.Sleep(500 * time.Millisecond)
+
+			m.statusPoller.ForceRefresh()
 
 			return m.relayer.Send(ctx, result)
 		} else {
@@ -156,6 +175,7 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 
 			return m.relayer.Send(ctx,
 				map[string]interface{}{
+					"type":      "RPC",
 					"messageID": payload.MessageID,
 					"message":   result,
 				})
@@ -163,4 +183,9 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 	}
 
 	return nil
+}
+
+// SetStatusPoller sets the StatusPoller reference after initialization
+func (m *Mediator) SetStatusPoller(statusPoller *StatusPoller) {
+	m.statusPoller = statusPoller
 }

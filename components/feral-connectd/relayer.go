@@ -166,8 +166,18 @@ func (r *RelayerClient) Connect(ctx context.Context) error {
 	}
 
 	topicID := GetState().Relayer.TopicID
+	r.logger.Debug("Retrieved topic ID from state",
+		zap.String("topicID", topicID),
+		zap.Bool("isEmpty", topicID == ""),
+		zap.Bool("isReady", GetState().Relayer.IsReady()))
+
 	if topicID != "" {
 		connectURL += fmt.Sprintf("&topicID=%s", topicID)
+		r.logger.Debug("Added topic ID to connection URL", zap.String("connectURL", connectURL))
+	} else {
+		r.logger.Warn("Topic ID is empty, connecting without topic ID",
+			zap.String("connectURL", connectURL),
+			zap.String("stateFile", "/home/feralfile/.state/connectd.state"))
 	}
 
 	dialer := websocket.DefaultDialer
@@ -405,4 +415,37 @@ func (r *RelayerClient) closeConn() error {
 	r.logger.Info("Relayer connection closed")
 
 	return nil
+}
+
+func (r *RelayerClient) sendNotification(ctx context.Context, notificationType NotificationType, message interface{}) error {
+	r.logger.Debug("Attempting to send notification",
+		zap.String("type", string(notificationType)),
+		zap.Bool("relayer_connected", r.IsConnected()))
+
+	if !r.IsConnected() {
+		r.logger.Warn("Relayer not connected, skipping notification",
+			zap.String("type", string(notificationType)))
+		return nil
+	}
+
+	notification := map[string]interface{}{
+		"type":              "notification",
+		"notification_type": string(notificationType),
+		"message":           message,
+	}
+
+	// Get persist record count from the configuration map
+	if persistRecordCount, exists := notificationPersistConfig[notificationType]; exists {
+		notification["persist_record_count"] = persistRecordCount
+		r.logger.Debug("Sending notification",
+			zap.String("type", string(notificationType)),
+			zap.Int("persist_count", persistRecordCount),
+			zap.Any("message", message))
+	} else {
+		r.logger.Debug("Sending notification without persist config",
+			zap.String("type", string(notificationType)),
+			zap.Any("message", message))
+	}
+
+	return r.Send(ctx, notification)
 }
