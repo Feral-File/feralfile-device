@@ -145,8 +145,12 @@ func main() {
 
 func getConnectivityStatus(ctx context.Context, dbus *godbus.DBusClient, logger *zap.Logger) (bool, error) {
 	logger.Info("Getting connectivity status")
+
+	deadlineCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	resp, err := dbus.Call(
-		ctx,
+		deadlineCtx,
 		MONITORD_DBUS_NAME,
 		MONITORD_DBUS_PATH,
 		MONITORD_DBUS_INTERFACE,
