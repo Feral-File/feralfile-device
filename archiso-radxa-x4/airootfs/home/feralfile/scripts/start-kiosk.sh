@@ -9,6 +9,8 @@ fi
 # Set Wayland/wlroots environment variables
 export WLR_DRM_FORMATS="XR24/I915_FORMAT_MOD_Y_TILED;XR24/I915_FORMAT_MOD_Yf_TILED"
 
+/home/feralfile/scripts/cdp-ready-check.sh &
+
 # Start cage with bash, which will wait, rotate the screen, and start Chromium
 exec cage -- /bin/bash -c "wlr-randr --output HDMI-A-1 --transform $ROTATION && exec /usr/bin/chromium \
     --kiosk \
