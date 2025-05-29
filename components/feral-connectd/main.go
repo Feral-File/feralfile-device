@@ -91,7 +91,7 @@ func main() {
 	}
 	defer dbusClient.Stop()
 
-	err = dbusClient.Export(NewConnectdDBus(ctx, relayerClient), DBUS_PATH, DBUS_INTERFACE)
+	err = dbusClient.Export(NewConnectdDBus(ctx, relayerClient, logger), DBUS_PATH, DBUS_INTERFACE)
 	if err != nil {
 		logger.Fatal("Failed to export DBus interface", zap.Error(err))
 	}

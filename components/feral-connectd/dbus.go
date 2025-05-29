@@ -9,6 +9,7 @@ import (
 
 	"github.com/feral-file/godbus"
 	"github.com/godbus/dbus/v5"
+	"go.uber.org/zap"
 )
 
 const (
@@ -29,16 +30,20 @@ const (
 type ConnectdDBus struct {
 	ctx     context.Context
 	relayer *RelayerClient
+	logger  *zap.Logger
 }
 
-func NewConnectdDBus(ctx context.Context, relayer *RelayerClient) *ConnectdDBus {
+func NewConnectdDBus(ctx context.Context, relayer *RelayerClient, logger *zap.Logger) *ConnectdDBus {
 	return &ConnectdDBus{
 		ctx:     ctx,
 		relayer: relayer,
+		logger:  logger,
 	}
 }
 
 func (c *ConnectdDBus) GetRelayerTopicID() (string, *dbus.Error) {
+	c.logger.Info("DBus RPC called: GetRelayerTopicID")
+
 	topicID := GetState().Relayer.TopicID
 	if topicID != "" {
 		return topicID, nil
@@ -92,7 +97,7 @@ func (c *ConnectdDBus) GetRelayerTopicID() (string, *dbus.Error) {
 	defer c.relayer.RemoveRelayerMessage(handler)
 
 	// Connect to the relayer
-	err := c.relayer.Connect(deadlineCtx)
+	err := c.relayer.Connect(c.ctx)
 	if errors.Is(err, errRelayerAlreadyConnected) {
 		return GetState().Relayer.TopicID, nil
 	}
