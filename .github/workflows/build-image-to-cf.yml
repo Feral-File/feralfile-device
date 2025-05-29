@@ -28,6 +28,11 @@ on:
         required: false
         default: false
         type: boolean
+      install_to_emmc:
+        description: "Build an installation image which will install to emmc directly"
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   build-feral-connectd:
@@ -129,6 +134,14 @@ jobs:
           python-rich
           EOF
           fi 
+
+      - name: Update EFI boot option
+        if: ${{ (inputs.install_to_emmc == true) || (github.event.inputs.install_to_emmc == true) }}
+        run: |
+          cat >> /build/archiso-radxa-x4/efiboot/loader/loader.conf << EOF
+          default archiso-x86_64-linux-emmc-installation.conf
+          timeout 0
+          EOF
 
       - name: Update start-kiosk.sh
         if: ${{ (inputs.is_development == true) || (github.event.inputs.is_development == true) }}
