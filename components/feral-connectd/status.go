@@ -24,9 +24,6 @@ type StatusPoller struct {
 	stopChan    chan struct{}
 	refreshChan chan struct{}
 
-	// Store last system metrics
-	lastSysMetrics []byte
-
 	// Store last status hashes for each notification type to avoid duplicate notifications
 	lastStatusHashes map[NotificationType]string
 }
@@ -40,29 +37,6 @@ func NewStatusPoller(cdp *CDPClient, relayer *RelayerClient, logger *zap.Logger)
 		refreshChan:      make(chan struct{}, 10), // Buffered channel to prevent blocking
 		lastStatusHashes: make(map[NotificationType]string),
 	}
-}
-
-// SaveLastSysMetrics stores the latest system metrics
-func (s *StatusPoller) SaveLastSysMetrics(metrics []byte) {
-	s.Lock()
-	defer s.Unlock()
-	s.lastSysMetrics = metrics
-}
-
-// GetLastSysMetrics returns the last stored system metrics
-func (s *StatusPoller) GetLastSysMetrics() (map[string]interface{}, error) {
-	s.RLock()
-	defer s.RUnlock()
-
-	var sysMetrics map[string]interface{}
-	if s.lastSysMetrics != nil {
-		err := json.Unmarshal(s.lastSysMetrics, &sysMetrics)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal last sys metrics: %s", err)
-		}
-	}
-
-	return sysMetrics, nil
 }
 
 // computeStatusHash computes a fast MD5 hash of the status data for comparison
@@ -117,7 +91,6 @@ func (s *StatusPoller) Start(ctx context.Context) {
 	// Poll immediately on start
 	s.pollPlayerStatus(ctx)
 	s.pollDeviceStatus(ctx)
-	s.pollSysMetrics(ctx)
 
 	for {
 		select {
@@ -130,7 +103,6 @@ func (s *StatusPoller) Start(ctx context.Context) {
 		case <-statusTicker.C:
 			s.pollPlayerStatus(ctx)
 			s.pollDeviceStatus(ctx)
-			s.pollSysMetrics(ctx)
 		case <-s.refreshChan:
 			s.logger.Debug("Force refreshing status due to CDP command")
 			s.pollPlayerStatus(ctx)
@@ -239,33 +211,5 @@ func (s *StatusPoller) pollDeviceStatus(ctx context.Context) {
 	err = s.relayer.sendNotification(ctx, NOTIFICATION_TYPE_DEVICE_STATUS, deviceStatus)
 	if err != nil {
 		s.logger.Error("Failed to send device status notification", zap.Error(err))
-	}
-}
-
-func (s *StatusPoller) pollSysMetrics(ctx context.Context) {
-	// Check if relayer is connected before polling
-	if !s.relayer.IsConnected() {
-		s.logger.Debug("Relayer not connected, skipping sys metrics poll")
-		return
-	}
-
-	s.logger.Debug("Polling sys metrics")
-
-	// Get sys metrics from our stored data
-	sysMetrics, err := s.GetLastSysMetrics()
-	if err != nil {
-		s.logger.Error("Failed to get sys metrics", zap.Error(err))
-		return
-	}
-
-	// Check if we should send this notification (now includes sys metrics filtering)
-	if !s.shouldSendNotification(NOTIFICATION_TYPE_SYSTEM_METRICS, sysMetrics) {
-		s.logger.Debug("System metrics unchanged, skipping notification")
-		return
-	}
-
-	err = s.relayer.sendNotification(ctx, NOTIFICATION_TYPE_SYSTEM_METRICS, sysMetrics)
-	if err != nil {
-		s.logger.Error("Failed to send sys metrics notification", zap.Error(err))
 	}
 }
