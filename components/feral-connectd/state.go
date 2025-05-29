@@ -105,8 +105,6 @@ func GetState() *State {
 	defer stateLock.Unlock()
 
 	if state == nil {
-		// Log when creating new empty state
-		fmt.Printf("DEBUG: Creating new empty state (state was nil)\n")
 		state = &State{
 			Relayer:         &RelayerState{},
 			ConnectedDevice: &Device{},
