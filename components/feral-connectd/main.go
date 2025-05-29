@@ -124,6 +124,9 @@ func main() {
 	// Set the StatusPoller reference in mediator for force refresh
 	mediator.SetStatusPoller(statusPoller)
 
+	// Set the StatusPoller reference in command handler for force refresh
+	cmd.SetStatusPoller(statusPoller)
+
 	// Start StatusPoller - it will handle relayer connection status internally
 	go statusPoller.Start(ctx)
 	defer statusPoller.Stop()
