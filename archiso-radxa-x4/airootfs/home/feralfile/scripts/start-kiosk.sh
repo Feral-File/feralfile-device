@@ -31,4 +31,5 @@ exec cage -- /bin/bash -c "wlr-randr --output HDMI-A-1 --transform $ROTATION && 
     --enable-logging=stderr \
     --v=1 \
     --disk-cache-size=1073741824 \
+    --hide-scrollbars \
     file:///opt/feral/ui/launcher/index.html?step=logo"
