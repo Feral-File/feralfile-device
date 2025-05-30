@@ -123,23 +123,28 @@ func (c *Connectivity) background() {
 	go func() {
 		c.logger.Info("Connectivity background goroutine started")
 
-		// Check initial connectivity
-		connected, err := c.CheckConnectivity(BACKGROUND_PING_TIMEOUT)
-		if err != nil {
-			c.logger.Warn("Connectivity check failed", zap.Error(err))
-		}
+		// Get the last connected state
 		c.Lock()
 		lastConnected := c.lastConnected
-		c.lastConnected = &connected
 		c.Unlock()
 
-		if lastConnected == nil || connected != *lastConnected {
+		// Always check connectivity for the first time
+		if lastConnected == nil {
+			connected, err := c.CheckConnectivity(BACKGROUND_PING_TIMEOUT)
+			if err != nil {
+				c.logger.Warn("Connectivity check failed", zap.Error(err))
+			}
+			c.Lock()
+			c.lastConnected = &connected
+			lastConnected = c.lastConnected
+			c.Unlock()
+
 			c.notifyHandlers(c.ctx, connected)
 		}
 
 		// determine the interval based on the initial connectivity
 		interval := SLOW_PING_INTERVAL
-		if !connected {
+		if lastConnected == nil || !*lastConnected {
 			interval = FAST_PING_INTERVAL
 		}
 
@@ -187,7 +192,6 @@ func (c *Connectivity) CheckConnectivity(timeout time.Duration) (bool, error) {
 
 	eg, egCtx := errgroup.WithContext(ctx)
 	resultChan := make(chan bool, len(PING_TARGET_ADDRESS))
-	defer close(resultChan)
 
 	for _, target := range PING_TARGET_ADDRESS {
 		target := target
@@ -201,16 +205,7 @@ func (c *Connectivity) CheckConnectivity(timeout time.Duration) (bool, error) {
 				conn.Close()
 			}
 
-			select {
-			case resultChan <- err == nil:
-			case <-egCtx.Done():
-				return nil
-			case <-c.doneChan:
-				return nil
-			case <-c.ctx.Done():
-				return nil
-			}
-
+			resultChan <- err == nil
 			return err
 		})
 	}
@@ -221,7 +216,7 @@ func (c *Connectivity) CheckConnectivity(timeout time.Duration) (bool, error) {
 	}
 
 	connected := false
-	for i := 0; i < len(PING_TARGET_ADDRESS); i++ {
+	for range PING_TARGET_ADDRESS {
 		result := <-resultChan
 		if result {
 			connected = true
