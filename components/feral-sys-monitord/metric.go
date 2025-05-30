@@ -44,10 +44,9 @@ type ScreenMetrics struct {
 }
 
 type DiskMetrics struct {
-	TotalCapacity     float64            `json:"total_capacity"`
-	UsedCapacity      float64            `json:"used_capacity"`
-	AvailableCapacity float64            `json:"available_capacity"`
-	Breakdown         map[string]float64 `json:"breakdown"`
+	TotalCapacity     float64 `json:"total_capacity"`
+	UsedCapacity      float64 `json:"used_capacity"`
+	AvailableCapacity float64 `json:"available_capacity"`
 }
 
 type SysMetrics struct {
@@ -96,7 +95,7 @@ func (p *SysResMonitor) Start() {
 func (p *SysResMonitor) run() {
 	p.logger.Info("SysResMonitor started in the background")
 
-	go p.tick(p.ctx, 1*time.Second, p.monitorCPUFrequency, p.monitorGPUFreq, p.monitorMemory, p.monitorDisk)
+	go p.tick(p.ctx, 2*time.Second, p.monitorCPUFrequency, p.monitorGPUFreq, p.monitorMemory, p.monitorDisk)
 	go p.tick(p.ctx, 4*time.Second, p.monitorCPUTemperature)
 	go p.tick(p.ctx, 30*time.Second, p.monitorUptime)
 	go p.tick(p.ctx, 60*time.Second, p.monitorScreen)
@@ -448,16 +447,6 @@ func (p *SysResMonitor) monitorDisk(ctx context.Context) error {
 	p.lastMetrics.Disk.AvailableCapacity = available
 	p.Unlock()
 
-	// Get breakdown
-	breakdown, err := p.getDiskBreakdown(ctx)
-	if err != nil {
-		return err
-	}
-
-	p.Lock()
-	p.lastMetrics.Disk.Breakdown = breakdown
-	p.Unlock()
-
 	return nil
 }
 
@@ -497,35 +486,6 @@ func (p *SysResMonitor) getDiskStats(ctx context.Context) (total, used, availabl
 	}
 
 	return total, used, available, nil
-}
-
-func (p *SysResMonitor) getDiskBreakdown(ctx context.Context) (map[string]float64, error) {
-	cmd := exec.CommandContext(ctx, "bash", "-c", "du -s /* 2>/dev/null || true")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	output, err := cmd.Output()
-	if err != nil {
-		p.logger.Error("Failed to get disk breakdown", zap.String("stderr", stderr.String()), zap.Error(err))
-		return nil, err
-	}
-
-	lines := strings.Split(string(output), "\n")
-	metrics := make(map[string]float64)
-	for _, line := range lines {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-
-		total, err := strconv.ParseFloat(fields[0], 64)
-		if err != nil {
-			return nil, err
-		}
-
-		metrics[fields[1]] = total
-	}
-
-	return metrics, nil
 }
 
 func (p *SysResMonitor) notifyHandlers(ctx context.Context, metrics *SysMetrics) {

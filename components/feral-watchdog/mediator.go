@@ -53,10 +53,9 @@ type ScreenMetrics struct {
 }
 
 type DiskMetrics struct {
-	TotalCapacity     float64            `json:"total_capacity"`
-	UsedCapacity      float64            `json:"used_capacity"`
-	AvailableCapacity float64            `json:"available_capacity"`
-	Breakdown         map[string]float64 `json:"breakdown"`
+	TotalCapacity     float64 `json:"total_capacity"`
+	UsedCapacity      float64 `json:"used_capacity"`
+	AvailableCapacity float64 `json:"available_capacity"`
 }
 
 func (p DiskMetrics) UsagePercent() (float64, error) {
