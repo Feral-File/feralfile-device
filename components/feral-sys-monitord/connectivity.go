@@ -164,10 +164,12 @@ func (c *Connectivity) background() {
 			case <-ticker.C:
 				c.logger.Info("Checking connectivity")
 				connected, err := c.CheckConnectivity(BACKGROUND_PING_TIMEOUT)
+				c.logger.Info("Connectivity check result", zap.Bool("connected", connected))
 				if err != nil {
 					c.logger.Warn("Connectivity check failed", zap.Error(err))
 					continue
 				}
+
 				c.Lock()
 				lastConnected := c.lastConnected
 				c.lastConnected = &connected
@@ -178,8 +180,9 @@ func (c *Connectivity) background() {
 
 					// restart the background goroutine when connectivity changes
 					c.restart()
+
+					return
 				}
-				c.logger.Info("Connectivity check result", zap.Bool("connected", connected))
 			}
 		}
 	}()
