@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/feral-file/godbus"
 	"github.com/godbus/dbus/v5"
+	"go.uber.org/zap"
 )
 
 const (
@@ -17,15 +18,18 @@ const (
 
 type SysMonitordDBus struct {
 	connectivity *Connectivity
+	logger       *zap.Logger
 }
 
-func NewSysMonitordDBus(connectivity *Connectivity) *SysMonitordDBus {
+func NewSysMonitordDBus(connectivity *Connectivity, logger *zap.Logger) *SysMonitordDBus {
 	return &SysMonitordDBus{
 		connectivity: connectivity,
+		logger:       logger,
 	}
 }
 
 func (s *SysMonitordDBus) GetConnectivityStatus(refresh bool) (bool, *dbus.Error) {
+	s.logger.Info("DBus RPC called: GetConnectivityStatus", zap.Bool("refresh", refresh))
 	if refresh {
 		connected, err := s.connectivity.CheckConnectivity(RPC_PING_TIMEOUT)
 		if err != nil {

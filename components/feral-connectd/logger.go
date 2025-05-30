@@ -14,7 +14,8 @@ func New(debug bool) (*zap.Logger, error) {
 		config = zap.NewProductionConfig()
 	}
 	config.EncoderConfig.StacktraceKey = ""
-	config.EncoderConfig.TimeKey = ""
+	config.EncoderConfig.TimeKey = "timestamp"
+	config.EncoderConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
 
 	// Create the logger with the custom core
 	logger, err := config.Build()

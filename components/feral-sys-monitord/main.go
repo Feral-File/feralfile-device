@@ -70,7 +70,7 @@ func main() {
 	defer dbusClient.Stop()
 
 	// Initialize SysMonitordDBus
-	sysMonitordDBus := NewSysMonitordDBus(connectivity)
+	sysMonitordDBus := NewSysMonitordDBus(connectivity, logger)
 	err = dbusClient.Export(sysMonitordDBus, DBUS_PATH, DBUS_INTERFACE)
 	if err != nil {
 		logger.Fatal("DBus export failed", zap.Error(err))
