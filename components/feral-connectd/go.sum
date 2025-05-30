@@ -4,8 +4,8 @@ github.com/coreos/go-systemd/v22 v22.5.0 h1:RrqgGjYQKalulkV8NGVIfkXQf6YYmOyiJKk8
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/feral-file/godbus v0.0.6-0.20250528074618-d9e498dc3a36 h1:8NmsktmXcKuX5oOiUqd1XknjLNYgTCxli0UvqTnan9A=
-github.com/feral-file/godbus v0.0.6-0.20250528074618-d9e498dc3a36/go.mod h1:fJiQvR6JLa2TKwwzOoxKg+/qfjM2MeWxpjFhrleOEMA=
+github.com/feral-file/godbus v0.0.6-0.20250530032926-fc5a2d7c32a7 h1:/INaxTD9dwqT1BvY5aED+QIRs+jWER4TSiSfJFCg0OU=
+github.com/feral-file/godbus v0.0.6-0.20250530032926-fc5a2d7c32a7/go.mod h1:fJiQvR6JLa2TKwwzOoxKg+/qfjM2MeWxpjFhrleOEMA=
 github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/godbus/dbus/v5 v5.1.0 h1:4KLkAxT3aOY8Li4FRJe/KvhoNFFxo0m6fNuFUO8QJUk=
 github.com/godbus/dbus/v5 v5.1.0/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=

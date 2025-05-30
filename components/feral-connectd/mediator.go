@@ -65,6 +65,8 @@ func (m *Mediator) handleDBusSignal(
 		return nil, nil
 	}
 
+	m.logger.Info("handle received DBus signal", zap.String("name", payload.Name()), zap.String("path", payload.Path.String()))
+
 	switch payload.Member {
 	case DBUS_SYS_MONITORD_EVENT_SYSMETRICS:
 		if len(payload.Body) != 1 {
@@ -120,6 +122,8 @@ func (m *Mediator) handleDBusSignal(
 }
 
 func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayload) error {
+	m.logger.Info("handle received relayer message", zap.Any("payload", payload))
+
 	switch payload.MessageID {
 	case RELAYER_MESSAGE_ID_SYSTEM:
 		topicID := payload.Message.TopicID

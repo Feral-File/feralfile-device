@@ -17,6 +17,8 @@ import (
 const (
 	// Timeouts
 	GOROUTINE_TIMEOUT = 1500 * time.Millisecond // 1.5 seconds
+
+	DBUS_NAME = "com.feralfile.watchdog"
 )
 
 var debug = false
@@ -57,7 +59,7 @@ func main() {
 
 	// Initialize DBus client
 	mo := dbus.WithMatchPathNamespace(dbus.ObjectPath("/com/feralfile/sysmonitord"))
-	dbusClient := godbus.NewDBusClient(ctx, logger, mo)
+	dbusClient := godbus.NewDBusClient(ctx, logger, DBUS_NAME, mo)
 	err = dbusClient.Start()
 	if err != nil {
 		logger.Fatal("DBus init failed", zap.Error(err))
