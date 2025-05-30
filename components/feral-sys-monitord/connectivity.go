@@ -205,17 +205,20 @@ func (c *Connectivity) CheckConnectivity(timeout time.Duration) (bool, error) {
 			after := time.Now()
 			c.logger.Debug("Connectivity check result", zap.String("target", target), zap.Duration("duration", after.Sub(before)), zap.Error(err))
 			if conn != nil {
-				conn.Close()
+				if err := conn.Close(); err != nil {
+					c.logger.Warn("Failed to close connection", zap.Error(err))
+				}
 			}
 
 			resultChan <- err == nil
+
 			return err
 		})
 	}
 
 	err := eg.Wait()
 	if err != nil {
-		return false, err
+		c.logger.Warn("Connectivity check failed", zap.Error(err))
 	}
 
 	connected := false
