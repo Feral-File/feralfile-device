@@ -13,7 +13,23 @@ import (
 	"go.uber.org/zap"
 )
 
-var errRelayerAlreadyConnected = fmt.Errorf("relayer is already connected")
+var (
+	// Errors
+	errRelayerAlreadyConnected = fmt.Errorf("relayer is already connected")
+
+	// Constants
+	ConnectdCmds = map[RelayerCmd]bool{
+		RELAYER_CMD_CONNECT:              true,
+		RELAYER_CMD_SHOW_PAIRING_QR_CODE: true,
+		RELAYER_CMD_PROFILE:              true,
+		RELAYER_CMD_KEYBOARD_EVENT:       true,
+		RELAYER_CMD_MOUSE_DRAG_EVENT:     true,
+		RELAYER_CMD_MOUSE_TAP_EVENT:      true,
+		RELAYER_CMD_SCREEN_ROTATION:      true,
+		RELAYER_CMD_SHUTDOWN:             true,
+		RELAYER_CMD_DEVICE_STATUS:        true,
+	}
+)
 
 const (
 	RELAYER_MESSAGE_ID_SYSTEM = "system"
@@ -36,16 +52,8 @@ const (
 	RELAYER_CMD_DEVICE_STATUS        RelayerCmd = "getDeviceStatus"
 )
 
-func (c RelayerCmd) CDPCmd() bool {
-	return c != RELAYER_CMD_CONNECT &&
-		c != RELAYER_CMD_SHOW_PAIRING_QR_CODE &&
-		c != RELAYER_CMD_PROFILE &&
-		c != RELAYER_CMD_KEYBOARD_EVENT &&
-		c != RELAYER_CMD_MOUSE_DRAG_EVENT &&
-		c != RELAYER_CMD_MOUSE_TAP_EVENT &&
-		c != RELAYER_CMD_SCREEN_ROTATION &&
-		c != RELAYER_CMD_SHUTDOWN &&
-		c != RELAYER_CMD_DEVICE_STATUS
+func (c RelayerCmd) ConnectdCmd() bool {
+	return ConnectdCmds[c]
 }
 
 type RelayerPayload struct {

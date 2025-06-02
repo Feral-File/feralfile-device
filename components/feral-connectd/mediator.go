@@ -147,7 +147,25 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 			return nil
 		}
 
-		if cmd.CDPCmd() {
+		if cmd.ConnectdCmd() {
+			result, err := m.cmd.Execute(ctx,
+				Command{
+					Command:   *cmd,
+					Arguments: payload.Message.Args,
+				})
+			if err != nil {
+				m.logger.Error("Failed to execute command", zap.Error(err))
+				return err
+			}
+
+			return m.relayer.Send(ctx,
+				map[string]interface{}{
+					"type":      "RPC",
+					"messageID": payload.MessageID,
+					"message":   result,
+				})
+
+		} else {
 			p, err := payload.JSON()
 			if err != nil {
 				m.logger.Error("Failed to marshal payload", zap.Error(err))
@@ -166,23 +184,6 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 			m.statusPoller.ForceRefresh()
 
 			return m.relayer.Send(ctx, result)
-		} else {
-			result, err := m.cmd.Execute(ctx,
-				Command{
-					Command:   *cmd,
-					Arguments: payload.Message.Args,
-				})
-			if err != nil {
-				m.logger.Error("Failed to execute command", zap.Error(err))
-				return err
-			}
-
-			return m.relayer.Send(ctx,
-				map[string]interface{}{
-					"type":      "RPC",
-					"messageID": payload.MessageID,
-					"message":   result,
-				})
 		}
 	}
 
