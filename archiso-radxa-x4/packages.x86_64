@@ -42,6 +42,7 @@ seatd
 # Fonts and themes
 ttf-dejavu
 ttf-liberation
+noto-fonts-cjk
 adwaita-icon-theme
 
 # Radxa X4 / Intel N100 support
