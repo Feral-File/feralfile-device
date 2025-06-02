@@ -19,6 +19,7 @@ file_permissions=(
   ["/root"]="0:0:750"
   ["/root/.automated_script.sh"]="0:0:755"
   ["/root/install-to-disk.sh"]="0:0:755"
+  ["/root/install-to-emmc.sh"]="0:0:755"
   ["/home/feralfile/"]="1000:1000:755"
   ["/home/feralfile/scripts/feral-updater.sh"]="1000:1000:755"
   ["/home/feralfile/scripts/feral-service-update.sh"]="1000:1000:755"
