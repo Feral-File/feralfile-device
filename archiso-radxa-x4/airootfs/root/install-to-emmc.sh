@@ -5,7 +5,31 @@ echo "Booting..."
 sleep 3
 
 cleanup() {
+  echo
+  echo "Flushing disk caches..."
+  sync
+
+  echo "Unmounting chroot bind mounts..."
+  for m in sys proc dev; do
+    if mountpoint -q /mnt/$m; then
+      umount /mnt/$m 2>/dev/null || umount -l /mnt/$m
+    fi
+  done
+
+  echo "Unmounting installation mounts..."
+  if mountpoint -q /mnt/boot; then
+    umount /mnt/boot 2>/dev/null || umount -l /mnt/boot
+  fi
+  if mountpoint -q /mnt; then
+    umount /mnt 2>/dev/null || umount -l /mnt
+  fi
+
+  echo "Flushing disk caches again..."
+  sync
+
+  echo
   echo "🔌 Shutting down now..."
+  sleep 2
   shutdown -h now
 }
 trap cleanup EXIT
@@ -106,6 +130,10 @@ initrd  /intel-ucode.img
 options root=PARTUUID=$PARTUUID rw
 EOF
 
+mount --bind /dev /mnt/dev
+mount --bind /proc /mnt/proc
+mount --bind /sys /mnt/sys
+
 arch-chroot /mnt /bin/bash <<EOF
 echo "Removing soaktest account..."
 userdel soaktest
@@ -125,7 +153,7 @@ bootctl install
 EOF
 
 # ─── Post-install cleanup and prompt ───────────────────────────────────
-sleep 20
+sleep 5
 
 echo
 echo "Arch Linux has been installed to $TARGET_DISK successfully!"
