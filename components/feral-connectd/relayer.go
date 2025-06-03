@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
+	"net"
+	"net/http"
+	"net/url"
 	"sync"
+	"syscall"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -84,6 +88,36 @@ type RelayerConfig struct {
 
 type RelayerHandler func(ctx context.Context, payload RelayerPayload) error
 
+// Custom websocket error
+type PermanentErr error
+type TransientErr error
+type BusyErr error
+
+func categorizeWebsocketError(err error, resp *http.Response) error {
+	// Handshake errors
+	if errors.Is(err, websocket.ErrBadHandshake) {
+		statusCode := resp.StatusCode
+		if statusCode >= 500 || statusCode == http.StatusTooManyRequests {
+			return BusyErr(err)
+		}
+		return PermanentErr(err)
+	}
+
+	// Network errors
+	var urlErr *url.Error
+	var netErr net.Error
+	if errors.As(err, &urlErr) ||
+		(errors.As(err, &netErr) && netErr.Timeout()) ||
+		errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE) {
+		return TransientErr(err)
+	}
+
+	// Fallback to permanent error
+	return PermanentErr(err)
+}
+
 // RelayerClient handles Relayer connection to relay server
 type RelayerClient struct {
 	sync.Mutex
@@ -112,48 +146,47 @@ func (r *RelayerClient) IsConnected() bool {
 	return r.conn != nil
 }
 
-// RetryableConnect connects to the Relayer server and listens for messages
-// with exponential backoff
+// RetryableConnect attempts to connect to the Relayer server and listens for messages indefinitely
+// This function blocks the current thread and should be called in a separate goroutine unless otherwise specified
 func (r *RelayerClient) RetryableConnect(ctx context.Context) error {
-	bo := backoff.NewExponentialBackOff()
-	bo.InitialInterval = 2 * time.Second
-	bo.Multiplier = 2
-	bo.RandomizationFactor = 0.5
-	bo.MaxElapsedTime = 30 * time.Second
-
-	attempts := 0
-	ops := func() error {
-		// Check if context is cancelled or done channel is closed
-		select {
-		case <-ctx.Done():
-			return backoff.Permanent(ctx.Err()) // Permanent error stops retry
-		case <-r.done:
-			return backoff.Permanent(fmt.Errorf("connection aborted")) // Permanent error stops retry
-		default:
-			// Continue with connection attempt
-		}
-
+	var attempts int
+	for {
 		attempts++
 		r.logger.Info("Connecting to Relayer", zap.String("endpoint", r.config.Endpoint), zap.Int("attempts", attempts))
 
 		err := r.Connect(ctx)
-		if err == errRelayerAlreadyConnected {
+		if err == nil {
 			return nil
 		}
-		return err
-	}
 
-	err := backoff.Retry(ops, bo)
-	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			r.logger.Warn("Retry stopped due to context cancellation")
+		var permanentErr PermanentErr
+		var transientErr TransientErr
+		var busyErr BusyErr
+		switch {
+		case errors.Is(err, errRelayerAlreadyConnected):
 			return nil
+		case errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
+			return err
+		case errors.As(err, &permanentErr):
+			return err
+		case errors.As(err, &transientErr):
+			// randomize sleep time between 1 and 5 seconds
+			sleepTime := 4 * time.Second
+			sleepTime = time.Second + time.Duration(rand.Intn(int(sleepTime)))
+			r.logger.Debug("Sleeping for transient error", zap.Duration("sleepTime", sleepTime))
+			time.Sleep(sleepTime)
+			continue
+		case errors.As(err, &busyErr):
+			// randomize sleep time between 10 and 60 seconds
+			sleepTime := 50 * time.Second
+			sleepTime = 10*time.Second + time.Duration(rand.Intn(int(sleepTime)))
+			r.logger.Debug("Sleeping for busy error", zap.Duration("sleepTime", sleepTime))
+			time.Sleep(sleepTime)
+			continue
+		default:
+			return err
 		}
-		r.logger.Error("Failed to connect to Relayer after retrying", zap.Int("attempts", attempts), zap.Error(err))
-		return err
 	}
-
-	return nil
 }
 
 // Connect connects to the Relayer server and listens for messages
@@ -192,10 +225,10 @@ func (r *RelayerClient) Connect(ctx context.Context) error {
 	dialer.HandshakeTimeout = 5 * time.Second
 
 	r.Lock()
-	conn, _, err := dialer.DialContext(ctx, connectURL, nil)
+	conn, resp, err := dialer.DialContext(ctx, connectURL, nil)
 	if err != nil {
 		r.Unlock()
-		return err
+		return categorizeWebsocketError(err, resp)
 	}
 
 	r.conn = conn
@@ -238,15 +271,11 @@ func (r *RelayerClient) Connect(ctx context.Context) error {
 }
 
 func (r *RelayerClient) reconnect(ctx context.Context) error {
-	r.Lock()
 	r.logger.Info("Reconnecting to Relayer")
 
 	// Close the connection
-	err := r.closeConn()
-	if err != nil {
-		r.Unlock()
-		return err
-	}
+	r.Lock()
+	r.closeConn()
 
 	if r.pingDoneChan != nil {
 		close(r.pingDoneChan)
@@ -393,15 +422,12 @@ func (r *RelayerClient) Close() {
 		r.pingDoneChan = nil
 	}
 
-	err := r.closeConn()
-	if err != nil {
-		r.logger.Error("Failed to close Relayer connection", zap.Error(err))
-	}
+	r.closeConn()
 }
 
-func (r *RelayerClient) closeConn() error {
+func (r *RelayerClient) closeConn() {
 	if r.conn == nil {
-		return nil
+		return
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -411,18 +437,16 @@ func (r *RelayerClient) closeConn() error {
 		deadline,
 	)
 	if err != nil {
-		return err
+		r.logger.Warn("Failed to write close message", zap.Error(err))
 	}
 
 	err = r.conn.Close()
 	if err != nil {
-		return err
+		r.logger.Warn("Failed to close Relayer connection", zap.Error(err))
 	}
 
 	r.conn = nil
 	r.logger.Info("Relayer connection closed")
-
-	return nil
 }
 
 func (r *RelayerClient) sendNotification(ctx context.Context, notificationType NotificationType, message interface{}) error {

@@ -110,7 +110,6 @@ func (m *Mediator) handleDBusSignal(
 			err := m.relayer.RetryableConnect(ctx)
 			if err != nil {
 				m.logger.Error("Failed to reconnect to relayer", zap.Error(err))
-				panic(err)
 			}
 		}
 
