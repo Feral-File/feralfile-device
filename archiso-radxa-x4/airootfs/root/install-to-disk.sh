@@ -156,6 +156,9 @@ cat > /mnt/etc/systemd/system/getty@tty1.service.d/autologin.conf <<EOF
 ExecStart=
 ExecStart=-/usr/bin/agetty --noclear --autologin feralfile %I $TERM
 EOF
+cat > /mnt/home/feralfile/.config/environment <<EOF
+live
+EOF
 if [[ ! "$copy_wifi" =~ ^[yY]$ ]]; then
   rm -f /mnt/etc/NetworkManager/system-connections/*
 fi
