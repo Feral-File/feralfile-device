@@ -21,7 +21,7 @@ cleanup() {
     umount /mnt/boot 2>/dev/null || umount -l /mnt/boot
   fi
   if mountpoint -q /mnt; then
-    umount /mnt 2>/dev/null || umount -l /mnt
+    umount -R /mnt 2>/dev/null || umount -Rl /mnt
   fi
 
   echo "Flushing disk caches again..."
@@ -119,7 +119,7 @@ wipefs -a "$TARGET_DISK"
 parted -s "$TARGET_DISK" mklabel gpt
 parted -s "$TARGET_DISK" mkpart ESP fat32 1MiB 513MiB
 parted -s "$TARGET_DISK" set 1 esp on
-parted -s "$TARGET_DISK" mkpart primary ext4 513MiB 100%
+parted -s "$TARGET_DISK" mkpart primary btrfs 513MiB 100%
 
 sleep 1  # Wait for kernel to re-read partition table
 
@@ -136,13 +136,30 @@ echo "Formatting EFI boot partition: $BOOT_PART"
 mkfs.fat -F32 "$BOOT_PART"
 
 echo "Formatting root partition: $ROOT_PART"
-mkfs.ext4 -F "$ROOT_PART"
+mkfs.btrfs -f -L ROOT "$ROOT_PART"
 
 # ─── Mount target system ───────────────────────────────────────────────
 echo
 echo "Mounting partitions..."
 mount "$ROOT_PART" /mnt
-mkdir -p /mnt/boot
+
+btrfs subvolume create /mnt/@          # root
+btrfs subvolume create /mnt/@home      # /home
+btrfs subvolume create /mnt/@log       # /var/log
+btrfs subvolume create /mnt/@tmp       # /tmp
+btrfs subvolume create /mnt/@pkg       # /var/cache/pacman/pkg
+btrfs subvolume create /mnt/@snapshots # storage for snapshots
+
+umount /mnt
+
+mount -o compress=zstd,noatime,subvol=@ "$ROOT_PART" /mnt
+mkdir -p /mnt/{boot,home,tmp,var/log,var/cache/pacman/pkg,.snapshots}
+mount -o compress=zstd,noatime,subvol=@home      "$ROOT_PART" /mnt/home
+mount -o compress=zstd,noatime,subvol=@log       "$ROOT_PART" /mnt/var/log
+mount -o compress=zstd,noatime,subvol=@snapshots "$ROOT_PART" /mnt/.snapshots
+mount -o compress=zstd,noatime,subvol=@tmp       "$ROOT_PART" /mnt/tmp
+mount -o compress=zstd,noatime,subvol=@pkg       "$ROOT_PART" /mnt/var/cache/pacman/pkg
+
 mount "$BOOT_PART" /mnt/boot
 
 # ─── Copy root filesystem ──────────────────────────────────────────────
@@ -169,6 +186,22 @@ rm -f /mnt/root/.bash_history
 rm -f /mnt/home/*/.bash_history 2>/dev/null || true
 rm -rf /mnt/var/log/*
 rm -rf /mnt/var/tmp/*
+
+# ─── Generate fstab ────────────────────────────────────────────────────
+echo "Generating /etc/fstab..."
+ROOT_PART_UUID=$(blkid -s UUID -o value "$ROOT_PART")
+BOOT_PART_UUID=$(blkid -s UUID -o value "$BOOT_PART")
+
+cat > /mnt/etc/fstab <<EOF
+# <file system>         <dir>         <type>    <options>                               <dump> <pass>
+UUID=$ROOT_PART_UUID    /             btrfs     compress=zstd,noatime,subvol=@              0      0
+UUID=$ROOT_PART_UUID    /home         btrfs     compress=zstd,noatime,subvol=@home          0      0
+UUID=$ROOT_PART_UUID    /.snapshots   btrfs     compress=zstd,noatime,subvol=@snapshots     0      0
+UUID=$ROOT_PART_UUID    /var/log      btrfs     compress=zstd,noatime,subvol=@log           0      0
+UUID=$ROOT_PART_UUID    /tmp          btrfs     compress=zstd,noatime,subvol=@tmp           0      0
+UUID=$ROOT_PART_UUID    /var/cache/pacman/pkg  btrfs compress=zstd,noatime,subvol=@pkg      0      0
+UUID=$BOOT_PART_UUID    /boot         vfat      defaults                                    0      2
+EOF
 
 # ─── Setup bootloader ──────────────────────────────────────────────────
 echo
@@ -204,7 +237,7 @@ title   Feral File X1 Arch Linux
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options root=PARTUUID=$PARTUUID rw
+options root=PARTUUID=$PARTUUID rw rootflags=subvol=@,compress=zstd,noatime
 EOF
 
 mount --bind /dev /mnt/dev
@@ -213,8 +246,11 @@ mount --bind /sys /mnt/sys
 
 if [[ "$SKIP_PACMAN_INIT" -eq 0 ]]; then
 arch-chroot /mnt /bin/bash <<EOF
+echo "Removing soaktest account..."
+userdel soaktest
+
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems btrfs)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P
@@ -233,7 +269,7 @@ echo "Removing soaktest account..."
 userdel soaktest
 
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems btrfs)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P
