@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+#
+# /usr/lib/initcpio/scripts/btrfs-rollback
+#
+# This script is invoked by the corresponding hook if the kernel
+# cmdline contains rollback=factory or rollback=ota.
+#
+# It will:
+#   1. Parse cmdline for rollback=factory or rollback=ota
+#   2. Mount subvolid=0 of the root Btrfs to /run/rollback
+#   3. Delete the old @ subvolume (if exists)
+#   4. Snapshot from @snapshots/@factory_reset or @snapshots/@ota_prev → new @
+#   5. Set that new @ as the default subvolume
+#   6. Unmount and reboot immediately
+#
+
+run_addon() {
+  local mode=""
+  # 1. Parse cmdline
+  for param in $(cat /proc/cmdline); do
+    case "$param" in
+      rollback=factory)
+        mode="factory"
+        ;;
+      rollback=ota)
+        mode="ota"
+        ;;
+    esac
+  done
+
+  # If no rollback request, just return
+  if [[ -z "$mode" ]]; then
+    return 0
+  fi
+
+  echo "[btrfs-rollback] Detected rollback mode: $mode"
+  mkdir -p /run/rollback
+
+  # === 使用預設的 PARTUUID 來指定 root_dev ===
+  # 假設我們已經在 initramfs cmdline 中傳入了 root_partuuid=XXXX-XXXX
+  # 以下讀取該參數並組成 /dev/disk/by-partuuid/XXXX-XXXX
+  local root_partuuid=""
+  for param in $(cat /proc/cmdline); do
+    case "$param" in
+      root_partuuid=*)
+        root_partuuid="${param#root_partuuid=}"
+        ;;
+    esac
+  done
+
+  if [[ -z "$root_partuuid" ]]; then
+    echo "[btrfs-rollback] ERROR: root_partuuid not provided in kernel cmdline." >&2
+    return 1
+  fi
+
+  root_dev="/dev/disk/by-partuuid/$root_partuuid"
+  if [[ ! -b "$root_dev" ]]; then
+    echo "[btrfs-rollback] ERROR: /dev/disk/by-partuuid/$root_partuuid does not exist." >&2
+    return 1
+  fi
+
+  echo "[btrfs-rollback] Root device identified: $root_dev"
+  # === End of PARTUUID logic ===
+
+  # 3. Mount top-level (subvolid=0)
+  if ! mount -o subvolid=0 "$root_dev" /run/rollback; then
+    echo "[btrfs-rollback] ERROR: Failed to mount subvolid=0 on $root_dev" >&2
+    return 1
+  fi
+
+  # 4. Determine source snapshot and target subvolume "@"
+  local source_snap=""
+  if [[ "$mode" == "factory" ]]; then
+    source_snap="@snapshots/@factory_reset"
+  else
+    source_snap="@snapshots/@ota_prev"
+  fi
+  local target_at="@"
+
+  if [[ ! -d "/run/rollback/$source_snap" ]]; then
+    echo "[btrfs-rollback] ERROR: source snapshot not found: /run/rollback/$source_snap" >&2
+    umount /run/rollback
+    return 1
+  fi
+
+  # 5. Delete existing "@" if it exists (corrected check)
+  if btrfs subvolume list /run/rollback | awk '$NF=="@" {print $2}' | grep -q .; then
+    echo "[btrfs-rollback] Deleting existing @ subvolume..."
+    if ! btrfs subvolume delete "/run/rollback/$target_at"; then
+      echo "[btrfs-rollback] ERROR: Could not delete existing @ subvolume" >&2
+      umount /run/rollback
+      return 1
+    fi
+  fi
+
+  # 6. Snapshot source_snap → "@"
+  echo "[btrfs-rollback] Snapshotting $source_snap → $target_at ..."
+  if ! btrfs subvolume snapshot "/run/rollback/$source_snap" "/run/rollback/$target_at"; then
+    echo "[btrfs-rollback] ERROR: Snapshot operation failed" >&2
+    umount /run/rollback
+    return 1
+  fi
+
+  # 7. Retrieve new "@" subvol ID
+  local new_id
+  new_id=$(btrfs subvolume list /run/rollback | awk '$NF=="@" {print $2}')
+  if [[ -z "$new_id" ]]; then
+    echo "[btrfs-rollback] ERROR: Cannot get new subvol ID for @" >&2
+    umount /run/rollback
+    return 1
+  fi
+
+  echo "[btrfs-rollback] New subvol ID for @: $new_id"
+  # 8. Set-default new "@"
+  if ! btrfs subvolume set-default "$new_id" /run/rollback; then
+    echo "[btrfs-rollback] ERROR: Failed to set-default new @" >&2
+    umount /run/rollback
+    return 1
+  fi
+
+  echo "[btrfs-rollback] @ has been replaced by snapshot of $source_snap"
+  umount /run/rollback
+
+  # 9. Force reboot to boot into new "@"
+  echo "[btrfs-rollback] Rebooting now to load new @" 
+  reboot -f
+}
+
+help() {
+  cat <<EOF2
+This is the initcpio helper script for btrfs-rollback.
+Usage: Called during early initramfs if 'btrfs-rollback' hook is present.
+Provide 'root_partuuid=<UUID>' on the kernel cmdline.
+EOF2
+}
+
+if [[ "$1" == "run" ]]; then
+  run_addon
+elif [[ "$1" == "help" ]]; then
+  help
+fi

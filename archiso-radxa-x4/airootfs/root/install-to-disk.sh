@@ -239,8 +239,26 @@ title   Feral File X1 Arch Linux
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options root=PARTUUID=$PARTUUID rw
+options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
 EOF
+
+cat > /mnt/boot/loader/entries/factory_reset.conf <<EOF
+title   Feral File X1 - Factory Reset
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+initrd  /intel-ucode.img
+options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
+EOF
+
+cat > /mnt/boot/loader/entries/ota_prev.conf <<EOF
+title   Feral File X1 - Rollback to OTA Prev
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+initrd  /intel-ucode.img
+options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
+EOF
+
+chmod 644 /mnt/boot/loader/entries/*.conf
 
 mount --bind /dev /mnt/dev
 mount --bind /proc /mnt/proc
@@ -249,10 +267,10 @@ mount --bind /sys /mnt/sys
 if [[ "$SKIP_PACMAN_INIT" -eq 0 ]]; then
 arch-chroot /mnt /bin/bash <<EOF
 echo "Removing soaktest account..."
-userdel soaktest
+id soaktest &>/dev/null && userdel soaktest || true
 
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems btrfs)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block btrfs-rollback filesystems btrfs)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P
@@ -268,10 +286,10 @@ EOF
 else
 arch-chroot /mnt /bin/bash <<EOF
 echo "Removing soaktest account..."
-userdel soaktest
+id soaktest &>/dev/null && userdel soaktest || true
 
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems btrfs)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block btrfs-rollback filesystems btrfs)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P

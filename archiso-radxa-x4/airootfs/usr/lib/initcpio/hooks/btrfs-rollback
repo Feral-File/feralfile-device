@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#
+# /usr/lib/initcpio/hooks/btrfs-rollback
+#
+# This hook will invoke the 'btrfs-rollback' script if the kernel
+# cmdline contains rollback=factory or rollback=ota.
+#
+
+run_hook() {
+  /usr/lib/initcpio/scripts/btrfs-rollback run
+}
+
+help() {
+  cat <<EOF2
+This is the initcpio hook for btrfs-rollback.
+EOF2
+}

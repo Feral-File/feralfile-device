@@ -87,7 +87,7 @@ rsync -aAX --delete --info=progress2 \
 rm -rf /home/soaktest
 rm -f /usr/local/bin/websocat
 
-sudo userdel soaktest
+id soaktest &>/dev/null && sudo userdel soaktest || true
 
 echo -n > /etc/machine-id
 rm -f /var/lib/systemd/random-seed

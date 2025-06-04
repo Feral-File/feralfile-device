@@ -139,7 +139,7 @@ mount --bind /sys /mnt/sys
 
 arch-chroot /mnt /bin/bash <<EOF
 echo "Removing soaktest account..."
-userdel soaktest
+id soaktest &>/dev/null && userdel soaktest || true
 
 echo "Overwriting mkinitcpio.conf HOOKS..."
 sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems)/' /etc/mkinitcpio.conf
