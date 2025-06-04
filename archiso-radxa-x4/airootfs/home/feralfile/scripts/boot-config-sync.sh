@@ -41,7 +41,7 @@ options root=PARTUUID=$PARTUUID rw
 EOF
 
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems btrfs)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P

@@ -25,14 +25,38 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "=== OTA Update: Version-aware SquashFS Sync ==="
+echo "=== OTA Update: Version-aware SquashFS Sync with Btrfs Snapshot ==="
 
-# --- Step 1: Load local config --------------------------------------------------
+# --- Step 1: Load local config ------------------------------------------------
 echo "📖 Loading config from $CONFIG_FILE"
 auth_user=$(jq -r '.distribution_acc' "$CONFIG_FILE")
 auth_pass=$(jq -r '.distribution_pass' "$CONFIG_FILE")
 
-# --- Step 3: Download and extract new image -------------------------------------
+# --- Step 2: Create Btrfs snapshot of current @ subvolume ----------------------
+echo
+echo "📸 Creating readonly snapshot of current system (subvol @) ..."
+if [[ -d "/.snapshots/@ota_new" ]]; then
+  echo "⚠️  Found stale '/.snapshots/@ota_new', deleting it first..."
+  btrfs subvolume delete "/.snapshots/@ota_new"
+fi
+
+if btrfs subvolume snapshot -r / "/.snapshots/@ota_new"; then
+  echo "✅ Snapshot '/.snapshots/@ota_new' created successfully."
+else
+  echo "❌ Error: Failed to create snapshot '/.snapshots/@ota_new'. Aborting."
+  exit 1
+fi
+
+if [[ -d "/.snapshots/@ota_prev" ]]; then
+  echo "🗑  Deleting previous OTA snapshot '/.snapshots/@ota_prev' ..."
+  btrfs subvolume delete "/.snapshots/@ota_prev"
+fi
+
+echo "🔄 Renaming '/.snapshots/@ota_new' → '/.snapshots/@ota_prev' ..."
+mv "/.snapshots/@ota_new" "/.snapshots/@ota_prev"
+
+# --- Step 3: Download and extract new image ------------------------------------
+echo
 echo "📦 Downloading new image..."
 mkdir -p "$TMP_DIR"
 curl -u "$auth_user:$auth_pass" -f -L "https://feralfile-device-distribution.bitmark-development.workers.dev$IMAGE_URL" -o "$ZIP_FILE"
@@ -42,7 +66,7 @@ ISO_FILE=$(find "$TMP_DIR" -name '*.iso' | head -n1)
 mkdir -p "$ISO_MOUNT"
 mount -o loop "$ISO_FILE" "$ISO_MOUNT"
 
-# --- Step 6: Mount airootfs.sfs -------------------------------------------------
+# --- Step 4: Mount airootfs.sfs ------------------------------------------------
 SFS_PATH="$ISO_MOUNT/arch/x86_64/airootfs.sfs"
 if [[ ! -f "$SFS_PATH" ]]; then
   echo "❌ airootfs.sfs not found in image."
@@ -53,10 +77,11 @@ echo "📦 Mounting SquashFS: $SFS_PATH"
 mkdir -p "$SFS_MOUNT"
 mount -t squashfs -o loop "$SFS_PATH" "$SFS_MOUNT"
 
-# --- Step 7: Rsync selective update from SquashFS -------------------------------
-echo "🔁 Syncing filesystem (excluding persistent and sensitive paths)..."
+# --- Step 5: Rsync selective update from SquashFS ------------------------------
+echo
+echo "🔁 Syncing filesystem (excluding persistent & sensitive paths) into '/' (subvol @)..."
 rsync -aAX --delete --info=progress2 \
-  --exclude={"/dev/*","/proc/*","/boot/*","/root/*","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/live-efi/*","/lost+found","/etc/machine-id","/etc/ssh/ssh_host_*","/etc/NetworkManager/system-connections/*","/var/lib/systemd/random-seed","/home/feralfile/.config/*","/home/feralfile/.logs/*","/home/feralfile/.state/*"} \
+  --exclude={"/dev/*","/proc/*","/boot/*","/root/*","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/live-efi/*","/lost+found","/etc/fstab","/etc/machine-id","/etc/ssh/ssh_host_*","/etc/NetworkManager/system-connections/*","/var/lib/systemd/random-seed","/home/feralfile/.config/*","/home/feralfile/.logs/*","/home/feralfile/.state/*"} \
   "$SFS_MOUNT"/ /
 
 rm -rf /home/soaktest
@@ -80,10 +105,12 @@ pacman-key --init
 pacman-key --populate archlinux
 pacman -Syy
 
-# --- Step 8: Clean up ------------------------------------------------------------
-echo "🧹 Cleaning up..."
+# --- Step 6: Clean up and reboot ------------------------------------------------
+echo
+echo "🧹 Cleaning up mounts and temporary data..."
 cleanup
 trap - EXIT
 
-echo "✅ OTA update complete. Rebooting..."
+echo
+echo "✅ OTA update complete. Rebooting now..."
 systemctl reboot --no-wall --no-block
