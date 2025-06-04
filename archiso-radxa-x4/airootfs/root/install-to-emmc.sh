@@ -84,6 +84,9 @@ cat > /mnt/etc/systemd/system/getty@tty1.service.d/autologin.conf <<EOF
 ExecStart=
 ExecStart=-/usr/bin/agetty --noclear --autologin feralfile %I $TERM
 EOF
+cat > /mnt/home/feralfile/.config/environment <<EOF
+live
+EOF
 rm -f /mnt/etc/NetworkManager/system-connections/*
 echo -n > /mnt/etc/machine-id
 rm -f /mnt/var/lib/systemd/random-seed

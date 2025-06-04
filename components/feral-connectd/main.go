@@ -112,7 +112,7 @@ func main() {
 		logger.Info("Connectivity status", zap.Bool("connected", connected))
 	}
 	if connected && state.Relayer.IsReady() {
-		err = relayerClient.RetryableConnect(ctx)
+		err = relayerClient.Connect(ctx)
 		if err != nil {
 			logger.Fatal("Failed to connect to relayer", zap.Error(err))
 		}
