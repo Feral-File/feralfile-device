@@ -14,8 +14,11 @@ use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::signal::unix::{SignalKind, signal as unix_signal};
-use tokio::sync::Mutex;
-use tokio::task;
+use tokio::{
+    sync::Mutex,
+    task,
+    time::{self, Duration},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Page {
@@ -135,6 +138,9 @@ fn create_wifi_connected_cb(
             app_state.app_cache.save(constant::CACHE_FILEPATH);
             app_state.internet.store(true, Ordering::Relaxed);
             task::spawn(async move {
+                // This is a workaround to avoid Err Network Changed from Chrome
+                // This potentially also avoids the white screen issue
+                time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
                 let _ = show_webapp(&app_state, &chromium).await;
             });
             Some(topic_id)
