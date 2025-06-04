@@ -48,7 +48,8 @@ impl SSIDsCacher {
             }
 
             println!("SSIDsCacher: refreshing...");
-            let res = list_ssids().await;
+            let res = list_ssids(true).await;
+            println!("SSIDsCacher: refreshed: \n{:?}", res);
 
             {
                 let mut st = state.lock().await;
@@ -140,12 +141,14 @@ fn delete(ssid: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 }
 
-pub async fn list_ssids() -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
-    // Run nmcli in terse mode to get only SSID fields
-    let output = task::spawn_blocking(|| {
-        Command::new("nmcli")
-            .args(&["-t", "-f", "SSID", "device", "wifi", "list"])
-            .output()
+pub async fn list_ssids(force: bool) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
+    let output = task::spawn_blocking(move || {
+        let mut args = vec!["-t", "-f", "SSID", "device", "wifi", "list"];
+        if force {
+            args.push("--rescan");
+            args.push("yes");
+        }
+        Command::new("nmcli").args(&args).output()
     })
     .await??;
 
