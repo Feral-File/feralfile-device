@@ -24,6 +24,7 @@ rsync -a "$BOOT_MOUNT"/EFI /boot
 
 echo "🔍 Detecting root partition PARTUUID..."
 ROOT_DEV=$(findmnt / -no SOURCE)
+ROOT_DEV="${ROOT_DEV%%\[*}"
 PARTUUID=$(blkid -s PARTUUID -o value "$ROOT_DEV")
 
 cat > /boot/loader/loader.conf <<EOF
