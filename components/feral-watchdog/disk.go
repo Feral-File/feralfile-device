@@ -72,8 +72,7 @@ func (c *DiskHandler) checkDiskUsage(ctx context.Context, metrics *SysMetrics) {
 		return
 	}
 
-	c.logger.Info("DISK: usage is normal, usage_percent",
-		zap.Float64("usage_percent", diskUsage))
+	// DISK: usage is normal, reset cleaned flag
 	c.isCleaned = false
 
 }
