@@ -65,7 +65,7 @@ func (m *CDPMonitor) Start(ctx context.Context) {
 			if err := m.check(ctx); err != nil {
 				m.logger.Warn("CDP: Health check failed", zap.Error(err))
 			} else {
-				m.logger.Info("CDP: Health check passed")
+				// CDP: Health check passed, do nothing
 			}
 		}
 	}
