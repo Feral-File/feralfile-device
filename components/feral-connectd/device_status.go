@@ -48,9 +48,9 @@ func GetDeviceStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 			savedRotation := strings.TrimSpace(string(configData))
 			orientationMap := map[string]string{
 				"normal": "landscape",
-				"90":     "portraitReverse",
+				"90":     "portrait",
 				"180":    "landscapeReverse",
-				"270":    "portrait",
+				"270":    "portraitReverse",
 			}
 			if orientation, ok := orientationMap[savedRotation]; ok {
 				screenRotation = orientation
