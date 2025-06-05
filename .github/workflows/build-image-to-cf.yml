@@ -240,13 +240,17 @@ jobs:
 
       - name: Setup pacman
         run: |
-          curl -o /etc/pacman.d/mirrorlist "https://archlinux.org/mirrorlist/?country=US&protocol=https&ip_version=4&use_mirror_status=on"
-          sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist
+          # Use Arch Linux Archive snapshot from May 30, 2024
+          cat > /etc/pacman.d/mirrorlist << EOF
+          # Arch Linux Archive - May 30, 2024 snapshot
+          Server = https://archive.archlinux.org/repos/2025/05/30/\$repo/os/\$arch
+          EOF
+          
           pacman-key --init
           pacman-key --populate archlinux
           pacman -Syy --debug
 
-          # copy US mirror list to iso
+          # copy archive mirror list to iso
           mkdir -p /build/archiso-radxa-x4/airootfs/etc/pacman.d
           cp /etc/pacman.d/mirrorlist /build/archiso-radxa-x4/airootfs/etc/pacman.d/mirrorlist
 
