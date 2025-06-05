@@ -238,21 +238,25 @@ jobs:
           EOF
           chmod 755 /build/archiso-radxa-x4/airootfs/home/feralfile/x1-config.json
 
-      - name: Setup pacman
-        run: |
-          # Use Arch Linux Archive snapshot from May 30, 2024
-          cat > /etc/pacman.d/mirrorlist << EOF
-          # Arch Linux Archive - May 30, 2024 snapshot
-          Server = https://archive.archlinux.org/repos/2025/05/31/\$repo/os/\$arch
-          EOF
-          
-          pacman-key --init
-          pacman-key --populate archlinux
-          pacman -Syy --debug
-
-          # copy archive mirror list to iso
-          mkdir -p /build/archiso-radxa-x4/airootfs/etc/pacman.d
-          cp /etc/pacman.d/mirrorlist /build/archiso-radxa-x4/airootfs/etc/pacman.d/mirrorlist
+          - name: Setup pacman
+          run: |
+            # Use Arch Linux Archive snapshot from May 31, 2025
+            cat > /etc/pacman.d/mirrorlist << EOF
+            # Arch Linux Archive - May 31, 2025 snapshot
+            Server = https://archive.archlinux.org/repos/2025/05/31/\$repo/os/\$arch
+            EOF
+            
+            pacman-key --init
+            pacman-key --populate archlinux
+            pacman -Syy --debug
+  
+            # CRITICAL: Create and set up the mirrorlist for the archiso build environment
+            mkdir -p /build/archiso-radxa-x4/pacman.d
+            cp /etc/pacman.d/mirrorlist /build/archiso-radxa-x4/pacman.d/mirrorlist
+            
+            # Also copy archive mirror list to the final ISO
+            mkdir -p /build/archiso-radxa-x4/airootfs/etc/pacman.d
+            cp /etc/pacman.d/mirrorlist /build/archiso-radxa-x4/airootfs/etc/pacman.d/mirrorlist
 
       - name: Build ISO Image
         run: |
