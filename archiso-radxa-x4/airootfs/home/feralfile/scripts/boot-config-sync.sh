@@ -28,13 +28,13 @@ ROOT_DEV="${ROOT_DEV%%\[*}"
 PARTUUID=$(blkid -s PARTUUID -o value "$ROOT_DEV")
 
 cat > /boot/loader/loader.conf <<EOF
-default arch
+default arch.conf
 timeout 0
 editor no
 EOF
 
 cat > /boot/loader/entries/arch.conf <<EOF
-title   Feral File X1 Arch Linux
+title   Feral File X1
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
