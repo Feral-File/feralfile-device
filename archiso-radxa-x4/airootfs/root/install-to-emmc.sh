@@ -186,9 +186,6 @@ arch-chroot /mnt /bin/bash <<EOF
 echo "Removing soaktest account..."
 id soaktest &>/dev/null && userdel soaktest || true
 
-echo "Overwriting mkinitcpio.conf BINARIES..."
-sed -i 's|^BINARIES=.*|BINARIES=(/usr/bin/bash)|' /etc/mkinitcpio.conf
-
 echo "Overwriting mkinitcpio.conf HOOKS..."
 sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block keyboard keymap btrfs-rollback btrfs filesystems fsck)/' /etc/mkinitcpio.conf
 
