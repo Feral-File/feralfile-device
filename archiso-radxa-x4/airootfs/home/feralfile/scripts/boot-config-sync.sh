@@ -58,7 +58,7 @@ options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
 EOF
 
 echo "Overwriting mkinitcpio.conf BINARIES..."
-sed -i 's/^BINARIES=.*/BINARIES=(/usr/bin/bash)/' /etc/mkinitcpio.conf
+sed -i 's|^BINARIES=.*|BINARIES=(/usr/bin/bash)|' /etc/mkinitcpio.conf
 
 echo "Overwriting mkinitcpio.conf HOOKS..."
 sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block keyboard keymap btrfs-rollback btrfs filesystems fsck)/' /etc/mkinitcpio.conf
