@@ -101,6 +101,8 @@ func (c *CommandHandler) Execute(ctx context.Context, cmd Command) (interface{},
 		result, err = c.shutdown(ctx)
 	case RELAYER_CMD_DEVICE_STATUS:
 		result, err = c.deviceStatus(ctx, bytes)
+	case RELAYER_CMD_UPDATE_TO_LATEST:
+		result, err = c.updateToLatest(ctx, bytes)
 	default:
 		return nil, fmt.Errorf("invalid command: %s", cmd)
 	}
@@ -575,4 +577,17 @@ func (c *CommandHandler) getSysMetrics() (interface{}, error) {
 	}
 
 	return sysMetrics, nil
+}
+
+func (c *CommandHandler) updateToLatest(ctx context.Context, args []byte) (interface{}, error) {
+	c.logger.Info("Executing update to latest version command")
+
+	// execute command systemctl start feral-updater@00:00.service
+	cmd := exec.CommandContext(ctx, "systemctl", "start", "feral-updater@00:00.service")
+
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("failed to execute update to latest command: %s", err)
+	}
+
+	return CmdOK, nil
 }

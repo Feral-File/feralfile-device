@@ -32,6 +32,7 @@ var (
 		RELAYER_CMD_SCREEN_ROTATION:      true,
 		RELAYER_CMD_SHUTDOWN:             true,
 		RELAYER_CMD_DEVICE_STATUS:        true,
+		RELAYER_CMD_UPDATE_TO_LATEST:     true,
 	}
 )
 
@@ -54,6 +55,7 @@ const (
 	RELAYER_CMD_SCREEN_ROTATION      RelayerCmd = "rotate"
 	RELAYER_CMD_SHUTDOWN             RelayerCmd = "shutdown"
 	RELAYER_CMD_DEVICE_STATUS        RelayerCmd = "getDeviceStatus"
+	RELAYER_CMD_UPDATE_TO_LATEST     RelayerCmd = "updateToLatestVersion"
 )
 
 func (c RelayerCmd) ConnectdCmd() bool {
