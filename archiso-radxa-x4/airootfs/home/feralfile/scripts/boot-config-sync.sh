@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-TMP_DIR="/tmp/ota"
+TMP_DIR="/var/tmp/ota"
 BOOT_MOUNT="/mnt/ota-boot"
 
 cleanup() {
