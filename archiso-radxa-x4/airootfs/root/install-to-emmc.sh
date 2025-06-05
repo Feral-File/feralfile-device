@@ -21,7 +21,7 @@ cleanup() {
     umount /mnt/boot 2>/dev/null || umount -l /mnt/boot
   fi
   if mountpoint -q /mnt; then
-    umount /mnt 2>/dev/null || umount -l /mnt
+    umount -R /mnt 2>/dev/null || umount -Rl /mnt
   fi
 
   echo "Flushing disk caches again..."
@@ -47,7 +47,7 @@ wipefs -a "$TARGET_DISK"
 parted -s "$TARGET_DISK" mklabel gpt
 parted -s "$TARGET_DISK" mkpart ESP fat32 1MiB 513MiB
 parted -s "$TARGET_DISK" set 1 esp on
-parted -s "$TARGET_DISK" mkpart primary ext4 513MiB 100%
+parted -s "$TARGET_DISK" mkpart primary btrfs 513MiB 100%
 
 sleep 1  # Wait for kernel to re-read partition table
 
@@ -64,13 +64,34 @@ echo "Formatting EFI boot partition: $BOOT_PART"
 mkfs.fat -F32 "$BOOT_PART"
 
 echo "Formatting root partition: $ROOT_PART"
-mkfs.ext4 -F "$ROOT_PART"
+mkfs.btrfs -f -L ROOT "$ROOT_PART"
 
-# ─── Mount target system ───────────────────────────────────────────────
+# ─── Mount Btrfs top-level (subvolid=0) to create subvolumes ───────────────────────────────────────────────
 echo
-echo "Mounting partitions..."
-mount "$ROOT_PART" /mnt
-mkdir -p /mnt/boot
+echo "Mounting Btrfs top-level (subvolid=0) on /mnt..."
+mount -o subvolid=0 "$ROOT_PART" /mnt
+
+echo "Creating Btrfs subvolumes: @, @log, @pkg, @snapshots..."
+btrfs subvolume create /mnt/@             # root subvolume
+btrfs subvolume create /mnt/@log          # /var/log
+btrfs subvolume create /mnt/@pkg          # /var/cache/pacman/pkg
+btrfs subvolume create /mnt/@snapshots    # /.snapshots
+
+# ─── Set default subvolume to @ ────────────────────────────────────────────
+echo "Setting '@' as default subvolume..."
+btrfs subvolume set-default "$(btrfs subvolume list /mnt | awk '$NF=="@" {print $2}')" /mnt
+
+umount /mnt
+
+echo
+echo "Mounting subvolumes under /mnt..."
+mount -o compress=zstd,noatime "$ROOT_PART" /mnt
+
+mkdir -p /mnt/{boot,home,tmp,var/log,var/cache/pacman/pkg,.snapshots}
+mount -o compress=zstd,noatime,subvol=@log       "$ROOT_PART" /mnt/var/log
+mount -o compress=zstd,noatime,subvol=@pkg       "$ROOT_PART" /mnt/var/cache/pacman/pkg
+mount -o compress=zstd,noatime,subvol=@snapshots "$ROOT_PART" /mnt/.snapshots
+
 mount "$BOOT_PART" /mnt/boot
 
 # ─── Copy root filesystem ──────────────────────────────────────────────
@@ -95,6 +116,20 @@ rm -f /mnt/root/.bash_history
 rm -f /mnt/home/*/.bash_history 2>/dev/null || true
 rm -rf /mnt/var/log/*
 rm -rf /mnt/var/tmp/*
+
+# ─── Generate fstab ────────────────────────────────────────────────────
+echo "Generating /etc/fstab..."
+ROOT_PART_UUID=$(blkid -s UUID -o value "$ROOT_PART")
+BOOT_PART_UUID=$(blkid -s UUID -o value "$BOOT_PART")
+
+cat > /mnt/etc/fstab <<EOF
+# <file system>          <dir>                   <type>    <options>                                   <dump> <pass>
+UUID=$ROOT_PART_UUID     /                       btrfs     compress=zstd,noatime                         0      0
+UUID=$ROOT_PART_UUID     /.snapshots             btrfs     compress=zstd,noatime,subvol=@snapshots        0      0
+UUID=$ROOT_PART_UUID     /var/log                btrfs     compress=zstd,noatime,subvol=@log              0      0
+UUID=$ROOT_PART_UUID     /var/cache/pacman/pkg   btrfs     compress=zstd,noatime,subvol=@pkg              0      0
+UUID=$BOOT_PART_UUID     /boot                   vfat      defaults                                      0      2
+EOF
 
 # ─── Setup bootloader ──────────────────────────────────────────────────
 echo
@@ -130,8 +165,18 @@ title   Feral File X1 Arch Linux
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options root=PARTUUID=$PARTUUID rw
+options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
 EOF
+
+cat > /mnt/boot/loader/entries/factory_reset.conf <<EOF
+title   Feral File X1 - Factory Reset
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+initrd  /intel-ucode.img
+options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw break=premount
+EOF
+
+chmod 644 /mnt/boot/loader/entries/*.conf
 
 mount --bind /dev /mnt/dev
 mount --bind /proc /mnt/proc
@@ -141,8 +186,11 @@ arch-chroot /mnt /bin/bash <<EOF
 echo "Removing soaktest account..."
 id soaktest &>/dev/null && userdel soaktest || true
 
+echo "Overwriting mkinitcpio.conf BINARIES..."
+sed -i 's/^BINARIES=.*/BINARIES=(/usr/bin/bash)/' /etc/mkinitcpio.conf
+
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block keyboard keymap btrfs-rollback btrfs filesystems fsck)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P
@@ -154,6 +202,18 @@ chmod 600 /boot/loader/random-seed 2>/dev/null || true
 echo "Installing systemd-boot to disk..."
 bootctl install
 EOF
+
+# ─── Create Factory Reset Snapshot ─────────────────────────────────────
+echo
+echo "Creating factory reset snapshot..."
+# Create a read-only snapshot of the current root (mounted at /mnt)
+# into the .snapshots directory (mounted at /mnt/.snapshots)
+if btrfs subvolume snapshot -r /mnt /mnt/.snapshots/@factory_reset; then
+  echo "✅ Factory reset snapshot '@factory_reset' created successfully in '/.snapshots'."
+  echo "   This is a read-only snapshot of your initial system state."
+else
+  echo "❌ Error: Failed to create factory reset snapshot."
+fi
 
 # ─── Post-install cleanup and prompt ───────────────────────────────────
 sleep 5
