@@ -33,6 +33,14 @@ on:
         required: true
         default: false
         type: boolean
+      pacman_snapshot:
+        description: "Pacman repository snapshot to use"
+        required: false
+        default: "2025/05/31"
+        type: choice
+        options:
+          - "2025/05/31"
+          - "latest"
 
 jobs:
   build-feral-connectd:
@@ -240,13 +248,30 @@ jobs:
 
       - name: Setup pacman
         run: |
-          curl -o /etc/pacman.d/mirrorlist "https://archlinux.org/mirrorlist/?country=US&protocol=https&ip_version=4&use_mirror_status=on"
-          sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist
+          if [ "${{ inputs.pacman_snapshot || github.event.inputs.pacman_snapshot }}" = "latest" ]; then
+            # Use latest Arch Linux repositories - download US mirrors
+            echo "Using latest Arch Linux repositories"
+            curl -o /etc/pacman.d/mirrorlist "https://archlinux.org/mirrorlist/?country=US&protocol=https&ip_version=4&use_mirror_status=on"
+            sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist
+          else
+            # Use Arch Linux Archive snapshot (default: May 31, 2025)
+            SNAPSHOT_DATE="${{ inputs.pacman_snapshot || github.event.inputs.pacman_snapshot }}"
+            echo "Using Arch Linux Archive snapshot: $SNAPSHOT_DATE"
+            cat > /etc/pacman.d/mirrorlist << EOF
+          # Arch Linux Archive - $SNAPSHOT_DATE snapshot
+          Server = https://archive.archlinux.org/repos/$SNAPSHOT_DATE/\$repo/os/\$arch
+          EOF
+          fi
+          
           pacman-key --init
           pacman-key --populate archlinux
           pacman -Syy --debug
 
-          # copy US mirror list to iso
+          # CRITICAL: Create and set up the mirrorlist for the archiso build environment
+          mkdir -p /build/archiso-radxa-x4/pacman.d
+          cp /etc/pacman.d/mirrorlist /build/archiso-radxa-x4/pacman.d/mirrorlist
+          
+          # Also copy mirror list to the final ISO
           mkdir -p /build/archiso-radxa-x4/airootfs/etc/pacman.d
           cp /etc/pacman.d/mirrorlist /build/archiso-radxa-x4/airootfs/etc/pacman.d/mirrorlist
 

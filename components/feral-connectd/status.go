@@ -161,6 +161,8 @@ func (s *StatusPoller) pollPlayerStatus(ctx context.Context) {
 		return
 	}
 
+	s.logger.Debug("Player status result", zap.Any("result", result))
+
 	// Send the status as a notification
 	resultMap, ok := result.(map[string]interface{})
 	if !ok {

@@ -12,7 +12,7 @@ IMAGE_URL="$1"
 CONFIG_FILE="/home/feralfile/x1-config.json"
 ISO_MOUNT="/mnt/ota-iso"
 SFS_MOUNT="/mnt/ota-sfs"
-TMP_DIR="/tmp/ota"
+TMP_DIR="/var/tmp/ota"
 ZIP_FILE="$TMP_DIR/image.zip"
 
 cleanup() {
@@ -74,7 +74,7 @@ mount -t squashfs -o loop "$SFS_PATH" "$SFS_MOUNT"
 echo
 echo "🔁 Syncing filesystem (excluding persistent & sensitive paths) into '/' (subvol @)..."
 rsync -aAX --delete --info=progress2 \
-  --exclude={"/dev/*","/.snapshots/*","/proc/*","/boot/*","/root/*","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/live-efi/*","/lost+found","/etc/fstab","/etc/machine-id","/etc/ssh/ssh_host_*","/etc/NetworkManager/system-connections/*","/var/lib/systemd/random-seed","/home/feralfile/.config/*","/home/feralfile/.logs/*","/home/feralfile/.state/*"} \
+  --exclude={"/dev/*","/.snapshots/*","/proc/*","/boot/*","/root/*","/sys/*","/tmp/*","/var/tmp/*","/run/*","/mnt/*","/media/*","/live-efi/*","/lost+found","/etc/fstab","/etc/machine-id","/etc/ssh/ssh_host_*","/etc/NetworkManager/system-connections/*","/var/lib/systemd/random-seed","/home/feralfile/.config/*","/home/feralfile/.logs/*","/home/feralfile/.state/*"} \
   "$SFS_MOUNT"/ /
 
 rm -rf /home/soaktest
