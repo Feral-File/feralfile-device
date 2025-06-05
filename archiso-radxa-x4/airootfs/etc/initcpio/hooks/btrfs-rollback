@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+run_hook() {
+  mkdir -p /run
+  LOG="/run/btrfs-rollback.log"
+  local mode="" 
+  for param in $(cat /proc/cmdline); do
+    case "$param" in
+      rollback=factory) mode="factory" ;;
+      rollback=ota)     mode="ota"     ;;
+    esac
+  done
+
+  # If no rollback request, just return
+  if [[ -z "$mode" ]]; then
+    return 0
+  fi
+
+  echo "[btrfs-rollback] Detected rollback mode: $mode" >> $LOG
+  mkdir -p /run/rollback
+
+  local root_partuuid=""
+  for param in $(cat /proc/cmdline); do
+    case "$param" in
+      root_partuuid=*) root_partuuid="${param#root_partuuid=}" ;;
+    esac
+  done
+  if [[ -z "$root_partuuid" ]]; then
+    echo "[btrfs-rollback] ERROR: root_partuuid not provided" >> $LOG
+    return 1
+  fi
+
+  root_dev="/dev/disk/by-partuuid/$root_partuuid"
+  if [[ ! -b "$root_dev" ]]; then
+    echo "[btrfs-rollback] ERROR: $root_dev does not exist" >> $LOG
+    return 1
+  fi
+  echo "[btrfs-rollback] Root device identified: $root_dev" >> $LOG
+
+  if ! mount -o subvolid=0 "$root_dev" /run/rollback; then
+    echo "[btrfs-rollback] ERROR: Failed to mount subvolid=0 on $root_dev" >> $LOG
+    return 1
+  fi
+
+  local source_snap=""
+  if [[ "$mode" == "factory" ]]; then
+    source_snap="@snapshots/@factory_reset"
+  else
+    source_snap="@snapshots/@ota_prev"
+  fi
+  local target_at="@"
+
+  if [[ ! -d "/run/rollback/$source_snap" ]]; then
+    echo "[btrfs-rollback] ERROR: source snapshot not found: /run/rollback/$source_snap" >> $LOG
+    umount /run/rollback
+    return 1
+  fi
+
+  local tmp_id
+  tmp_id=$(btrfs subvolume list /run/rollback | awk -v s="$source_snap" '$NF==s { print $2 }')
+  if [[ -z "$tmp_id" ]]; then
+    echo "[btrfs-rollback] ERROR: Cannot find ID for $source_snap" >> $LOG
+    umount /run/rollback
+    return 1
+  fi
+  if ! btrfs subvolume set-default "$tmp_id" /run/rollback; then
+    echo "[btrfs-rollback] ERROR: Failed to set-default $tmp_id" >> $LOG
+    umount /run/rollback
+    return 1
+  fi
+  echo "[btrfs-rollback] Default subvol set to $source_snap (ID $tmp_id)" >> $LOG
+
+  if btrfs subvolume list /run/rollback | awk '$NF=="@" {print $2}' | grep -q .; then
+    echo "[btrfs-rollback] Deleting old @ subvolume" >> $LOG
+    if ! btrfs subvolume delete "/run/rollback/@"; then
+      echo "[btrfs-rollback] ERROR: Failed to delete old @" >> $LOG
+      umount /run/rollback
+      return 1
+    fi
+  fi
+
+  echo "[btrfs-rollback] Snapshotting $source_snap → @" >> $LOG
+  if ! btrfs subvolume snapshot "/run/rollback/$source_snap" "/run/rollback/@"; then
+    echo "[btrfs-rollback] ERROR: Snapshot $source_snap → @ failed" >> $LOG
+    umount /run/rollback
+    return 1
+  fi
+
+  new_id=$(btrfs subvolume list /run/rollback | awk -v s="@" '$NF==s { print $2 }')
+  if [[ -z "$new_id" ]]; then
+    echo "[btrfs-rollback] ERROR: Cannot find ID for new @" >> $LOG
+    umount /run/rollback
+    return 1
+  fi
+
+  if ! btrfs subvolume set-default "$new_id" /run/rollback; then
+    echo "[btrfs-rollback] ERROR: Failed to set-default $new_id" >> $LOG
+    umount /run/rollback
+    return 1
+  fi
+  echo "[btrfs-rollback] Default subvol set to @ (ID $new_id)" >> $LOG
+
+  echo "[btrfs-rollback] Booting into new @"  >> $LOG
+  umount /run/rollback
+}

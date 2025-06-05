@@ -24,24 +24,41 @@ rsync -a "$BOOT_MOUNT"/EFI /boot
 
 echo "🔍 Detecting root partition PARTUUID..."
 ROOT_DEV=$(findmnt / -no SOURCE)
+ROOT_DEV="${ROOT_DEV%%\[*}"
 PARTUUID=$(blkid -s PARTUUID -o value "$ROOT_DEV")
 
 cat > /boot/loader/loader.conf <<EOF
-default arch
+default arch.conf
 timeout 0
 editor no
 EOF
 
 cat > /boot/loader/entries/arch.conf <<EOF
-title   Feral File X1 Arch Linux
+title   Feral File X1
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options root=PARTUUID=$PARTUUID rw
+options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
+EOF
+
+cat > /boot/loader/entries/factory_reset.conf <<EOF
+title   Feral File X1 - Factory Reset
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+initrd  /intel-ucode.img
+options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
+EOF
+
+cat > /boot/loader/entries/ota_prev.conf <<EOF
+title   Feral File X1 - Rollback to previous version
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+initrd  /intel-ucode.img
+options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
 EOF
 
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block keyboard keymap btrfs-rollback btrfs filesystems fsck)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P

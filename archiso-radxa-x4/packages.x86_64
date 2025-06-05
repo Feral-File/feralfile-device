@@ -21,6 +21,7 @@ polkit
 jq
 unzip
 p7zip
+btrfs-progs
 
 # Boot support
 intel-ucode
