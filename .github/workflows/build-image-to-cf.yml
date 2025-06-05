@@ -243,7 +243,7 @@ jobs:
           # Use Arch Linux Archive snapshot from May 30, 2024
           cat > /etc/pacman.d/mirrorlist << EOF
           # Arch Linux Archive - May 30, 2024 snapshot
-          Server = https://archive.archlinux.org/repos/2025/05/30/\$repo/os/\$arch
+          Server = https://archive.archlinux.org/repos/2025/05/31/\$repo/os/\$arch
           EOF
           
           pacman-key --init
