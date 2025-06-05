@@ -50,7 +50,7 @@ options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
 EOF
 
 cat > /boot/loader/entries/ota_prev.conf <<EOF
-title   Feral File X1 - Rollback to OTA Prev
+title   Feral File X1 - Rollback to previous version
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
