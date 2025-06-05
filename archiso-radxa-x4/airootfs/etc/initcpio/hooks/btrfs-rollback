@@ -1,20 +1,10 @@
 #!/usr/bin/env bash
 #
-# /usr/lib/initcpio/scripts/btrfs-rollback
-#
-# This script is invoked by the corresponding hook if the kernel
+# This hook will invoke the 'btrfs-rollback' script if the kernel
 # cmdline contains rollback=factory or rollback=ota.
 #
-# It will:
-#   1. Parse cmdline for rollback=factory or rollback=ota
-#   2. Mount subvolid=0 of the root Btrfs to /run/rollback
-#   3. Delete the old @ subvolume (if exists)
-#   4. Snapshot from @snapshots/@factory_reset or @snapshots/@ota_prev → new @
-#   5. Set that new @ as the default subvolume
-#   6. Unmount and reboot immediately
-#
 
-run_addon() {
+run_hook() {
   local mode=""
   # 1. Parse cmdline
   for param in $(cat /proc/cmdline); do
@@ -36,9 +26,6 @@ run_addon() {
   echo "[btrfs-rollback] Detected rollback mode: $mode"
   mkdir -p /run/rollback
 
-  # === 使用預設的 PARTUUID 來指定 root_dev ===
-  # 假設我們已經在 initramfs cmdline 中傳入了 root_partuuid=XXXX-XXXX
-  # 以下讀取該參數並組成 /dev/disk/by-partuuid/XXXX-XXXX
   local root_partuuid=""
   for param in $(cat /proc/cmdline); do
     case "$param" in
@@ -125,17 +112,3 @@ run_addon() {
   echo "[btrfs-rollback] Rebooting now to load new @" 
   reboot -f
 }
-
-help() {
-  cat <<EOF2
-This is the initcpio helper script for btrfs-rollback.
-Usage: Called during early initramfs if 'btrfs-rollback' hook is present.
-Provide 'root_partuuid=<UUID>' on the kernel cmdline.
-EOF2
-}
-
-if [[ "$1" == "run" ]]; then
-  run_addon
-elif [[ "$1" == "help" ]]; then
-  help
-fi

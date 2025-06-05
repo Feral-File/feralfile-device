@@ -38,11 +38,27 @@ title   Feral File X1 Arch Linux
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options root=PARTUUID=$PARTUUID rw
+options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
+EOF
+
+cat > /mnt/boot/loader/entries/factory_reset.conf <<EOF
+title   Feral File X1 - Factory Reset
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+initrd  /intel-ucode.img
+options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
+EOF
+
+cat > /mnt/boot/loader/entries/ota_prev.conf <<EOF
+title   Feral File X1 - Rollback to OTA Prev
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+initrd  /intel-ucode.img
+options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
 EOF
 
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems btrfs)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems btrfs btrfs-rollback)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P

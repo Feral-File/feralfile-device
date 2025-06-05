@@ -270,7 +270,7 @@ echo "Removing soaktest account..."
 id soaktest &>/dev/null && userdel soaktest || true
 
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block btrfs-rollback filesystems btrfs)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems btrfs btrfs-rollback)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P
@@ -289,7 +289,7 @@ echo "Removing soaktest account..."
 id soaktest &>/dev/null && userdel soaktest || true
 
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block btrfs-rollback filesystems btrfs)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems btrfs btrfs-rollback)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P
