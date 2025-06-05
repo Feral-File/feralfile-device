@@ -32,7 +32,7 @@ networkmanager
 # Wayland & Kiosk mode
 wayland
 cage
-wlroots0.19
+wlroots
 xorg-xwayland
 xdg-utils
 chromium
