@@ -35,25 +35,18 @@ auth_pass=$(jq -r '.distribution_pass' "$CONFIG_FILE")
 # --- Step 2: Create Btrfs snapshot of current @ subvolume ----------------------
 echo
 echo "📸 Creating readonly snapshot of current system (subvol @) ..."
-if [[ -d "/.snapshots/@ota_new" ]]; then
-  echo "⚠️  Found stale '/.snapshots/@ota_new', deleting it first..."
-  btrfs subvolume delete "/.snapshots/@ota_new"
-fi
-
-if btrfs subvolume snapshot -r / "/.snapshots/@ota_new"; then
-  echo "✅ Snapshot '/.snapshots/@ota_new' created successfully."
-else
-  echo "❌ Error: Failed to create snapshot '/.snapshots/@ota_new'. Aborting."
-  exit 1
-fi
 
 if [[ -d "/.snapshots/@ota_prev" ]]; then
   echo "🗑  Deleting previous OTA snapshot '/.snapshots/@ota_prev' ..."
   btrfs subvolume delete "/.snapshots/@ota_prev"
 fi
 
-echo "🔄 Renaming '/.snapshots/@ota_new' → '/.snapshots/@ota_prev' ..."
-mv "/.snapshots/@ota_new" "/.snapshots/@ota_prev"
+if btrfs subvolume snapshot -r / "/.snapshots/@ota_prev"; then
+  echo "✅ Snapshot '/.snapshots/@ota_prev' created successfully."
+else
+  echo "❌ Error: Failed to create snapshot '/.snapshots/@ota_prev'. Aborting."
+  exit 1
+fi
 
 # --- Step 3: Download and extract new image ------------------------------------
 echo

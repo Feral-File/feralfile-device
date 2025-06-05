@@ -41,7 +41,7 @@ initrd  /intel-ucode.img
 options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
 EOF
 
-cat > /mnt/boot/loader/entries/factory_reset.conf <<EOF
+cat > /boot/loader/entries/factory_reset.conf <<EOF
 title   Feral File X1 - Factory Reset
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
@@ -49,7 +49,7 @@ initrd  /intel-ucode.img
 options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
 EOF
 
-cat > /mnt/boot/loader/entries/ota_prev.conf <<EOF
+cat > /boot/loader/entries/ota_prev.conf <<EOF
 title   Feral File X1 - Rollback to OTA Prev
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
