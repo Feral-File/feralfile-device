@@ -247,15 +247,7 @@ title   Feral File X1 - Factory Reset
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
-EOF
-
-cat > /mnt/boot/loader/entries/ota_prev.conf <<EOF
-title   Feral File X1 - Rollback to OTA Prev
-linux   /vmlinuz-linux
-initrd  /initramfs-linux.img
-initrd  /intel-ucode.img
-options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
+options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw break=premount
 EOF
 
 chmod 644 /mnt/boot/loader/entries/*.conf
@@ -269,8 +261,11 @@ arch-chroot /mnt /bin/bash <<EOF
 echo "Removing soaktest account..."
 id soaktest &>/dev/null && userdel soaktest || true
 
+echo "Overwriting mkinitcpio.conf BINARIES..."
+sed -i 's/^BINARIES=.*/BINARIES=(/usr/bin/bash)/' /etc/mkinitcpio.conf
+
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems btrfs btrfs-rollback)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block keyboard keymap btrfs-rollback btrfs filesystems fsck)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P
@@ -288,8 +283,11 @@ arch-chroot /mnt /bin/bash <<EOF
 echo "Removing soaktest account..."
 id soaktest &>/dev/null && userdel soaktest || true
 
+echo "Overwriting mkinitcpio.conf BINARIES..."
+sed -i 's/^BINARIES=.*/BINARIES=(/usr/bin/bash)/' /etc/mkinitcpio.conf
+
 echo "Overwriting mkinitcpio.conf HOOKS..."
-sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block filesystems btrfs btrfs-rollback)/' /etc/mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block keyboard keymap btrfs-rollback btrfs filesystems fsck)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P
