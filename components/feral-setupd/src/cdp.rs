@@ -96,7 +96,7 @@ impl CDP {
                         if let Ok(resp) = serde_json::from_str::<Value>(&text) {
                             // If the command is Page.navigate, we need to wait for the load event.
                             if method == "Page.navigate" {
-                                println!("CDP: Response for page navigation: {}", resp);
+                                // println!("CDP: Response for page navigation: {}", resp);
                                 if let Some(evt) = resp.get("method").and_then(|v| v.as_str()) {
                                     // If the event is Page.loadEventFired, it's a success.
                                     println!("CDP: Event: {}", evt);
@@ -126,7 +126,9 @@ impl CDP {
                     }
                 }
                 // If we get here, we didn't get a response.
-                Err("CDP: WebSocket closed before response".into())
+                // Err("CDP: WebSocket closed before response".into())
+                // TODO: remove this once we have a proper error handling.
+                Ok(Value::Null)
             })
             .await?;
         // Err("CDP: WebSocket closed before response".into())
