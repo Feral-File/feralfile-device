@@ -1,0 +1,20 @@
+{
+  "cdp": {
+    "host": "localhost",
+    "port": 9222,
+    "timeout": 30
+  },
+  "relayer": {
+    "url": "wss://example.com/ws",
+    "timeout": 30,
+    "retry_interval": 5
+  },
+  "sentry": {
+    "dsn": "https://YOUR_SENTRY_DSN@o0.ingest.sentry.io/0",
+    "debug": "false",
+    "sample_rate": "1.0",
+    "environment": "production",
+    "release": "feral-connectd@1.0.0",
+    "repository": "organization/repository-name"
+  }
+} 

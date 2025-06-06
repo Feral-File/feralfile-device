@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	"go.uber.org/zap"
@@ -20,6 +22,46 @@ var (
 type Config struct {
 	CDPConfig     *CDPConfig     `json:"cdp"`
 	RelayerConfig *RelayerConfig `json:"relayer"`
+	SentryConfig  *SentryConfig  `json:"sentry"`
+}
+
+// SentryConfig contains Sentry-specific configuration
+type SentryConfig struct {
+	DSN         string `json:"dsn"`
+	Debug       string `json:"debug"`       // Will be converted to bool
+	SampleRate  string `json:"sample_rate"` // Will be converted to float64
+	Environment string `json:"environment"`
+	Release     string `json:"release"`
+	Repository  string `json:"repository"` // Git repository for commit linking
+}
+
+// GetDebug converts the string debug value to bool
+func (sc *SentryConfig) GetDebug() bool {
+	if sc.Debug == "" {
+		return false
+	}
+	debug, err := strconv.ParseBool(strings.ToLower(sc.Debug))
+	if err != nil {
+		return false
+	}
+	return debug
+}
+
+// GetSampleRate converts the string sample_rate value to float64
+func (sc *SentryConfig) GetSampleRate() float64 {
+	if sc.SampleRate == "" {
+		return 1.0 // Default sample rate
+	}
+	rate, err := strconv.ParseFloat(sc.SampleRate, 64)
+	if err != nil {
+		return 1.0 // Default sample rate
+	}
+	return rate
+}
+
+// IsEnabled checks if Sentry is enabled (DSN is not empty)
+func (sc *SentryConfig) IsEnabled() bool {
+	return sc != nil && strings.TrimSpace(sc.DSN) != ""
 }
 
 // LoadConfig loads the configuration from a JSON file
@@ -56,6 +98,7 @@ func GetConfig() *Config {
 		config = &Config{
 			CDPConfig:     &CDPConfig{},
 			RelayerConfig: &RelayerConfig{},
+			SentryConfig:  &SentryConfig{},
 		}
 	}
 	return config
