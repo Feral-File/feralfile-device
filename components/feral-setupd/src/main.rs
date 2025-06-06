@@ -237,6 +237,7 @@ async fn show_qrcode(
         let chrome = chrome.clone();
         dbus_utils::on_internet_available(
             move || {
+                app_state.internet.store(true, Ordering::Relaxed);
                 let app_state = app_state.clone();
                 let chrome = chrome.clone();
                 task::spawn(async move {
