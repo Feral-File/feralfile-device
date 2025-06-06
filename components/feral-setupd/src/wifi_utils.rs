@@ -173,3 +173,19 @@ pub async fn list_ssids(force: bool) -> Result<Vec<String>, Box<dyn Error + Send
     }
     Ok(ssids)
 }
+
+pub fn block_until_network_ready(timeout_seconds: u64) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let output = Command::new("nm-online")
+        .args(&[format!("--timeout={}", timeout_seconds).as_str(), "--quiet"])
+        .output();
+    if output.is_err() {
+        return Err(format!("Wifi: failed to call nm-online: {}", output.err().unwrap()).into());
+    } else {
+        let output = output.unwrap();
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(format!("Wifi: nm-online failed: {}", output.status).into())
+        }
+    }
+}

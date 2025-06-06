@@ -258,6 +258,15 @@ async fn show_webapp(
     if *page == Page::WebApp {
         return Ok(());
     }
+    // And we only navigate if the network is ready
+    // This is to avoid Err Network Changed from Chrome
+    let network_ready = wifi_utils::block_until_network_ready(constant::NETWORK_READY_TIMEOUT);
+    if let Err(e) = network_ready {
+        println!("MAIN: Failed to check network status: {}", e);
+        return Err(format!("MAIN: Failed to check network status: {}", e).into());
+    }
+
+    println!("MAIN: Network is ready, navigating to webapp");
     match chrome.navigate(constant::WEBAPP_URL).await {
         Ok(_) => {
             println!("MAIN: Navigated to {}", constant::WEBAPP_URL);
