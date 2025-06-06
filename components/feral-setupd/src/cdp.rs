@@ -95,27 +95,35 @@ impl CDP {
                     if let Message::Text(text) = msg {
                         if let Ok(resp) = serde_json::from_str::<Value>(&text) {
                             // If the command is Page.navigate, we need to wait for the load event.
-                            if method == "Page.navigate" {
-                                // println!("CDP: Response for page navigation: {}", resp);
-                                if let Some(evt) = resp.get("method").and_then(|v| v.as_str()) {
-                                    // If the event is Page.loadEventFired, it's a success.
-                                    println!("CDP: Event: {}", evt);
-                                    // match evt {
-                                    //     "Page.loadEventFired" => {
-                                    //         return Ok(resp
-                                    //             .get("result")
-                                    //             .cloned()
-                                    //             .unwrap_or(Value::Null));
-                                    //     }
-                                    //     // If the event is Page.frameStoppedLoading, it's an error.
-                                    //     "Page.frameStoppedLoading" => {
-                                    //         return Err("CDP: Received Page.frameStoppedLoading without Page.loadEventFired".into());
-                                    //     }
-                                    //     _ => {}
-                                    // }
-                                }
-                                // If the command is not Page.navigate, we can just return the response.
-                            } else if resp.get("id").and_then(|v| v.as_u64()) == Some(id as u64) {
+                            // if method == "Page.navigate" {
+                            //     println!("CDP: Response for page navigation: {}", resp);
+                            //     println!("--------------------------------");
+                            //     // if let Some(evt) = resp.get("method").and_then(|v| v.as_str()) {
+                            //     //     // If the event is Page.loadEventFired, it's a success.
+                            //     //     println!("CDP: Event: {}", evt);
+                            //     //     match evt {
+                            //     //         "Page.loadEventFired" => {
+                            //     //             return Ok(resp
+                            //     //                 .get("result")
+                            //     //                 .cloned()
+                            //     //                 .unwrap_or(Value::Null));
+                            //     //         }
+                            //     //         // If the event is Page.frameStoppedLoading, it's an error.
+                            //     //         "Page.frameStoppedLoading" => {
+                            //     //             return Err("CDP: Received Page.frameStoppedLoading without Page.loadEventFired".into());
+                            //     //         }
+                            //     //         _ => {}
+                            //     //     }
+                            //     // }
+                            //     // If the command is not Page.navigate, we can just return the response.
+                            // } else if resp.get("id").and_then(|v| v.as_u64()) == Some(id as u64) {
+                            //     println!("CDP: Response for {}: {}", method, resp);
+                            //     if let Some(err) = resp.get("error") {
+                            //         return Err(format!("CDP error: {}", err).into());
+                            //     }
+                            //     return Ok(resp.get("result").cloned().unwrap_or(Value::Null));
+                            // }]
+                            if resp.get("id").and_then(|v| v.as_u64()) == Some(id as u64) {
                                 println!("CDP: Response for {}: {}", method, resp);
                                 if let Some(err) = resp.get("error") {
                                     return Err(format!("CDP error: {}", err).into());
