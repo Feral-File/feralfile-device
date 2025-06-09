@@ -259,11 +259,11 @@ func (c *CommandHandler) handleScreenRotation(ctx context.Context, args []byte) 
 	orientationReplyMsg := "landscape"
 	switch newRotation {
 	case "90":
-		orientationReplyMsg = "portraitReverse"
+		orientationReplyMsg = "portrait"
 	case "180":
 		orientationReplyMsg = "landscapeReverse"
 	case "270":
-		orientationReplyMsg = "portrait"
+		orientationReplyMsg = "portraitReverse"
 	}
 	return map[string]string{"orientation": orientationReplyMsg}, nil
 }
