@@ -38,7 +38,7 @@ title   Feral File X1
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
+options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
 EOF
 
 cat > /boot/loader/entries/factory_reset.conf <<EOF
@@ -46,7 +46,7 @@ title   Feral File X1 - Factory Reset
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
+options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
 EOF
 
 cat > /boot/loader/entries/ota_prev.conf <<EOF
@@ -54,7 +54,7 @@ title   Feral File X1 - Rollback to previous version
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID rw
+options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
 EOF
 
 echo "Overwriting mkinitcpio.conf HOOKS..."
