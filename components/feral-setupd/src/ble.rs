@@ -1,6 +1,5 @@
 use crate::constant;
 use crate::encoding;
-use crate::wifi_utils;
 use crate::wifi_utils::SSIDsCacher;
 use bluer::{
     Adapter, Session,
@@ -29,14 +28,11 @@ use std::time::Instant;
 use tokio::sync::Mutex;
 use tokio::task;
 
-const SUCCESS_CODE: &[u8] = &[0];
-const ERR_CODE_WRONG_WIFI_PWD: &[u8] = &[1];
-const ERR_CODE_NO_INTERNET: &[u8] = &[2];
-const ERR_CODE_UNKNOWN_ERROR: &[u8] = &[255];
-
-pub type BTConnectedCallback = Option<Box<dyn Fn() + Send + Sync>>;
-pub type ConnectWifiCallback =
-    Box<dyn Fn() -> Pin<Box<dyn Future<Output = Option<String>> + Send>> + Send + Sync>;
+pub type BTConnectedCallback =
+    Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>;
+pub type ConnectWifiCallback = Box<
+    dyn Fn(&str, &str) -> Pin<Box<dyn Future<Output = Result<String, u8>> + Send>> + Send + Sync,
+>;
 pub type GetInfoCallback = Option<Box<dyn Fn() -> Vec<String> + Send + Sync>>;
 
 #[derive(Default)]
@@ -189,7 +185,7 @@ impl BLE {
                         // Store the notifier for later use in the write callback
                         *handle.lock().await = Some(notifier);
                         if let Some(cb) = bt_connected_callback.as_ref() {
-                            cb();
+                            cb().await;
                         }
                     }
                     .boxed()
@@ -280,7 +276,7 @@ async fn handle_scan_wifi(
     // Build BLE reply payload
     let mut reply = Vec::with_capacity(ssids.len() + 2);
     reply.push(reply_id.as_bytes());
-    reply.push(SUCCESS_CODE);
+    reply.push(&[constant::BLE_SUCCESS_CODE]);
     reply.extend(ssids.iter().map(|s| s.as_bytes()));
     println!("BLE: Reply: {:?}", reply);
     let payload = encoding::encode_payload(&reply);
@@ -318,41 +314,23 @@ async fn handle_connect_wifi(
     let ssid = &params[0];
     let pass = &params[1];
 
-    // Attempt connection
-    // If it fails, notify central with error code
-    let start_time = Instant::now();
-    let cb_response: String;
     let mut payload = Vec::with_capacity(3); // to reply to central
     payload.push(reply_id.as_bytes());
-    if let Err(e) = wifi_utils::connect(ssid, pass) {
-        eprintln!(
-            "BLE: Failed to connect to wifi \"{}\" in {:?} ms: {}",
-            ssid,
-            start_time.elapsed().as_millis(),
-            e
-        );
-        // This is a bit of a hack to detect wrong password
-        // But the command doesn't provide a reliable way to detect this
-        let error_code = if e.to_string().contains("password") {
-            ERR_CODE_WRONG_WIFI_PWD
-        } else {
-            ERR_CODE_UNKNOWN_ERROR
-        };
-        payload.push(error_code);
-    } else {
-        println!(
-            "BLE: Connected to wifi \"{}\" in {:?} ms",
-            ssid,
-            start_time.elapsed().as_millis()
-        );
-        if let Some(response) = cb().await {
-            cb_response = response;
-            payload.push(SUCCESS_CODE);
-            payload.push(cb_response.as_bytes());
-        } else {
-            payload.push(ERR_CODE_NO_INTERNET);
+
+    // Pre-declare variables to own the returned values
+    let topic_id: String;
+    let error_code: [u8; 1];
+    match cb(ssid, pass).await {
+        Ok(tid) => {
+            topic_id = tid;
+            payload.push(&[constant::BLE_SUCCESS_CODE]);
+            payload.push(topic_id.as_bytes());
         }
-    }
+        Err(e) => {
+            error_code = [e];
+            payload.push(&error_code);
+        }
+    };
 
     let mut guard = notifier.lock().await;
     if let Some(notifier) = guard.as_mut() {
@@ -383,7 +361,7 @@ async fn handle_get_info(
     };
     let mut reply = Vec::with_capacity(payload.len() + 1);
     reply.push(reply_id.as_bytes());
-    reply.push(SUCCESS_CODE);
+    reply.push(&[constant::BLE_SUCCESS_CODE]);
     reply.extend(payload.iter().map(|s| s.as_bytes()));
 
     let mut guard = notifier.lock().await;
