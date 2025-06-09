@@ -69,6 +69,9 @@
     <div id="connectScreen" class="hidden">
         <p id="connectText"></p>
     </div>
+    <div id="messageScreen" class="hidden">
+        <p id="messageText"></p>
+    </div>
 
     <script>
         const screens = {
@@ -118,6 +121,13 @@
                 render: (params) => {
                     document.getElementById("connectText").textContent = 
                         `Connecting to ${params.get("ssid")}`;
+                },
+            },
+            message: {
+                id: "messageScreen",
+                requiredParams: ["message"],
+                render: (params) => {
+                    document.getElementById("messageText").textContent = params.get("message");
                 },
             },
         };
