@@ -5,6 +5,7 @@ use std::error::Error;
 use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
+use tokio::time::{Duration, timeout};
 
 use futures_util::{SinkExt, StreamExt}; // for .send() and .next()
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -76,34 +77,37 @@ impl CDP {
         sock.send(Message::Text(body.to_string().into())).await?;
         println!("CDP: Sent command: {}", body);
 
+        let timeout_duration = Duration::from_secs(3);
+
         // Wait for the response with the same ID.
         // Or if the command is Page.navigate, wait for the response with corresponding event.
-        println!("CDP: Waiting for response...");
-        while let Some(msg) = sock.next().await {
-            let msg = msg?;
-            if let Message::Text(text) = msg {
-                if let Ok(resp) = serde_json::from_str::<Value>(&text) {
-                    if method == "Page.navigate" {
-                        if let Some(evt) = resp.get("method").and_then(|v| v.as_str()) {
-                            match evt {
-                                "Page.loadEventFired" | "Page.frameStoppedLoading" => {
-                                    println!("CDP: Response for page navigation: {}", evt);
-                                    return Ok(resp.get("result").cloned().unwrap_or(Value::Null));
-                                }
-                                _ => {}
+        println!(
+            "CDP: Waiting for response for {} with timeout {}s",
+            method,
+            timeout_duration.as_secs()
+        );
+
+        timeout(timeout_duration, async {
+            // Keep getting messages until we get the right response.
+            while let Some(msg) = sock.next().await {
+                let msg = msg?;
+                // Get the text of the message and parse it as JSON.
+                if let Message::Text(text) = msg {
+                    if let Ok(resp) = serde_json::from_str::<Value>(&text) {
+                        // If the response is for the command we sent, return the result.
+                        if resp.get("id").and_then(|v| v.as_u64()) == Some(id as u64) {
+                            println!("CDP: Response for {}: {}", method, resp);
+                            if let Some(err) = resp.get("error") {
+                                return Err(format!("CDP error: {}", err).into());
                             }
+                            return Ok(resp.get("result").cloned().unwrap_or(Value::Null));
                         }
-                    } else if resp.get("id").and_then(|v| v.as_u64()) == Some(id as u64) {
-                        println!("CDP: Response for {}: {}", method, resp);
-                        if let Some(err) = resp.get("error") {
-                            return Err(format!("CDP error: {}", err).into());
-                        }
-                        return Ok(resp.get("result").cloned().unwrap_or(Value::Null));
                     }
                 }
             }
-        }
-        Err("CDP: WebSocket closed before response".into())
+            Err("CDP: WebSocket closed before response".into())
+        })
+        .await?
     }
 
     /// Fetch the WebSocket debug URL from the CDP HTTP endpoint.

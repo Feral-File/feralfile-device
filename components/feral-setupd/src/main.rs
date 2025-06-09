@@ -13,6 +13,7 @@ use cdp::CDP;
 use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 use tokio::signal::unix::{SignalKind, signal as unix_signal};
 use tokio::{
     sync::Mutex,
@@ -56,11 +57,17 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     println!("MAIN: App state initialized: {:?}", app_state);
 
     // Start bluetooth advertising with callbacks
-    let connect_wifi_cb = create_wifi_connected_cb(app_state.clone(), chrome.clone());
+    let bt_connected_cb = create_bt_connected_cb(chrome.clone());
+    let connect_wifi_cb = create_connect_wifi_cb(app_state.clone(), chrome.clone());
     let get_info_cb = create_get_info_cb(app_state.clone());
     let ssids_cacher = Arc::new(SSIDsCacher::new());
     match ble_service
-        .start(None, connect_wifi_cb, get_info_cb, ssids_cacher.clone())
+        .start(
+            bt_connected_cb,
+            connect_wifi_cb,
+            get_info_cb,
+            ssids_cacher.clone(),
+        )
         .await
     {
         Ok(_) => println!("MAIN: Bluetooth advertising started successfully"),
@@ -113,24 +120,68 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
 }
 
-fn create_wifi_connected_cb(
+fn create_bt_connected_cb(chromium: Arc<CDP>) -> ble::BTConnectedCallback {
+    Some(Box::new(move || {
+        let chromium = chromium.clone();
+        Box::pin(async move {
+            let _ = show_message(&chromium, constant::WELCOME_MSG).await;
+        })
+    }))
+}
+
+fn create_connect_wifi_cb(
     app_state: Arc<AppState>,
     chromium: Arc<CDP>,
 ) -> ble::ConnectWifiCallback {
-    Box::new(move || {
+    Box::new(move |ssid, pwd| {
         let app_state = app_state.clone();
         let chromium = chromium.clone();
+        let ssid = ssid.to_string();
+        let pwd = pwd.to_string();
         Box::pin(async move {
-            let internet = dbus_utils::internet_availability();
-            if !internet {
-                return None;
+            let start_time = Instant::now();
+            // Show message
+            let _ = show_message(
+                &chromium,
+                &format!("{}{}", constant::WIFI_CONNECTING_MSG_PREFIX, ssid),
+            )
+            .await;
+
+            // Connect to wifi & return early if failed
+            if let Err(e) = wifi_utils::connect(&ssid, &pwd) {
+                eprintln!(
+                    "MAIN: Failed to connect to wifi \"{}\" in {:?} ms: {}",
+                    ssid,
+                    start_time.elapsed().as_millis(),
+                    e
+                );
+                task::spawn(async move {
+                    let _ = show_message(&chromium, constant::WIFI_FAILED_TO_CONNECT_MSG).await;
+                });
+                // This is a bit of a hack to detect wrong password
+                // But the command doesn't provide a reliable way to detect this
+                return if e.to_string().contains("password") {
+                    Err(constant::BLE_ERR_CODE_WRONG_WIFI_PWD)
+                } else {
+                    Err(constant::BLE_ERR_CODE_UNKNOWN_ERROR)
+                };
             }
 
+            // Return early if there is no internet
+            let internet = dbus_utils::internet_availability();
+            if !internet {
+                task::spawn(async move {
+                    let _ = show_message(&chromium, constant::INTERNET_FAILED_TO_CONNECT_MSG).await;
+                });
+                return Err(constant::BLE_ERR_CODE_NO_INTERNET);
+            }
+
+            // Get topic id from connectd
             let topic_id = match dbus_utils::get_relayer_info() {
                 Ok(info) => info,
                 Err(e) => {
                     eprintln!("BLE: can't get relayer data from connectd: {}", e);
-                    return None;
+                    return Err(constant::BLE_ERR_CODE_UNKNOWN_ERROR);
                 }
             };
 
@@ -140,10 +191,11 @@ fn create_wifi_connected_cb(
             task::spawn(async move {
                 // This is a workaround to avoid Err Network Changed from Chrome
                 // This potentially also avoids the white screen issue
+                let _ = show_message(&chromium, constant::SETUP_SUCCESSFULLY_MSG).await;
                 time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
                 let _ = show_webapp(&app_state, &chromium).await;
             });
-            Some(topic_id)
+            Ok(topic_id)
         })
     })
 }
@@ -259,6 +311,10 @@ async fn show_webapp(
     if *page == Page::WebApp {
         return Ok(());
     }
+
+    // This is to avoid Err Network Changed from Chrome
+    time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
+
     match chrome.navigate(constant::WEBAPP_URL).await {
         Ok(_) => {
             println!("MAIN: Navigated to {}", constant::WEBAPP_URL);
@@ -270,4 +326,21 @@ async fn show_webapp(
         }
     };
     Ok(())
+}
+
+async fn show_message(
+    chrome: &Arc<CDP>,
+    message: &str,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let message_url = format!("{}{}", constant::MSG_URL_PREFIX, message);
+    match chrome.navigate(&message_url).await {
+        Ok(_) => {
+            println!("MAIN: Navigated to {}", message_url);
+            Ok(())
+        }
+        Err(e) => {
+            println!("MAIN: Error showing message: {}", e);
+            Err(e)
+        }
+    }
 }
