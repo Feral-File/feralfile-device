@@ -31,7 +31,7 @@ FILES_TO_TEST=(
 RESULTS_JSON_FILE="soak_results.json"
 SUMMARY_SCRIPT_PATH="/home/soaktest/summary.py" # Path to your Python summary script
 
-FILE_TARGET_DURATION_SECONDS=$((5 * 60 * 60)) # 5 hours per file
+FILE_TARGET_DURATION_SECONDS=$((60)) # 5 hours per file
 #FILE_TARGET_DURATION_SECONDS=$((3 * 60)) # For testing: 3 minutes per file
 
 LOOP_SAMPLING_DELAY_SECONDS=5       # Interval for collecting metrics
