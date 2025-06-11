@@ -1,4 +1,4 @@
-package main
+package mediator
 
 import (
 	"context"
@@ -6,38 +6,38 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/cdp"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/command"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/dbus"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/state"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/status"
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
 )
 
-// NotificationType represents the type of notification
-type NotificationType string
+//go:generate mockgen -source=mediator.go -destination=../mocks/mock_mediator.go -package=mocks -mock_names=Interface=MockMediator
 
-const (
-	NOTIFICATION_TYPE_PLAYER_STATUS NotificationType = "player_status"
-	NOTIFICATION_TYPE_DEVICE_STATUS NotificationType = "device_status"
-)
-
-// notificationPersistConfig maps notification types to their persist record counts
-var notificationPersistConfig = map[NotificationType]int{
-	NOTIFICATION_TYPE_PLAYER_STATUS: 1,
-	NOTIFICATION_TYPE_DEVICE_STATUS: 1,
+type Interface interface {
+	Start()
+	Stop()
+	SetStatusPoller(statusPoller status.PollerInterface)
 }
 
 type Mediator struct {
-	relayer      *RelayerClient
-	dbus         *godbus.DBusClient
-	cdp          *CDPClient
-	cmd          *CommandHandler
+	relayer      relayer.ClientInterface
+	dbus         dbus.ClientInterface
+	cdp          cdp.ClientInterface
+	cmd          command.HandlerInterface
+	statusPoller status.PollerInterface
 	logger       *zap.Logger
-	statusPoller *StatusPoller
 }
 
-func NewMediator(
-	relayer *RelayerClient,
-	dbus *godbus.DBusClient,
-	cdp *CDPClient,
-	cmd *CommandHandler,
+func New(
+	relayer relayer.ClientInterface,
+	dbus dbus.ClientInterface,
+	cdp cdp.ClientInterface,
+	cmd command.HandlerInterface,
 	logger *zap.Logger) *Mediator {
 	return &Mediator{
 		relayer: relayer,
@@ -68,7 +68,7 @@ func (m *Mediator) handleDBusSignal(
 	m.logger.Info("handle received DBus signal", zap.String("name", payload.Name()), zap.String("path", payload.Path.String()))
 
 	switch payload.Member {
-	case DBUS_SYS_MONITORD_EVENT_SYSMETRICS:
+	case dbus.MONITORD_EVENT_SYSMETRICS:
 		if len(payload.Body) != 1 {
 			m.logger.Error("Invalid number of arguments", zap.Int("expected", 1), zap.Int("actual", len(payload.Body)))
 			return nil, fmt.Errorf("invalid number of arguments")
@@ -81,9 +81,9 @@ func (m *Mediator) handleDBusSignal(
 		}
 
 		m.logger.Debug("Received sysmetrics", zap.String("metrics", string(body)))
-		m.cmd.saveLastSysMetrics(body)
+		m.cmd.SaveLastSysMetrics(body)
 
-	case DBUS_SYS_MONITORD_EVENT_CONNECTIVITY_CHANGE:
+	case dbus.MONITORD_EVENT_CONNECTIVITY_CHANGE:
 		if len(payload.Body) != 1 {
 			m.logger.Error("Invalid number of arguments", zap.Int("expected", 1), zap.Int("actual", len(payload.Body)))
 			return nil, fmt.Errorf("invalid number of arguments")
@@ -96,8 +96,8 @@ func (m *Mediator) handleDBusSignal(
 		}
 
 		// Send the connectivity change to web app
-		_, err := m.cdp.SendCDPRequest(
-			CDP_METHOD_EVALUATE,
+		_, err := m.cdp.Send(
+			cdp.METHOD_EVALUATE,
 			map[string]interface{}{
 				"expression": fmt.Sprintf("window.handleConnectivityChange(%t)", connected),
 			})
@@ -120,11 +120,11 @@ func (m *Mediator) handleDBusSignal(
 	return nil, nil
 }
 
-func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayload) error {
+func (m *Mediator) handleRelayerMessage(ctx context.Context, payload relayer.Payload) error {
 	m.logger.Info("handle received relayer message", zap.Any("payload", payload))
 
 	switch payload.MessageID {
-	case RELAYER_MESSAGE_ID_SYSTEM:
+	case relayer.MESSAGE_ID_SYSTEM:
 		topicID := payload.Message.TopicID
 		if topicID == nil {
 			m.logger.Error("Payload doesn't contain topicID", zap.Any("payload", payload))
@@ -132,9 +132,9 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 		}
 
 		// Save state
-		state := GetState()
-		state.Relayer.TopicID = *topicID
-		err := state.Save()
+		s := state.GetState()
+		s.Relayer.TopicID = *topicID
+		err := s.Save()
 		if err != nil {
 			m.logger.Error("Failed to persist state", zap.Error(err))
 			return err
@@ -148,7 +148,7 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 
 		if cmd.ConnectdCmd() {
 			result, err := m.cmd.Execute(ctx,
-				Command{
+				command.Command{
 					Command:   *cmd,
 					Arguments: payload.Message.Args,
 				})
@@ -171,7 +171,7 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 				return err
 			}
 
-			result, err := m.cdp.SendCDPRequest(CDP_METHOD_EVALUATE, map[string]interface{}{
+			result, err := m.cdp.Send(cdp.METHOD_EVALUATE, map[string]interface{}{
 				"expression": fmt.Sprintf("window.handleCDPRequest(%s)", string(p)),
 			})
 			if err != nil {
@@ -190,6 +190,6 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload RelayerPayl
 }
 
 // SetStatusPoller sets the StatusPoller reference after initialization
-func (m *Mediator) SetStatusPoller(statusPoller *StatusPoller) {
+func (m *Mediator) SetStatusPoller(statusPoller status.PollerInterface) {
 	m.statusPoller = statusPoller
 }

@@ -9,15 +9,23 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/cdp"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/command"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/config"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/dbus"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/mediator"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/state"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/status"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/watchdog"
 	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/feral-file/godbus"
-	"github.com/godbus/dbus/v5"
+	dbus_v5 "github.com/godbus/dbus/v5"
 	"go.uber.org/zap"
 )
 
 const (
-	WATCHDOG_INTERVAL = 15 * time.Second
-	SHUTDOWN_TIMEOUT  = 2 * time.Second
+	SHUTDOWN_TIMEOUT = 2 * time.Second
 )
 
 var debug = false
@@ -54,53 +62,53 @@ func main() {
 	}()
 
 	// Load configuration
-	config, err := LoadConfig(logger)
+	config, err := config.Load(logger)
 	if err != nil {
 		logger.Fatal("Failed to load configuration", zap.Error(err))
 	}
 
 	// Load state
-	state, err = LoadState(logger)
+	s, err := state.Load(logger)
 	if err != nil {
 		logger.Fatal("Failed to load state", zap.Error(err))
 	}
 
 	// Initialize CDP client
-	cdpClient := NewCDPClient(config.CDPConfig, logger)
-	err = cdpClient.InitCDP(ctx)
+	cdpClient := cdp.NewClient(config.CDPConfig, logger)
+	err = cdpClient.Init(ctx)
 	if err != nil {
 		logger.Fatal("CDP init failed", zap.Error(err))
 	}
 	defer cdpClient.Close()
 
 	// Start watchdog in a goroutine
-	watchdog := NewWatchdog(WATCHDOG_INTERVAL, logger)
+	watchdog := watchdog.New(logger)
 	go watchdog.Start(ctx)
 	defer watchdog.Stop()
 
 	// Initialize Relayer client
-	relayerClient := NewRelayerClient(config.RelayerConfig, logger)
+	relayerClient := relayer.NewDefault(config.RelayerConfig, logger)
 	defer relayerClient.Close()
 
 	// Initialize DBus client
-	mo := dbus.WithMatchPathNamespace(dbus.ObjectPath("/com/feralfile"))
-	dbusClient := godbus.NewDBusClient(ctx, logger, DBUS_NAME, mo)
+	mo := dbus_v5.WithMatchPathNamespace(dbus_v5.ObjectPath("/com/feralfile"))
+	dbusClient := godbus.NewDBusClient(ctx, logger, dbus.NAME, mo)
 	err = dbusClient.Start()
 	if err != nil {
 		logger.Fatal("DBus init failed", zap.Error(err))
 	}
 	defer dbusClient.Stop()
 
-	err = dbusClient.Export(NewConnectdDBus(ctx, relayerClient, logger), DBUS_PATH, DBUS_INTERFACE)
+	err = dbusClient.Export(dbus.NewClient(ctx, relayerClient, logger), dbus.PATH, dbus.INTERFACE)
 	if err != nil {
 		logger.Fatal("Failed to export DBus interface", zap.Error(err))
 	}
 
 	// Initialize command handler
-	cmd := NewCommandHandler(cdpClient, dbusClient, logger)
+	cmd := command.NewHandler(cdpClient, dbusClient, logger)
 
 	// Initialize Mediator
-	mediator := NewMediator(relayerClient, dbusClient, cdpClient, cmd, logger)
+	mediator := mediator.New(relayerClient, dbusClient, cdpClient, cmd, logger)
 	mediator.Start()
 	defer mediator.Stop()
 
@@ -111,7 +119,7 @@ func main() {
 	} else {
 		logger.Info("Connectivity status", zap.Bool("connected", connected))
 	}
-	if connected && state.Relayer.IsReady() {
+	if connected && s.Relayer.IsReady() {
 		err = relayerClient.Connect(ctx)
 		if err != nil {
 			logger.Fatal("Failed to connect to relayer", zap.Error(err))
@@ -119,7 +127,7 @@ func main() {
 	}
 
 	// Initialize StatusPoller
-	statusPoller := NewStatusPoller(cdpClient, relayerClient, logger)
+	statusPoller := status.NewPoller(cdpClient, relayerClient, logger)
 
 	// Set the StatusPoller reference in mediator for force refresh
 	mediator.SetStatusPoller(statusPoller)
@@ -143,18 +151,18 @@ func main() {
 	<-ctx.Done()
 }
 
-func getConnectivityStatus(ctx context.Context, dbus *godbus.DBusClient, logger *zap.Logger) (bool, error) {
+func getConnectivityStatus(ctx context.Context, dc *godbus.DBusClient, logger *zap.Logger) (bool, error) {
 	logger.Info("Getting connectivity status")
 
 	deadlineCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	resp, err := dbus.Call(
+	resp, err := dc.Call(
 		deadlineCtx,
-		MONITORD_DBUS_NAME,
-		MONITORD_DBUS_PATH,
-		MONITORD_DBUS_INTERFACE,
-		MONITORD_DBUS_METHOD_GET_CONNECTIVITY_STATUS,
+		dbus.MONITORD_NAME,
+		dbus.MONITORD_PATH,
+		dbus.MONITORD_INTERFACE,
+		dbus.MONITORD_METHOD_GET_CONNECTIVITY_STATUS,
 		true,
 	)
 	logger.Debug("Connectivity status", zap.Any("resp", resp), zap.Error(err))

@@ -1,11 +1,10 @@
-package main
+package relayer
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -13,56 +12,59 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/state"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
 
 var (
 	// Errors
-	errRelayerAlreadyConnected = fmt.Errorf("relayer is already connected")
+	ErrAlreadyConnected = fmt.Errorf("relayer is already connected")
+	ErrNotConnected     = fmt.Errorf("relayer is not connected")
 
 	// Constants
 	ConnectdCmds = map[RelayerCmd]bool{
-		RELAYER_CMD_CONNECT:              true,
-		RELAYER_CMD_SHOW_PAIRING_QR_CODE: true,
-		RELAYER_CMD_PROFILE:              true,
-		RELAYER_CMD_KEYBOARD_EVENT:       true,
-		RELAYER_CMD_MOUSE_DRAG_EVENT:     true,
-		RELAYER_CMD_MOUSE_TAP_EVENT:      true,
-		RELAYER_CMD_SCREEN_ROTATION:      true,
-		RELAYER_CMD_SHUTDOWN:             true,
-		RELAYER_CMD_DEVICE_STATUS:        true,
-		RELAYER_CMD_UPDATE_TO_LATEST:     true,
+		CMD_CONNECT:              true,
+		CMD_SHOW_PAIRING_QR_CODE: true,
+		CMD_PROFILE:              true,
+		CMD_KEYBOARD_EVENT:       true,
+		CMD_MOUSE_DRAG_EVENT:     true,
+		CMD_MOUSE_TAP_EVENT:      true,
+		CMD_SCREEN_ROTATION:      true,
+		CMD_SHUTDOWN:             true,
+		CMD_DEVICE_STATUS:        true,
+		CMD_UPDATE_TO_LATEST:     true,
 	}
 )
 
 const (
-	RELAYER_MESSAGE_ID_SYSTEM = "system"
-	RELAYER_PING_INTERVAL     = 15 * time.Second
-	RELAYER_PONG_WAIT         = 3 * time.Second
+	MESSAGE_ID_SYSTEM = "system"
+	PING_INTERVAL     = 15 * time.Second
+	PONG_WAIT         = 3 * time.Second
 )
 
 type RelayerCmd string
 
 const (
-	RELAYER_CMD_CONNECT              RelayerCmd = "connect"
-	RELAYER_CMD_SHOW_PAIRING_QR_CODE RelayerCmd = "showPairingQRCode"
-	RELAYER_CMD_PROFILE              RelayerCmd = "deviceMetrics"
-	RELAYER_CMD_KEYBOARD_EVENT       RelayerCmd = "sendKeyboardEvent"
-	RELAYER_CMD_MOUSE_DRAG_EVENT     RelayerCmd = "dragGesture"
-	RELAYER_CMD_MOUSE_TAP_EVENT      RelayerCmd = "tapGesture"
-	RELAYER_CMD_SYS_METRICS          RelayerCmd = "deviceMetrics"
-	RELAYER_CMD_SCREEN_ROTATION      RelayerCmd = "rotate"
-	RELAYER_CMD_SHUTDOWN             RelayerCmd = "shutdown"
-	RELAYER_CMD_DEVICE_STATUS        RelayerCmd = "getDeviceStatus"
-	RELAYER_CMD_UPDATE_TO_LATEST     RelayerCmd = "updateToLatestVersion"
+	CMD_CONNECT              RelayerCmd = "connect"
+	CMD_SHOW_PAIRING_QR_CODE RelayerCmd = "showPairingQRCode"
+	CMD_PROFILE              RelayerCmd = "deviceMetrics"
+	CMD_KEYBOARD_EVENT       RelayerCmd = "sendKeyboardEvent"
+	CMD_MOUSE_DRAG_EVENT     RelayerCmd = "dragGesture"
+	CMD_MOUSE_TAP_EVENT      RelayerCmd = "tapGesture"
+	RELAYER_CMD_SYS_METRICS  RelayerCmd = "deviceMetrics"
+	CMD_SCREEN_ROTATION      RelayerCmd = "rotate"
+	CMD_SHUTDOWN             RelayerCmd = "shutdown"
+	CMD_DEVICE_STATUS        RelayerCmd = "getDeviceStatus"
+	CMD_UPDATE_TO_LATEST     RelayerCmd = "updateToLatestVersion"
 )
 
 func (c RelayerCmd) ConnectdCmd() bool {
 	return ConnectdCmds[c]
 }
 
-type RelayerPayload struct {
+type Payload struct {
 	MessageID string `json:"messageID"`
 	Message   struct {
 		Command *RelayerCmd            `json:"command,omitempty"`
@@ -71,11 +73,11 @@ type RelayerPayload struct {
 	} `json:"message"`
 }
 
-func (p RelayerPayload) JSON() ([]byte, error) {
+func (p Payload) JSON() ([]byte, error) {
 	return json.Marshal(p)
 }
 
-func (p RelayerPayload) Arguments(key string) (interface{}, error) {
+func (p Payload) Arguments(key string) (interface{}, error) {
 	v, ok := p.Message.Args[key]
 	if !ok {
 		return nil, fmt.Errorf("key %s not found", key)
@@ -83,66 +85,112 @@ func (p RelayerPayload) Arguments(key string) (interface{}, error) {
 	return v, nil
 }
 
-type RelayerConfig struct {
+type Config struct {
 	Endpoint string `json:"endpoint"`
 	APIKey   string `json:"apiKey"`
 }
 
-type RelayerHandler func(ctx context.Context, payload RelayerPayload) error
+type Handler func(ctx context.Context, payload Payload) error
 
-// Custom websocket error
-type PermanentErr error
-type TransientErr error
-type BusyErr error
-
-func categorizeWebsocketError(err error, resp *http.Response) error {
-	// Handshake errors
-	if errors.Is(err, websocket.ErrBadHandshake) {
-		statusCode := resp.StatusCode
-		if statusCode >= 500 || statusCode == http.StatusTooManyRequests {
-			return BusyErr(err)
-		}
-		return PermanentErr(err)
-	}
-
-	// Network errors
-	var urlErr *url.Error
-	var netErr net.Error
-	if errors.As(err, &urlErr) ||
-		(errors.As(err, &netErr) && netErr.Timeout()) ||
-		errors.Is(err, syscall.ECONNREFUSED) ||
-		errors.Is(err, syscall.ECONNRESET) ||
-		errors.Is(err, syscall.EPIPE) {
-		return TransientErr(err)
-	}
-
-	// Fallback to permanent error
-	return PermanentErr(err)
+// Custom websocket error types
+type PermanentErr struct {
+	Err error
 }
 
-// RelayerClient handles Relayer connection to relay server
-type RelayerClient struct {
+func (e PermanentErr) Error() string {
+	return e.Err.Error()
+}
+
+type TransientErr struct {
+	Err error
+}
+
+func (e TransientErr) Error() string {
+	return e.Err.Error()
+}
+
+type BusyErr struct {
+	Err error
+}
+
+func (e BusyErr) Error() string {
+	return e.Err.Error()
+}
+
+// NotificationType represents the type of notification
+type NotificationType string
+
+const (
+	NOTIFICATION_TYPE_PLAYER_STATUS NotificationType = "player_status"
+	NOTIFICATION_TYPE_DEVICE_STATUS NotificationType = "device_status"
+)
+
+// notificationPersistConfig maps notification types to their persist record counts
+var notificationPersistConfig = map[NotificationType]int{
+	NOTIFICATION_TYPE_PLAYER_STATUS: 1,
+	NOTIFICATION_TYPE_DEVICE_STATUS: 1,
+}
+
+//go:generate mockgen -source=relayer.go -destination=../mocks/mock_relayer.go -package=mocks -mock_names=ClientInterface=MockRelayerClient
+type ClientInterface interface {
+	IsConnected() bool
+	Connect(ctx context.Context) error
+	RetryableConnect(ctx context.Context) error
+	Send(ctx context.Context, data interface{}) error
+	OnRelayerMessage(handler Handler)
+	RemoveRelayerMessage(handler Handler)
+	Close()
+	SendNotification(ctx context.Context, notificationType NotificationType, message interface{}) error
+}
+
+// Client handles Relayer connection to relay server
+type Client struct {
 	sync.Mutex
 
-	config       *RelayerConfig
-	conn         *websocket.Conn
+	config       *Config
+	dialer       wrapper.WebSocketDialerInterface
+	conn         wrapper.WebSocketConnInterface
+	randomizer   wrapper.Randomizer
+	clock        wrapper.ClockInterface
 	done         chan struct{}
 	pingDoneChan chan struct{}
 	logger       *zap.Logger
-	handlers     []RelayerHandler
+	handlers     []Handler
 }
 
-// NewRelayerClient creates a new Relayer client
-func NewRelayerClient(config *RelayerConfig, logger *zap.Logger) *RelayerClient {
-	return &RelayerClient{
-		config:   config,
-		done:     make(chan struct{}),
-		logger:   logger,
-		handlers: []RelayerHandler{},
+// NewDefault creates a new default Relayer client
+func NewDefault(config *Config, logger *zap.Logger) *Client {
+	d := websocket.DefaultDialer
+	d.HandshakeTimeout = 5 * time.Second
+	return NewClient(
+		config,
+		logger,
+		wrapper.NewWebSocketDialer(d),
+		wrapper.NewRandomizer(),
+		wrapper.NewClock(),
+	)
+}
+
+// NewClient creates a new Relayer client with a custom fields
+func NewClient(
+	config *Config,
+	logger *zap.Logger,
+	dialer wrapper.WebSocketDialerInterface,
+	randomizer wrapper.Randomizer,
+	clock wrapper.ClockInterface,
+) *Client {
+	return &Client{
+		config:     config,
+		dialer:     dialer,
+		randomizer: randomizer,
+		clock:      clock,
+		done:       make(chan struct{}),
+		logger:     logger,
+		handlers:   []Handler{},
 	}
 }
 
-func (r *RelayerClient) IsConnected() bool {
+func (r *Client) IsConnected() bool {
 	r.Lock()
 	defer r.Unlock()
 	return r.conn != nil
@@ -150,7 +198,7 @@ func (r *RelayerClient) IsConnected() bool {
 
 // RetryableConnect attempts to connect to the Relayer server and listens for messages indefinitely
 // This function blocks the current thread and should be called in a separate goroutine unless otherwise specified
-func (r *RelayerClient) RetryableConnect(ctx context.Context) error {
+func (r *Client) RetryableConnect(ctx context.Context) error {
 	var attempts int
 	for {
 		attempts++
@@ -165,7 +213,7 @@ func (r *RelayerClient) RetryableConnect(ctx context.Context) error {
 		var transientErr TransientErr
 		var busyErr BusyErr
 		switch {
-		case errors.Is(err, errRelayerAlreadyConnected):
+		case errors.Is(err, ErrAlreadyConnected):
 			return nil
 		case errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
 			return err
@@ -173,17 +221,13 @@ func (r *RelayerClient) RetryableConnect(ctx context.Context) error {
 			return err
 		case errors.As(err, &transientErr):
 			// randomize sleep time between 1 and 5 seconds
-			sleepTime := 4 * time.Second
-			sleepTime = time.Second + time.Duration(rand.Intn(int(sleepTime)))
-			r.logger.Debug("Sleeping for transient error", zap.Duration("sleepTime", sleepTime))
-			time.Sleep(sleepTime)
+			sleepTime := r.randomizer.Duration(1*time.Second, 5*time.Second)
+			r.clock.Sleep(sleepTime)
 			continue
 		case errors.As(err, &busyErr):
 			// randomize sleep time between 10 and 60 seconds
-			sleepTime := 50 * time.Second
-			sleepTime = 10*time.Second + time.Duration(rand.Intn(int(sleepTime)))
-			r.logger.Debug("Sleeping for busy error", zap.Duration("sleepTime", sleepTime))
-			time.Sleep(sleepTime)
+			sleepTime := r.randomizer.Duration(10*time.Second, 60*time.Second)
+			r.clock.Sleep(sleepTime)
 			continue
 		default:
 			return err
@@ -192,14 +236,13 @@ func (r *RelayerClient) RetryableConnect(ctx context.Context) error {
 }
 
 // Connect connects to the Relayer server and listens for messages
-func (r *RelayerClient) Connect(ctx context.Context) error {
+func (r *Client) Connect(ctx context.Context) error {
 	// Ensure the relayer is not connected
 	r.Lock()
 	if r.conn != nil {
 		r.Unlock()
-		return errRelayerAlreadyConnected
+		return ErrAlreadyConnected
 	}
-	r.Unlock()
 
 	// Create URL with topicID if available
 	connectURL := r.config.Endpoint
@@ -208,11 +251,11 @@ func (r *RelayerClient) Connect(ctx context.Context) error {
 		connectURL += fmt.Sprintf("/api/connection?apiKey=%s", r.config.APIKey)
 	}
 
-	topicID := GetState().Relayer.TopicID
+	topicID := state.GetState().Relayer.TopicID
 	r.logger.Debug("Retrieved topic ID from state",
 		zap.String("topicID", topicID),
 		zap.Bool("isEmpty", topicID == ""),
-		zap.Bool("isReady", GetState().Relayer.IsReady()))
+		zap.Bool("isReady", state.GetState().Relayer.IsReady()))
 
 	if topicID != "" {
 		connectURL += fmt.Sprintf("&topicID=%s", topicID)
@@ -223,14 +266,10 @@ func (r *RelayerClient) Connect(ctx context.Context) error {
 			zap.String("stateFile", "/home/feralfile/.state/connectd.state"))
 	}
 
-	dialer := websocket.DefaultDialer
-	dialer.HandshakeTimeout = 5 * time.Second
-
-	r.Lock()
-	conn, resp, err := dialer.DialContext(ctx, connectURL, nil)
+	conn, resp, err := r.dialer.DialContext(ctx, connectURL, nil)
 	if err != nil {
 		r.Unlock()
-		return categorizeWebsocketError(err, resp)
+		return r.categorizeWebsocketError(err, resp)
 	}
 
 	r.conn = conn
@@ -247,16 +286,18 @@ func (r *RelayerClient) Connect(ctx context.Context) error {
 	}
 
 	// Start pinging
-	ticker := time.NewTicker(RELAYER_PING_INTERVAL)
-	defer ticker.Stop()
+	ticker := r.clock.NewTicker(PING_INTERVAL)
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
+				ticker.Stop()
 				return
 			case <-r.done:
+				ticker.Stop()
 				return
 			case <-r.pingDoneChan:
+				ticker.Stop()
 				return
 			case <-ticker.C:
 				r.ping()
@@ -272,7 +313,7 @@ func (r *RelayerClient) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (r *RelayerClient) reconnect(ctx context.Context) error {
+func (r *Client) reconnect(ctx context.Context) error {
 	r.logger.Info("Reconnecting to Relayer")
 
 	// Close the connection
@@ -289,13 +330,13 @@ func (r *RelayerClient) reconnect(ctx context.Context) error {
 	return r.RetryableConnect(ctx)
 }
 
-func (r *RelayerClient) OnRelayerMessage(f RelayerHandler) {
+func (r *Client) OnRelayerMessage(f Handler) {
 	r.Lock()
 	defer r.Unlock()
 	r.handlers = append(r.handlers, f)
 }
 
-func (r *RelayerClient) RemoveRelayerMessage(f RelayerHandler) {
+func (r *Client) RemoveRelayerMessage(f Handler) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -307,7 +348,7 @@ func (r *RelayerClient) RemoveRelayerMessage(f RelayerHandler) {
 	}
 }
 
-func (r *RelayerClient) background(ctx context.Context) {
+func (r *Client) background(ctx context.Context) {
 	go func() {
 		r.logger.Info("Relayer background goroutine started")
 		for {
@@ -342,7 +383,7 @@ func (r *RelayerClient) background(ctx context.Context) {
 				r.logger.Info("Received message", zap.ByteString("message", msg))
 
 				// Unmarshal payload
-				var payload RelayerPayload
+				var payload Payload
 				if err := json.Unmarshal(msg, &payload); err != nil {
 					r.logger.Error("Invalid JSON received", zap.ByteString("message", msg))
 					continue
@@ -354,7 +395,7 @@ func (r *RelayerClient) background(ctx context.Context) {
 					h := handler
 
 					// Run the handler in a separate goroutine to avoid blocking the main thread
-					go func(ctx context.Context, payload RelayerPayload, handler RelayerHandler) error {
+					go func(ctx context.Context, payload Payload, handler Handler) error {
 						select {
 						case <-ctx.Done():
 							return fmt.Errorf("context cancelled")
@@ -374,9 +415,13 @@ func (r *RelayerClient) background(ctx context.Context) {
 }
 
 // Send sends a message to the Relayer server
-func (r *RelayerClient) Send(ctx context.Context, data interface{}) error {
+func (r *Client) Send(ctx context.Context, data interface{}) error {
 	r.Lock()
 	defer r.Unlock()
+
+	if r.conn == nil {
+		return ErrNotConnected
+	}
 
 	r.logger.Info("Sending message to Relayer", zap.Any("data", data))
 
@@ -384,7 +429,7 @@ func (r *RelayerClient) Send(ctx context.Context, data interface{}) error {
 }
 
 // ping sends a ping to keep the connection alive
-func (r *RelayerClient) ping() {
+func (r *Client) ping() {
 	r.Lock()
 	defer r.Unlock()
 	if r.conn == nil {
@@ -395,13 +440,13 @@ func (r *RelayerClient) ping() {
 	if err := r.conn.WriteMessage(websocket.PingMessage, []byte("ping")); err != nil {
 		r.logger.Error("Failed to send ping", zap.Error(err))
 		return
+	} else {
+		r.conn.SetReadDeadline(r.clock.Now().Add(PONG_WAIT))
 	}
-
-	r.conn.SetReadDeadline(time.Now().Add(RELAYER_PONG_WAIT))
 }
 
 // Close closes the Relayer connection
-func (r *RelayerClient) Close() {
+func (r *Client) Close() {
 	r.Lock()
 	defer r.Unlock()
 
@@ -427,12 +472,12 @@ func (r *RelayerClient) Close() {
 	r.closeConn()
 }
 
-func (r *RelayerClient) closeConn() {
+func (r *Client) closeConn() {
 	if r.conn == nil {
 		return
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := r.clock.Now().Add(2 * time.Second)
 	err := r.conn.WriteControl(
 		websocket.CloseMessage,
 		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
@@ -451,7 +496,7 @@ func (r *RelayerClient) closeConn() {
 	r.logger.Info("Relayer connection closed")
 }
 
-func (r *RelayerClient) sendNotification(ctx context.Context, notificationType NotificationType, message interface{}) error {
+func (r *Client) SendNotification(ctx context.Context, notificationType NotificationType, message interface{}) error {
 	r.logger.Debug("Attempting to send notification",
 		zap.String("type", string(notificationType)),
 		zap.Bool("relayer_connected", r.IsConnected()))
@@ -481,5 +526,30 @@ func (r *RelayerClient) sendNotification(ctx context.Context, notificationType N
 			zap.Any("message", message))
 	}
 
-	return r.Send(ctx, notification)
+	return r.conn.WriteJSON(notification)
+}
+
+func (r *Client) categorizeWebsocketError(err error, resp *http.Response) error {
+	// Handshake errors
+	if errors.Is(err, websocket.ErrBadHandshake) {
+		statusCode := resp.StatusCode
+		if statusCode >= 500 || statusCode == http.StatusTooManyRequests {
+			return BusyErr{Err: err}
+		}
+		return PermanentErr{Err: err}
+	}
+
+	// Network errors
+	var urlErr *url.Error
+	var netErr net.Error
+	if errors.As(err, &urlErr) ||
+		(errors.As(err, &netErr) && netErr.Timeout()) ||
+		errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE) {
+		return TransientErr{Err: err}
+	}
+
+	// Fallback to permanent error
+	return PermanentErr{Err: err}
 }

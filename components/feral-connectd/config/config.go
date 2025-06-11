@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"encoding/json"
@@ -6,6 +6,8 @@ import (
 	"os"
 	"sync"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/cdp"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"go.uber.org/zap"
 )
 
@@ -18,12 +20,12 @@ var (
 
 // Configuration for all components
 type Config struct {
-	CDPConfig     *CDPConfig     `json:"cdp"`
-	RelayerConfig *RelayerConfig `json:"relayer"`
+	CDPConfig     *cdp.Config     `json:"cdp"`
+	RelayerConfig *relayer.Config `json:"relayer"`
 }
 
-// LoadConfig loads the configuration from a JSON file
-func LoadConfig(logger *zap.Logger) (*Config, error) {
+// Load loads the configuration from a JSON file
+func Load(logger *zap.Logger) (*Config, error) {
 	logger.Info("Loading config", zap.String("file", CONFIG_FILE))
 
 	// Try to read the file
@@ -47,15 +49,15 @@ func LoadConfig(logger *zap.Logger) (*Config, error) {
 	return config, nil
 }
 
-// GetConfig returns the current configuration safely
-func GetConfig() *Config {
+// Get returns the current configuration safely
+func Get() *Config {
 	configLock.Lock()
 	defer configLock.Unlock()
 
 	if config == nil {
 		config = &Config{
-			CDPConfig:     &CDPConfig{},
-			RelayerConfig: &RelayerConfig{},
+			CDPConfig:     &cdp.Config{},
+			RelayerConfig: &relayer.Config{},
 		}
 	}
 	return config

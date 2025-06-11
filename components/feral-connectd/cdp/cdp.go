@@ -1,4 +1,4 @@
-package main
+package cdp
 
 import (
 	"context"
@@ -14,21 +14,28 @@ import (
 
 const (
 	// CDP Methods
-	CDP_METHOD_EVALUATE = "Runtime.evaluate"
+	METHOD_EVALUATE = "Runtime.evaluate"
 
 	// CDP Types
-	CDP_TYPE_STRING = "string"
-	CDP_TYPE_OBJECT = "object"
+	TYPE_STRING = "string"
+	TYPE_OBJECT = "object"
 
 	// CDP Subtypes
-	CDP_SUBTYPE_ERROR = "error"
+	SUBTYPE_ERROR = "error"
 )
 
-type CDPConfig struct {
+type Config struct {
 	Endpoint string `json:"endpoint"`
 }
 
-type CDPClient struct {
+//go:generate mockgen -source=cdp.go -destination=../mocks/mock_cdp.go -package=mocks -mock_names=ClientInterface=MockCDPClient
+type ClientInterface interface {
+	Init(ctx context.Context) error
+	Send(method string, params map[string]interface{}) (interface{}, error)
+	Close()
+}
+
+type Client struct {
 	mu       sync.Mutex
 	conn     *websocket.Conn
 	reqID    int
@@ -37,9 +44,9 @@ type CDPClient struct {
 	logger   *zap.Logger
 }
 
-// NewCDPClient creates a new CDP client
-func NewCDPClient(config *CDPConfig, logger *zap.Logger) *CDPClient {
-	return &CDPClient{
+// NewClient creates a new CDP client
+func NewClient(config *Config, logger *zap.Logger) *Client {
+	return &Client{
 		endpoint: config.Endpoint,
 		reqID:    0,
 		isClosed: false,
@@ -47,8 +54,8 @@ func NewCDPClient(config *CDPConfig, logger *zap.Logger) *CDPClient {
 	}
 }
 
-// InitCDP fetches WS endpoint and dials Chromium
-func (c *CDPClient) InitCDP(ctx context.Context) error {
+// Init fetches WS endpoint and dials Chromium
+func (c *Client) Init(ctx context.Context) error {
 	c.logger.Info("Initializing CDP", zap.String("endpoint", c.endpoint))
 
 	// Fetch JSON with websocket debugger URL
@@ -114,8 +121,8 @@ func (c *CDPClient) InitCDP(ctx context.Context) error {
 	return nil
 }
 
-// SendCDPRequest sends a raw CDP JSON-RPC message and waits for response
-func (c *CDPClient) SendCDPRequest(method string, params map[string]interface{}) (interface{}, error) {
+// Send sends a raw CDP JSON-RPC message and waits for response
+func (c *Client) Send(method string, params map[string]interface{}) (interface{}, error) {
 	c.logger.Info("Sending CDP request", zap.String("method", method), zap.Any("params", params))
 
 	c.mu.Lock()
@@ -170,14 +177,14 @@ func (c *CDPClient) SendCDPRequest(method string, params map[string]interface{})
 	result := resp.Result.Result
 
 	// Check for uncaught errors
-	if result.Type == CDP_TYPE_OBJECT &&
+	if result.Type == TYPE_OBJECT &&
 		result.Subtype != nil &&
-		*result.Subtype == CDP_SUBTYPE_ERROR {
+		*result.Subtype == SUBTYPE_ERROR {
 		return nil, fmt.Errorf("CDP error: %v", *result.Description)
 	}
 
 	// Check for response type mismatch
-	if result.Type == CDP_TYPE_STRING {
+	if result.Type == TYPE_STRING {
 		// Unmarshal the result value
 		var v map[string]interface{}
 		if err := json.Unmarshal([]byte(result.Value.(string)), &v); err != nil {
@@ -185,7 +192,7 @@ func (c *CDPClient) SendCDPRequest(method string, params map[string]interface{})
 		}
 
 		return v, nil
-	} else if result.Type == CDP_TYPE_OBJECT {
+	} else if result.Type == TYPE_OBJECT {
 		return result.Value, nil
 	} else if len(result.Type) == 0 {
 		return nil, nil
@@ -195,7 +202,7 @@ func (c *CDPClient) SendCDPRequest(method string, params map[string]interface{})
 }
 
 // Close closes the CDP connection
-func (c *CDPClient) Close() {
+func (c *Client) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
