@@ -11,6 +11,7 @@ import (
 
 	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/feral-file/godbus"
+	"github.com/getsentry/sentry-go"
 	"github.com/godbus/dbus/v5"
 	"go.uber.org/zap"
 )
@@ -22,15 +23,50 @@ const (
 
 var debug = false
 
+// Note: Sentry integration is now handled automatically by the logger
+// Warn/Error logs send Sentry events, Fatal logs send crash events, Info logs add breadcrumbs
+
 func main() {
 	// Read from options
 	flag.BoolVar(&debug, "debug", false, "Enable debug mode")
 	flag.Parse()
 
-	// Initialize logger with debug enabled for development
-	logger, err := New(debug)
+	// Initialize basic logger first
+	basicLogger, err := New(debug)
 	if err != nil {
 		panic("Failed to initialize logger: " + err.Error())
+	}
+	defer basicLogger.Sync()
+
+	// Load configuration
+	config, err := LoadConfig(basicLogger)
+	if err != nil {
+		basicLogger.Fatal("Failed to load configuration", zap.Error(err))
+	}
+
+	// Initialize Sentry
+	err = InitSentry(config.SentryConfig)
+	if err != nil {
+		basicLogger.Error("Failed to initialize Sentry", zap.Error(err))
+		// Don't fail the application if Sentry initialization fails
+	}
+
+	// Create Sentry-integrated logger
+	var logger *zap.Logger
+	if config.SentryConfig.IsEnabled() {
+		logger, err = NewWithSentry(debug, config.SentryConfig)
+		if err != nil {
+			basicLogger.Error("Failed to create Sentry-integrated logger, falling back to basic logger", zap.Error(err))
+			logger = basicLogger
+		} else {
+			logger.Info("Sentry initialized successfully",
+				zap.String("environment", config.SentryConfig.Environment),
+				zap.String("release", config.SentryConfig.Release))
+			defer FlushSentry(2 * time.Second)
+		}
+	} else {
+		logger = basicLogger
+		logger.Info("Sentry not configured, using basic logger")
 	}
 	defer logger.Sync()
 
@@ -50,19 +86,23 @@ func main() {
 		time.Sleep(SHUTDOWN_TIMEOUT)
 		logger.Error("Shutdown timed out, forcing exit...",
 			zap.Duration("timeout", SHUTDOWN_TIMEOUT))
+
+		if config.SentryConfig.IsEnabled() {
+			sentry.Flush(1 * time.Second)
+		}
+
 		os.Exit(1)
 	}()
-
-	// Load configuration
-	config, err := LoadConfig(logger)
-	if err != nil {
-		logger.Fatal("Failed to load configuration", zap.Error(err))
-	}
 
 	// Load state
 	state, err = LoadState(logger)
 	if err != nil {
 		logger.Fatal("Failed to load state", zap.Error(err))
+	}
+
+	// Set global topic ID in Sentry if available
+	if config.SentryConfig.IsEnabled() && state.Relayer.TopicID != "" {
+		SetGlobalTopicID(state.Relayer.TopicID)
 	}
 
 	// Initialize CDP client
@@ -140,7 +180,11 @@ func main() {
 		logger.Warn("Failed to notify systemd, notification not supported. It could because NOTIFY_SOCKET is unset")
 	}
 
+	logger.Info("feral-connectd started successfully")
+
 	<-ctx.Done()
+
+	logger.Info("feral-connectd shutdown completed")
 }
 
 func getConnectivityStatus(ctx context.Context, dbus *godbus.DBusClient, logger *zap.Logger) (bool, error) {
