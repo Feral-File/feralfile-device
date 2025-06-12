@@ -1,2 +1,16 @@
 .DS_Store
 *.deb
+
+# VM files and directories
+vm/
+out/
+*.qcow2
+*.img
+*.img.xz
+*.iso
+
+# Build artifacts
+build_output/
+build_cache/
+*.pkg.tar.zst
+*.tar.gz
