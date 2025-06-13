@@ -1,10 +1,12 @@
-package main
+package disk
 
 import (
 	"context"
 	"sync"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/commands"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/metrics"
 	"go.uber.org/zap"
 )
 
@@ -22,12 +24,12 @@ const (
 type DiskHandler struct {
 	mu                  sync.Mutex
 	logger              *zap.Logger
-	commandHandler      *CommandHandler
+	commandHandler      *commands.CommandHandler
 	diskCleanupCooldown time.Time
 	isCleaned           bool
 }
 
-func NewDiskHandler(logger *zap.Logger, commandHandler *CommandHandler) *DiskHandler {
+func NewDiskHandler(logger *zap.Logger, commandHandler *commands.CommandHandler) *DiskHandler {
 	return &DiskHandler{
 		logger:              logger,
 		diskCleanupCooldown: time.Time{},
@@ -36,7 +38,7 @@ func NewDiskHandler(logger *zap.Logger, commandHandler *CommandHandler) *DiskHan
 	}
 }
 
-func (c *DiskHandler) checkDiskUsage(ctx context.Context, metrics *SysMetrics) {
+func (c *DiskHandler) CheckDiskUsage(ctx context.Context, sysMetrics *metrics.SysMetrics) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -47,7 +49,7 @@ func (c *DiskHandler) checkDiskUsage(ctx context.Context, metrics *SysMetrics) {
 
 	c.diskCleanupCooldown = time.Time{}
 
-	diskUsage, err := metrics.Disk.UsagePercent()
+	diskUsage, err := sysMetrics.Disk.UsagePercent()
 	if err != nil {
 		c.logger.Error("DISK: Failed to get disk usage", zap.Error(err))
 		return
@@ -57,7 +59,7 @@ func (c *DiskHandler) checkDiskUsage(ctx context.Context, metrics *SysMetrics) {
 	if diskUsage > DISK_CRITICAL_THRESHOLD {
 		if c.isCleaned {
 			c.logger.Error("DISK: Rebooting, usage remains critical after cleanup.", zap.Float64("usage_percent", diskUsage))
-			c.commandHandler.rebootSystem(ctx)
+			c.commandHandler.RebootSystem(ctx)
 		} else {
 			c.logger.Warn("DISK: Critical usage high, cleaning disk", zap.Float64("usage_percent", diskUsage))
 			c.cleanupDiskSpace(ctx, diskUsage)
@@ -74,14 +76,13 @@ func (c *DiskHandler) checkDiskUsage(ctx context.Context, metrics *SysMetrics) {
 
 	// DISK: usage is normal, reset cleaned flag
 	c.isCleaned = false
-
 }
 
 func (c *DiskHandler) cleanupDiskSpace(ctx context.Context, diskUsage float64) {
 	c.logger.Warn("DISK: usage high",
 		zap.Float64("usage_percent", diskUsage),
 		zap.Float64("threshold", DISK_WARNING_THRESHOLD))
-	c.commandHandler.cleanupPacmanCache(ctx)
+	c.commandHandler.CleanupPacmanCache(ctx)
 	c.isCleaned = true
 	c.diskCleanupCooldown = time.Now().Add(DISK_MONITOR_COOLDOWN)
 }

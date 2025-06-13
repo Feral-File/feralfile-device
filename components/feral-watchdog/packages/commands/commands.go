@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"context"
@@ -22,8 +22,8 @@ func NewCommandHandler(logger *zap.Logger) *CommandHandler {
 	}
 }
 
-// restartKiosk attempts to restart the chromium-kiosk service
-func (c *CommandHandler) restartKiosk(ctx context.Context) {
+// RestartKiosk attempts to restart the chromium-kiosk service
+func (c *CommandHandler) RestartKiosk(ctx context.Context) {
 	c.mu.Lock()
 	if c.isRestartingKiosk {
 		c.mu.Unlock()
@@ -49,8 +49,8 @@ func (c *CommandHandler) restartKiosk(ctx context.Context) {
 	}
 }
 
-// rebootSystem initiates a system reboot
-func (c *CommandHandler) rebootSystem(ctx context.Context) {
+// RebootSystem initiates a system reboot
+func (c *CommandHandler) RebootSystem(ctx context.Context) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -62,7 +62,7 @@ func (c *CommandHandler) rebootSystem(ctx context.Context) {
 	}
 }
 
-func (c *CommandHandler) cleanupPacmanCache(ctx context.Context) {
+func (c *CommandHandler) CleanupPacmanCache(ctx context.Context) {
 	c.mu.Lock()
 	if c.isCleaningDisk {
 		c.mu.Unlock()

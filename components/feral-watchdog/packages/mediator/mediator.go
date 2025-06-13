@@ -1,13 +1,16 @@
-package main
+package mediator
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"reflect"
 	"sync"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/disk"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/gpu"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/metrics"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/ram"
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
 )
@@ -20,76 +23,21 @@ const (
 	GPU_RECOVER_SIGNAL = "gpu_recover"
 )
 
-type CPUMetrics struct {
-	MaxFrequency       float64 `json:"max_frequency"`
-	CurrentFrequency   float64 `json:"current_frequency"`
-	MaxTemperature     float64 `json:"max_temperature"`
-	CurrentTemperature float64 `json:"current_temperature"`
-}
-
-type GPUMetrics struct {
-	MaxFrequency       float64 `json:"max_frequency"`
-	CurrentFrequency   float64 `json:"current_frequency"`
-	CurrentTemperature float64 `json:"current_temperature"`
-	MaxTemperature     float64 `json:"max_temperature"`
-}
-
-type MemoryMetrics struct {
-	MaxCapacity  float64 `json:"max_capacity"`
-	UsedCapacity float64 `json:"used_capacity"`
-}
-
-func (p MemoryMetrics) CapacityPercent() (float64, error) {
-	if p.MaxCapacity == 0 {
-		return 0, errors.New("Max capacity is 0")
-	}
-	return p.UsedCapacity / p.MaxCapacity * 100, nil
-}
-
-type ScreenMetrics struct {
-	Width       int     `json:"width"`
-	Height      int     `json:"height"`
-	RefreshRate float64 `json:"refresh_rate"`
-}
-
-type DiskMetrics struct {
-	TotalCapacity     float64 `json:"total_capacity"`
-	UsedCapacity      float64 `json:"used_capacity"`
-	AvailableCapacity float64 `json:"available_capacity"`
-}
-
-func (p DiskMetrics) UsagePercent() (float64, error) {
-	if p.TotalCapacity == 0 {
-		return 0, errors.New("Total capacity is 0")
-	}
-	return p.UsedCapacity / p.TotalCapacity * 100, nil
-}
-
-type SysMetrics struct {
-	CPU       CPUMetrics    `json:"cpu"`
-	GPU       GPUMetrics    `json:"gpu"`
-	Memory    MemoryMetrics `json:"memory"`
-	Screen    ScreenMetrics `json:"screen"`
-	Uptime    float64       `json:"uptime"`
-	Disk      DiskMetrics   `json:"disk"`
-	Timestamp time.Time     `json:"timestamp"` // Unix timestamp
-}
-
 type Mediator struct {
 	mu                  sync.Mutex
 	isProcessingMetrics bool
 	dbus                *godbus.DBusClient
 	logger              *zap.Logger
-	diskHandler         *DiskHandler
-	memoryHandler       *MemoryHandler
-	gpuHandler          *GPUHandler
+	diskHandler         *disk.DiskHandler
+	memoryHandler       *ram.MemoryHandler
+	gpuHandler          *gpu.GPUHandler
 }
 
 func NewMediator(
 	dbus *godbus.DBusClient,
-	disk *DiskHandler,
-	ram *MemoryHandler,
-	gpu *GPUHandler,
+	disk *disk.DiskHandler,
+	ram *ram.MemoryHandler,
+	gpu *gpu.GPUHandler,
 	logger *zap.Logger) *Mediator {
 	return &Mediator{
 		dbus:          dbus,
@@ -131,10 +79,10 @@ func (m *Mediator) handleDBusSignal(
 		switch eventType {
 		case GPU_HANGING_SIGNAL:
 			m.logger.Info("Received GPU hanging event")
-			m.gpuHandler.scheduleGPUReboot(ctx)
+			m.gpuHandler.GracefulShutdown(ctx)
 		case GPU_RECOVER_SIGNAL:
 			m.logger.Info("Received GPU recovery event")
-			m.gpuHandler.handleGPURecovery(ctx)
+			m.gpuHandler.HandleGPURecovery(ctx)
 		}
 		return nil, nil
 	case DBUS_SYS_MONITORD_EVENT_SYSMETRICS:
@@ -149,25 +97,25 @@ func (m *Mediator) handleDBusSignal(
 			return nil, nil
 		}
 
-		var metrics SysMetrics
-		if err := json.Unmarshal(body, &metrics); err != nil {
+		var sysMetrics metrics.SysMetrics
+		if err := json.Unmarshal(body, &sysMetrics); err != nil {
 			m.logger.Error("Failed to unmarshal metrics", zap.Error(err))
 			return nil, nil
 		}
 
 		// Set timestamp if not present
-		if metrics.Timestamp.IsZero() {
-			metrics.Timestamp = time.Now()
+		if sysMetrics.Timestamp.IsZero() {
+			sysMetrics.Timestamp = time.Now()
 		}
 
 		// Process metrics for system health monitoring
-		m.ProcessMetrics(ctx, &metrics)
+		m.ProcessMetrics(ctx, &sysMetrics)
 	}
 
 	return nil, nil
 }
 
-func (m *Mediator) ProcessMetrics(ctx context.Context, metrics *SysMetrics) {
+func (m *Mediator) ProcessMetrics(ctx context.Context, sysMetrics *metrics.SysMetrics) {
 	m.mu.Lock()
 	if m.isProcessingMetrics {
 		m.mu.Unlock()
@@ -184,8 +132,8 @@ func (m *Mediator) ProcessMetrics(ctx context.Context, metrics *SysMetrics) {
 	}()
 
 	// Check memory usage
-	m.memoryHandler.checkMemoryUsage(ctx, metrics)
+	m.memoryHandler.CheckMemoryUsage(ctx, sysMetrics)
 
 	// Check disk usage
-	m.diskHandler.checkDiskUsage(ctx, metrics)
+	m.diskHandler.CheckDiskUsage(ctx, sysMetrics)
 }

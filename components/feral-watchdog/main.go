@@ -9,6 +9,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/cdp"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/commands"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/config"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/disk"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/gpu"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/logger"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/mediator"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/ram"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/systemd_watchdog"
 	"github.com/feral-file/godbus"
 	"github.com/godbus/dbus/v5"
 	"go.uber.org/zap"
@@ -29,13 +38,13 @@ func main() {
 	flag.Parse()
 
 	// Initialize logger
-	logger, err := New(debug)
+	loggerInstance, err := logger.New(debug)
 	if err != nil {
 		panic("Failed to initialize logger: " + err.Error())
 	}
-	defer logger.Sync()
+	defer loggerInstance.Sync()
 
-	logger.Info("Starting feral-watchdog daemon")
+	loggerInstance.Info("Starting feral-watchdog daemon")
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -46,45 +55,45 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-sigCh
-		logger.Info("Received signal, initiating shutdown...",
+		loggerInstance.Info("Received signal, initiating shutdown...",
 			zap.String("signal", sig.String()))
 		cancel()
 	}()
 
 	// Load configuration
-	config, err := LoadConfig(logger)
+	cfg, err := config.LoadConfig(loggerInstance)
 	if err != nil {
-		logger.Fatal("Failed to load configuration", zap.Error(err))
+		loggerInstance.Fatal("Failed to load configuration", zap.Error(err))
 	}
 
 	// Initialize DBus client
 	mo := dbus.WithMatchPathNamespace(dbus.ObjectPath("/com/feralfile/sysmonitord"))
-	dbusClient := godbus.NewDBusClient(ctx, logger, DBUS_NAME, mo)
+	dbusClient := godbus.NewDBusClient(ctx, loggerInstance, DBUS_NAME, mo)
 	err = dbusClient.Start()
 	if err != nil {
-		logger.Fatal("DBus init failed", zap.Error(err))
+		loggerInstance.Fatal("DBus init failed", zap.Error(err))
 	}
 	defer dbusClient.Stop()
 
 	// Initialize system command executor
-	commandHandler := NewCommandHandler(logger)
+	commandHandler := commands.NewCommandHandler(loggerInstance)
 
 	// Initialize resource monitors
-	ramHandler := NewMemoryHandler(logger, commandHandler)
-	diskHandler := NewDiskHandler(logger, commandHandler)
-	gpuHandler := NewGPUHandler(logger, commandHandler)
+	ramHandler := ram.NewMemoryHandler(loggerInstance, commandHandler)
+	diskHandler := disk.NewDiskHandler(loggerInstance, commandHandler)
+	gpuHandler := gpu.NewGPUHandler(loggerInstance, commandHandler)
 	defer gpuHandler.GracefulShutdown(ctx)
 
 	// Initialize mediator
-	mediator := NewMediator(dbusClient, diskHandler, ramHandler, gpuHandler, logger)
-	mediator.Start()
-	defer mediator.Stop()
+	mediatorInstance := mediator.NewMediator(dbusClient, diskHandler, ramHandler, gpuHandler, loggerInstance)
+	mediatorInstance.Start()
+	defer mediatorInstance.Stop()
 
 	// Create a WaitGroup to track all the monitoring goroutines
 	var wg sync.WaitGroup
 
 	// Start systemd watchdog
-	systemdWatchdog := NewSystemdWatchdog(logger)
+	systemdWatchdog := systemd_watchdog.NewSystemdWatchdog(loggerInstance)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -92,7 +101,7 @@ func main() {
 	}()
 
 	// Start CDP monitor
-	cdpMonitor := NewCDPMonitor(config.CDPEndpoint, logger, commandHandler)
+	cdpMonitor := cdp.NewCDPMonitor(cfg.CDPEndpoint, loggerInstance, commandHandler)
 	defer cdpMonitor.Stop()
 	wg.Add(1)
 	go func() {
@@ -102,12 +111,12 @@ func main() {
 
 	// Notify systemd that we're ready
 	if err := systemdWatchdog.NotifyReady(); err != nil {
-		logger.Warn("Failed to notify systemd, but continuing", zap.Error(err))
+		loggerInstance.Warn("Failed to notify systemd, but continuing", zap.Error(err))
 	}
 
 	// Block until context is done (cancel is called)
 	<-ctx.Done()
-	logger.Info("Shutdown signal received, cleaning up...")
+	loggerInstance.Info("Shutdown signal received, cleaning up...")
 
 	// Wait for all goroutines to finish (with timeout)
 	waitCh := make(chan struct{})
@@ -118,10 +127,10 @@ func main() {
 
 	select {
 	case <-waitCh:
-		logger.Info("All goroutines have terminated cleanly")
+		loggerInstance.Info("All goroutines have terminated cleanly")
 	case <-time.After(GOROUTINE_TIMEOUT):
-		logger.Warn("Some goroutines did not terminate in time")
+		loggerInstance.Warn("Some goroutines did not terminate in time")
 	}
 
-	logger.Info("feral-watchdog daemon shutdown complete")
+	loggerInstance.Info("feral-watchdog daemon shutdown complete")
 }

@@ -1,4 +1,4 @@
-package main
+package cdp
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/commands"
 	"go.uber.org/zap"
 )
 
@@ -29,11 +30,11 @@ type CDPMonitor struct {
 	logger             *zap.Logger
 	restartHistory     []time.Time
 	lastSuccessfulResp time.Time
-	commandHandler     *CommandHandler
+	commandHandler     *commands.CommandHandler
 }
 
 // NewCDPMonitor creates a new CDP monitor instance
-func NewCDPMonitor(cdpEndpoint string, logger *zap.Logger, commandHandler *CommandHandler) *CDPMonitor {
+func NewCDPMonitor(cdpEndpoint string, logger *zap.Logger, commandHandler *commands.CommandHandler) *CDPMonitor {
 	return &CDPMonitor{
 		cdpEndpoint: cdpEndpoint,
 		client: &http.Client{
@@ -151,13 +152,13 @@ func (m *CDPMonitor) restartChromium(ctx context.Context) {
 	// Check if we need to trigger a reboot
 	if m.shouldTriggerReboot() {
 		m.logger.Error("CDP: Too many chromium restarts in a short period, triggering system reboot")
-		m.commandHandler.rebootSystem(ctx)
+		m.commandHandler.RebootSystem(ctx)
 		return
 	}
 
 	// Execute the restart command
 	m.logger.Warn("CDP: Restarting chromium-kiosk.service")
-	m.commandHandler.restartKiosk(ctx)
+	m.commandHandler.RestartKiosk(ctx)
 
 	// Reset the last successful response time to force a new successful check
 	// before evaluating hang state again

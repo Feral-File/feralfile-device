@@ -1,10 +1,11 @@
-package main
+package gpu
 
 import (
 	"context"
 	"sync"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/commands"
 	"go.uber.org/zap"
 )
 
@@ -15,12 +16,12 @@ const (
 type GPUHandler struct {
 	mu              sync.Mutex
 	logger          *zap.Logger
-	commandHandler  *CommandHandler
+	commandHandler  *commands.CommandHandler
 	rebootTimer     *time.Timer
 	rebootScheduled bool
 }
 
-func NewGPUHandler(logger *zap.Logger, commandHandler *CommandHandler) *GPUHandler {
+func NewGPUHandler(logger *zap.Logger, commandHandler *commands.CommandHandler) *GPUHandler {
 	return &GPUHandler{
 		logger:          logger,
 		commandHandler:  commandHandler,
@@ -30,6 +31,10 @@ func NewGPUHandler(logger *zap.Logger, commandHandler *CommandHandler) *GPUHandl
 
 func (g *GPUHandler) GracefulShutdown(ctx context.Context) {
 	g.cancelReboot()
+}
+
+func (g *GPUHandler) HandleGPURecovery(ctx context.Context) {
+	g.handleGPURecovery(ctx)
 }
 
 func (g *GPUHandler) scheduleGPUReboot(ctx context.Context) {
@@ -56,7 +61,7 @@ func (g *GPUHandler) scheduleGPUReboot(ctx context.Context) {
 			g.rebootTimer = nil
 			g.mu.Unlock()
 			g.logger.Info("GPU: executing reboot")
-			g.commandHandler.rebootSystem(ctx)
+			g.commandHandler.RebootSystem(ctx)
 		}
 	})
 }
@@ -99,5 +104,5 @@ func (g *GPUHandler) cancelReboot() {
 
 func (g *GPUHandler) restartKiosk(ctx context.Context) {
 	g.logger.Info("GPU: restarting kiosk")
-	g.commandHandler.restartKiosk(ctx)
+	g.commandHandler.RestartKiosk(ctx)
 }

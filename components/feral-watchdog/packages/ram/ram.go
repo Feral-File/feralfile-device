@@ -1,10 +1,12 @@
-package main
+package ram
 
 import (
 	"context"
 	"sync"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/commands"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/metrics"
 	"go.uber.org/zap"
 )
 
@@ -19,14 +21,14 @@ const (
 type MemoryHandler struct {
 	mu                    sync.Mutex
 	logger                *zap.Logger
-	commandHandler        *CommandHandler
+	commandHandler        *commands.CommandHandler
 	highMemoryMonitoring  bool
 	highMemStartTime      time.Time
 	memoryMonitorCoolDown time.Time
 	lastKioskRestart      time.Time
 }
 
-func NewMemoryHandler(logger *zap.Logger, commandHandler *CommandHandler) *MemoryHandler {
+func NewMemoryHandler(logger *zap.Logger, commandHandler *commands.CommandHandler) *MemoryHandler {
 	return &MemoryHandler{
 		logger:                logger,
 		highMemoryMonitoring:  false,
@@ -37,7 +39,7 @@ func NewMemoryHandler(logger *zap.Logger, commandHandler *CommandHandler) *Memor
 	}
 }
 
-func (c *MemoryHandler) checkMemoryUsage(ctx context.Context, metrics *SysMetrics) {
+func (c *MemoryHandler) CheckMemoryUsage(ctx context.Context, sysMetrics *metrics.SysMetrics) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -49,7 +51,7 @@ func (c *MemoryHandler) checkMemoryUsage(ctx context.Context, metrics *SysMetric
 	c.memoryMonitorCoolDown = time.Time{}
 
 	// Calculate memory usage percentage
-	memUsage, err := metrics.Memory.CapacityPercent()
+	memUsage, err := sysMetrics.Memory.CapacityPercent()
 	if err != nil {
 		c.logger.Error("RAM: Failed to get memory usage", zap.Error(err))
 		return
@@ -72,7 +74,7 @@ func (c *MemoryHandler) checkMemoryUsage(ctx context.Context, metrics *SysMetric
 			zap.Float64("usage_percent", memUsage),
 			zap.Float64("threshold", RAM_CRITICAL_THRESHOLD))
 		c.highMemoryMonitoring = true
-		c.highMemStartTime = metrics.Timestamp
+		c.highMemStartTime = sysMetrics.Timestamp
 		return
 	}
 
@@ -90,10 +92,10 @@ func (c *MemoryHandler) checkMemoryUsage(ctx context.Context, metrics *SysMetric
 
 	if !c.lastKioskRestart.IsZero() && time.Since(c.lastKioskRestart) < RAM_REBOOT_DURATION_THRESHOLD {
 		c.logger.Error("RAM: Rebooting. Usage remains critical after kiosk restart.")
-		c.commandHandler.rebootSystem(ctx)
+		c.commandHandler.RebootSystem(ctx)
 	} else {
 		c.logger.Error("RAM: Restarting kiosk")
-		c.commandHandler.restartKiosk(ctx)
+		c.commandHandler.RestartKiosk(ctx)
 		c.lastKioskRestart = time.Now()
 		c.memoryMonitorCoolDown = time.Now().Add(RAM_RESTART_KIOSK_COOLDOWN)
 		c.resetMonitoring()

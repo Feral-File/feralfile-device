@@ -1,0 +1,4 @@
+{
+  "git.openRepositoryInParentFolders": "always",
+  "git.autoRepositoryDetection": "subFolders"
+}

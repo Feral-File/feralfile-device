@@ -1,4 +1,4 @@
-package main
+package systemd_watchdog
 
 import (
 	"context"
