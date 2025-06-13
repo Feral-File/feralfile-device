@@ -267,7 +267,7 @@ func (r *RelayerClient) Connect(ctx context.Context) error {
 	// Handle background tasks
 	r.background(ctx)
 
-	r.logger.Info("Connected to Relayer")
+	r.logger.Info("Connected to Relayer", zap.String("reqID", resp.Header.Get("cf-ray")))
 
 	return nil
 }
