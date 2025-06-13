@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -49,9 +48,13 @@ func (c *ConnectdDBus) GetRelayerTopicID() (string, *dbus.Error) {
 		return topicID, nil
 	}
 
-	// Context for timeout
-	deadlineCtx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
-	defer cancel()
+	// Create a child context with deadline from the global context
+	deadlineCtx, deadlineCancel := context.WithTimeout(c.ctx, 30*time.Second)
+	defer deadlineCancel()
+
+	// Create a context that will be canceled when either the deadline is reached or the global context is canceled
+	retryCtx, retryCancel := context.WithCancel(c.ctx)
+	_ = retryCancel // Explicitly ignore retryCancel for successful case
 
 	// Channel to signal when the topicID is received
 	doneChan := make(chan struct{})
@@ -96,12 +99,10 @@ func (c *ConnectdDBus) GetRelayerTopicID() (string, *dbus.Error) {
 	c.relayer.OnRelayerMessage(handler)
 	defer c.relayer.RemoveRelayerMessage(handler)
 
-	// Connect to the relayer
-	err := c.relayer.RetryableConnect(deadlineCtx)
-	if errors.Is(err, errRelayerAlreadyConnected) {
-		return GetState().Relayer.TopicID, nil
-	}
+	// Connect to the relayer using the retry context
+	err := c.relayer.RetryableConnect(retryCtx)
 	if err != nil {
+		retryCancel()
 		return "", dbus.NewError(err.Error(), []interface{}{})
 	}
 
@@ -111,8 +112,10 @@ func (c *ConnectdDBus) GetRelayerTopicID() (string, *dbus.Error) {
 		case <-doneChan:
 			return GetState().Relayer.TopicID, nil
 		case err := <-errChan:
+			retryCancel()
 			return "", dbus.NewError(err.Error(), []interface{}{})
 		case <-deadlineCtx.Done():
+			retryCancel() // Cancel the retry context when deadline is reached
 			return "", dbus.NewError(deadlineCtx.Err().Error(), []interface{}{})
 		}
 	}
