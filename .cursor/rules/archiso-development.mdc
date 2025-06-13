@@ -1,0 +1,54 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# ArchISO Development Guidelines
+
+## Image Configuration
+Working with the ArchISO profile in `archiso-radxa-x4/` to build the Radxa X4 device image.
+
+## Key Configuration Files
+- `profiledef.sh` - Main profile definition with build settings
+- `packages.x86_64` - List of packages to include in the ISO
+- `pacman.conf` - Package manager configuration
+- `airootfs/` - Filesystem overlay that becomes the live system
+
+## File Permissions & Ownership
+ALL files in the final system should be owned by `feralfile` (1000:1000) unless they are system files.
+
+Key permission patterns in `profiledef.sh`:
+- `/home/feralfile/` and subdirectories: `1000:1000:755`
+- Scripts in `/home/feralfile/scripts/`: `1000:1000:755`
+- System config files: `0:0:644` or appropriate system permissions
+
+## Filesystem Overlay Structure (`airootfs/`)
+- `etc/` - System configuration (polkit rules, systemd services)
+- `home/feralfile/` - User space with `.config/`, `.logs/`, `.state/`, `scripts/`
+- `usr/local/bin/` - Custom binaries and services
+- `opt/` - Application data (UI bundles, etc.)
+
+## Polkit Rules (NOT sudo)
+Create rules in `airootfs/etc/polkit-1/rules.d/` for privilege escalation:
+- Network management (nmcli)
+- Time synchronization
+- System service control
+- Hardware access
+
+## Package Management
+- Keep the ISO minimal - only include necessary packages
+- Group related packages logically in `packages.x86_64`
+- Consider package dependencies and conflicts
+- Use official Arch packages when possible
+
+## Systemd Integration
+- Service files go in `airootfs/etc/systemd/system/`
+- Use proper service dependencies and ordering
+- Implement `setup.target` vs `kiosk.target` isolation
+- Enable services in the appropriate target
+
+## Build & Testing
+- Test the ISO in a VM before deploying to hardware
+- Verify all services start correctly
+- Check file permissions after build
+- Validate network connectivity and BLE functionality

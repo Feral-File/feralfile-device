@@ -50,11 +50,14 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
       CLOUDFLARE_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
     with:
       component: feral-connectd
       version: ${{ inputs.version || github.event.inputs.version }}
       description: 'Feral File Connectd Service'
       maintainer: 'Feral File'
+      environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
       
   build-feral-setupd:
     name: Build Feral Setupd
@@ -224,6 +227,14 @@ jobs:
             },
             "cdp": {
                 "endpoint": "http://127.0.0.1:9222"
+            },
+            "sentry": {
+                "dsn": "${{ secrets.SENTRY_DSN_CONNECTD }}",
+                "debug": "false",
+                "sample_rate": "${{ (github.event.inputs.environment == 'Production' || github.ref == 'refs/heads/main') && '0.1' || '1.0' }}",
+                "environment": "${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}",
+                "release": "${{ inputs.version || github.event.inputs.version }}",
+                "repository": "${{ github.repository }}"
             }
           }
           EOF

@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: 'GitHub Actions'
+      environment:
+        description: 'Environment for Sentry release'
+        required: false
+        type: string
+        default: 'Development'
     secrets:
       CLOUDFLARE_ACCOUNT_ID:
         required: true
@@ -28,6 +33,10 @@ on:
         required: true
       CLOUDFLARE_SECRET_ACCESS_KEY:
         required: true
+      SENTRY_AUTH_TOKEN:
+        required: false
+      SENTRY_ORG:
+        required: false
   workflow_dispatch:
     inputs:
       component:
@@ -54,6 +63,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Determine Build Type
         id: build-type
@@ -168,6 +179,20 @@ jobs:
           useradd -m builder
           chown -R builder:builder .
           su builder -c "makepkg -f --skipinteg"
+
+      - name: Create Sentry Release
+        if: ${{ inputs.component == 'feral-connectd' && github.ref == 'refs/heads/develop' }}
+        uses: getsentry/action-release@v3
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: feral-connectd
+        with:
+          environment: ${{ inputs.environment }}
+          release: ${{ inputs.version }}
+          finalize: true
+          set_commits: auto
+
       - name: Rclone to r2
         working-directory: components/${{ inputs.component }}
         run: |
