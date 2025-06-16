@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/commands"
 	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/metrics"
 	"go.uber.org/zap"
 )
@@ -18,24 +17,64 @@ const (
 	RAM_REBOOT_DURATION_THRESHOLD  = 60 * time.Second
 )
 
+// Logger interface for dependency injection
+type Logger interface {
+	Error(msg string, fields ...zap.Field)
+	Warn(msg string, fields ...zap.Field)
+	Debug(msg string, fields ...zap.Field)
+}
+
+// CommandExecutor interface for dependency injection
+type CommandExecutor interface {
+	RestartKiosk(ctx context.Context)
+	RebootSystem(ctx context.Context)
+}
+
+// TimeProvider interface for dependency injection of time functions
+type TimeProvider interface {
+	Now() time.Time
+}
+
+// DefaultTimeProvider implements TimeProvider using the standard time package
+type DefaultTimeProvider struct{}
+
+func (p *DefaultTimeProvider) Now() time.Time {
+	return time.Now()
+}
+
 type MemoryHandler struct {
 	mu                    sync.Mutex
-	logger                *zap.Logger
-	commandHandler        *commands.CommandHandler
+	logger                Logger
+	commandExecutor       CommandExecutor
+	timeProvider          TimeProvider
 	highMemoryMonitoring  bool
 	highMemStartTime      time.Time
 	memoryMonitorCoolDown time.Time
 	lastKioskRestart      time.Time
 }
 
-func NewMemoryHandler(logger *zap.Logger, commandHandler *commands.CommandHandler) *MemoryHandler {
+func NewMemoryHandler(logger Logger, commandExecutor CommandExecutor) *MemoryHandler {
 	return &MemoryHandler{
 		logger:                logger,
+		commandExecutor:       commandExecutor,
+		timeProvider:          &DefaultTimeProvider{},
 		highMemoryMonitoring:  false,
 		highMemStartTime:      time.Time{},
 		memoryMonitorCoolDown: time.Time{},
 		lastKioskRestart:      time.Time{},
-		commandHandler:        commandHandler,
+	}
+}
+
+// NewMemoryHandlerWithTimeProvider creates a MemoryHandler with custom TimeProvider (mainly for testing)
+func NewMemoryHandlerWithTimeProvider(logger Logger, commandExecutor CommandExecutor, timeProvider TimeProvider) *MemoryHandler {
+	return &MemoryHandler{
+		logger:                logger,
+		commandExecutor:       commandExecutor,
+		timeProvider:          timeProvider,
+		highMemoryMonitoring:  false,
+		highMemStartTime:      time.Time{},
+		memoryMonitorCoolDown: time.Time{},
+		lastKioskRestart:      time.Time{},
 	}
 }
 
@@ -43,8 +82,10 @@ func (c *MemoryHandler) CheckMemoryUsage(ctx context.Context, sysMetrics *metric
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	currentTime := c.timeProvider.Now()
+
 	// Skip if in cooldown period
-	if !c.memoryMonitorCoolDown.IsZero() && time.Now().Before(c.memoryMonitorCoolDown) {
+	if !c.memoryMonitorCoolDown.IsZero() && currentTime.Before(c.memoryMonitorCoolDown) {
 		return
 	}
 
@@ -79,7 +120,7 @@ func (c *MemoryHandler) CheckMemoryUsage(ctx context.Context, sysMetrics *metric
 	}
 
 	// Check if memory has been high for long enough
-	durHigh := time.Since(c.highMemStartTime)
+	durHigh := currentTime.Sub(c.highMemStartTime)
 	if durHigh < RAM_MONITOR_DURATION_THRESHOLD {
 		c.logger.Warn("RAM: usage is still above threshold",
 			zap.Float64("usage_percent", memUsage))
@@ -90,14 +131,14 @@ func (c *MemoryHandler) CheckMemoryUsage(ctx context.Context, sysMetrics *metric
 		zap.Float64("usage_percent", memUsage),
 		zap.Duration("duration", durHigh))
 
-	if !c.lastKioskRestart.IsZero() && time.Since(c.lastKioskRestart) < RAM_REBOOT_DURATION_THRESHOLD {
+	if !c.lastKioskRestart.IsZero() && currentTime.Sub(c.lastKioskRestart) < RAM_REBOOT_DURATION_THRESHOLD {
 		c.logger.Error("RAM: Rebooting. Usage remains critical after kiosk restart.")
-		c.commandHandler.RebootSystem(ctx)
+		c.commandExecutor.RebootSystem(ctx)
 	} else {
 		c.logger.Error("RAM: Restarting kiosk")
-		c.commandHandler.RestartKiosk(ctx)
-		c.lastKioskRestart = time.Now()
-		c.memoryMonitorCoolDown = time.Now().Add(RAM_RESTART_KIOSK_COOLDOWN)
+		c.commandExecutor.RestartKiosk(ctx)
+		c.lastKioskRestart = currentTime
+		c.memoryMonitorCoolDown = currentTime.Add(RAM_RESTART_KIOSK_COOLDOWN)
 		c.resetMonitoring()
 	}
 }
