@@ -277,32 +277,3 @@ func TestStructFieldTypes(t *testing.T) {
 		_ = screen.RefreshRate // float64
 	})
 }
-
-// Benchmark tests for performance-critical methods
-func BenchmarkMemoryMetrics_CapacityPercent(b *testing.B) {
-	memory := MemoryMetrics{
-		MaxCapacity:  16384.0,
-		UsedCapacity: 8192.0,
-	}
-
-	// Reset the timer to exclude the initialization time
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		// Do not assign the result to a variable to avoid the compiler optimizing the call away
-		_, _ = memory.CapacityPercent()
-	}
-}
-
-func BenchmarkDiskMetrics_UsagePercent(b *testing.B) {
-	disk := DiskMetrics{
-		TotalCapacity: 1000000.0,
-		UsedCapacity:  500000.0,
-	}
-
-	// Reset the timer to exclude the initialization time
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		// Call the method we want to benchmark
-		_, _ = disk.UsagePercent()
-	}
-}
