@@ -5,7 +5,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/commands"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/logger"
 	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/metrics"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/wrapper"
 	"go.uber.org/zap"
 )
 
@@ -17,47 +20,22 @@ const (
 	RAM_REBOOT_DURATION_THRESHOLD  = 60 * time.Second
 )
 
-// Logger interface for dependency injection
-type Logger interface {
-	Error(msg string, fields ...zap.Field)
-	Warn(msg string, fields ...zap.Field)
-	Debug(msg string, fields ...zap.Field)
-}
-
-// CommandExecutor interface for dependency injection
-type CommandExecutor interface {
-	RestartKiosk(ctx context.Context)
-	RebootSystem(ctx context.Context)
-}
-
-// TimeProvider interface for dependency injection of time functions
-type TimeProvider interface {
-	Now() time.Time
-}
-
-// DefaultTimeProvider implements TimeProvider using the standard time package
-type DefaultTimeProvider struct{}
-
-func (p *DefaultTimeProvider) Now() time.Time {
-	return time.Now()
-}
-
 type MemoryHandler struct {
 	mu                    sync.Mutex
-	logger                Logger
-	commandExecutor       CommandExecutor
-	timeProvider          TimeProvider
+	logger                logger.LoggerInterface
+	commandExecutor       commands.CommandHandlerInterface
+	timeProvider          wrapper.ClockInterface
 	highMemoryMonitoring  bool
 	highMemStartTime      time.Time
 	memoryMonitorCoolDown time.Time
 	lastKioskRestart      time.Time
 }
 
-func NewMemoryHandler(logger Logger, commandExecutor CommandExecutor) *MemoryHandler {
+func NewMemoryHandler(logger logger.LoggerInterface, commandExecutor commands.CommandHandlerInterface) *MemoryHandler {
 	return &MemoryHandler{
 		logger:                logger,
 		commandExecutor:       commandExecutor,
-		timeProvider:          &DefaultTimeProvider{},
+		timeProvider:          &wrapper.Clock{},
 		highMemoryMonitoring:  false,
 		highMemStartTime:      time.Time{},
 		memoryMonitorCoolDown: time.Time{},
@@ -66,7 +44,7 @@ func NewMemoryHandler(logger Logger, commandExecutor CommandExecutor) *MemoryHan
 }
 
 // NewMemoryHandlerWithTimeProvider creates a MemoryHandler with custom TimeProvider (mainly for testing)
-func NewMemoryHandlerWithTimeProvider(logger Logger, commandExecutor CommandExecutor, timeProvider TimeProvider) *MemoryHandler {
+func NewMemoryHandlerWithTimeProvider(logger logger.LoggerInterface, commandExecutor commands.CommandHandlerInterface, timeProvider wrapper.ClockInterface) *MemoryHandler {
 	return &MemoryHandler{
 		logger:                logger,
 		commandExecutor:       commandExecutor,

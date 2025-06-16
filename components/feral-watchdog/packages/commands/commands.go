@@ -8,6 +8,12 @@ import (
 	"go.uber.org/zap"
 )
 
+type CommandHandlerInterface interface {
+	RestartKiosk(ctx context.Context)
+	RebootSystem(ctx context.Context)
+	CleanupPacmanCache(ctx context.Context)
+}
+
 // CommandHandler implements system health checking and remediation actions
 type CommandHandler struct {
 	logger            *zap.Logger

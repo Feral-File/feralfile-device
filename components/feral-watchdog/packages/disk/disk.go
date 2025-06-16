@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/commands"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/logger"
 	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/metrics"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/wrapper"
 	"go.uber.org/zap"
 )
 
@@ -14,7 +16,7 @@ const (
 	// Disk monitoring thresholds and constants
 	DISK_WARNING_THRESHOLD  = 90.0             // 90% disk usage
 	DISK_CRITICAL_THRESHOLD = 95.0             // 95% disk usage triggers reboot
-	DISK_MONITOR_COOLDOWN   = 10 * time.Second // Wait 5s after cleanup
+	DISK_MONITOR_COOLDOWN   = 10 * time.Second // Wait 10s after cleanup
 
 	// Archlinux specific paths
 	PACMAN_CACHE_PATH = "/var/cache/pacman/pkg/"
@@ -23,18 +25,31 @@ const (
 
 type DiskHandler struct {
 	mu                  sync.Mutex
-	logger              *zap.Logger
-	commandHandler      *commands.CommandHandler
+	logger              logger.LoggerInterface
+	commandExecutor     commands.CommandHandlerInterface
+	timeProvider        wrapper.ClockInterface
 	diskCleanupCooldown time.Time
 	isCleaned           bool
 }
 
-func NewDiskHandler(logger *zap.Logger, commandHandler *commands.CommandHandler) *DiskHandler {
+func NewDiskHandler(logger logger.LoggerInterface, commandExecutor commands.CommandHandlerInterface) *DiskHandler {
 	return &DiskHandler{
 		logger:              logger,
+		commandExecutor:     commandExecutor,
+		timeProvider:        &wrapper.Clock{},
 		diskCleanupCooldown: time.Time{},
 		isCleaned:           false,
-		commandHandler:      commandHandler,
+	}
+}
+
+// NewDiskHandlerWithTimeProvider creates a DiskHandler with custom TimeProvider (mainly for testing)
+func NewDiskHandlerWithTimeProvider(logger logger.LoggerInterface, commandExecutor commands.CommandHandlerInterface, timeProvider wrapper.ClockInterface) *DiskHandler {
+	return &DiskHandler{
+		logger:              logger,
+		commandExecutor:     commandExecutor,
+		timeProvider:        timeProvider,
+		diskCleanupCooldown: time.Time{},
+		isCleaned:           false,
 	}
 }
 
@@ -42,8 +57,10 @@ func (c *DiskHandler) CheckDiskUsage(ctx context.Context, sysMetrics *metrics.Sy
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	currentTime := c.timeProvider.Now()
+
 	// Skip if we're in cooldown period after cleanup
-	if !c.diskCleanupCooldown.IsZero() && time.Now().Before(c.diskCleanupCooldown) {
+	if !c.diskCleanupCooldown.IsZero() && currentTime.Before(c.diskCleanupCooldown) {
 		return
 	}
 
@@ -59,7 +76,7 @@ func (c *DiskHandler) CheckDiskUsage(ctx context.Context, sysMetrics *metrics.Sy
 	if diskUsage > DISK_CRITICAL_THRESHOLD {
 		if c.isCleaned {
 			c.logger.Error("DISK: Rebooting, usage remains critical after cleanup.", zap.Float64("usage_percent", diskUsage))
-			c.commandHandler.RebootSystem(ctx)
+			c.commandExecutor.RebootSystem(ctx)
 		} else {
 			c.logger.Warn("DISK: Critical usage high, cleaning disk", zap.Float64("usage_percent", diskUsage))
 			c.cleanupDiskSpace(ctx, diskUsage)
@@ -82,7 +99,7 @@ func (c *DiskHandler) cleanupDiskSpace(ctx context.Context, diskUsage float64) {
 	c.logger.Warn("DISK: usage high",
 		zap.Float64("usage_percent", diskUsage),
 		zap.Float64("threshold", DISK_WARNING_THRESHOLD))
-	c.commandHandler.CleanupPacmanCache(ctx)
+	c.commandExecutor.CleanupPacmanCache(ctx)
 	c.isCleaned = true
-	c.diskCleanupCooldown = time.Now().Add(DISK_MONITOR_COOLDOWN)
+	c.diskCleanupCooldown = c.timeProvider.Now().Add(DISK_MONITOR_COOLDOWN)
 }

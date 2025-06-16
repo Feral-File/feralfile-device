@@ -2,138 +2,14 @@ package ram
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/metrics"
-	"go.uber.org/zap"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/mock"
+	"github.com/stretchr/testify/assert"
+	testifyMock "github.com/stretchr/testify/mock"
 )
-
-// Mock implementations for testing
-
-type MockLogger struct {
-	mu       sync.Mutex
-	messages []LogMessage
-}
-
-type LogMessage struct {
-	Level   string
-	Message string
-	Fields  []zap.Field
-}
-
-func (m *MockLogger) Error(msg string, fields ...zap.Field) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.messages = append(m.messages, LogMessage{Level: "error", Message: msg, Fields: fields})
-}
-
-func (m *MockLogger) Warn(msg string, fields ...zap.Field) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.messages = append(m.messages, LogMessage{Level: "warn", Message: msg, Fields: fields})
-}
-
-func (m *MockLogger) Debug(msg string, fields ...zap.Field) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.messages = append(m.messages, LogMessage{Level: "debug", Message: msg, Fields: fields})
-}
-
-func (m *MockLogger) GetMessages() []LogMessage {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return append([]LogMessage(nil), m.messages...)
-}
-
-func (m *MockLogger) ClearMessages() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.messages = nil
-}
-
-func (m *MockLogger) GetLastMessage() *LogMessage {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if len(m.messages) == 0 {
-		return nil
-	}
-	return &m.messages[len(m.messages)-1]
-}
-
-type MockCommandExecutor struct {
-	mu                  sync.Mutex
-	restartKioskCalled  int
-	rebootSystemCalled  int
-	restartKioskContext context.Context
-	rebootSystemContext context.Context
-}
-
-func (m *MockCommandExecutor) RestartKiosk(ctx context.Context) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.restartKioskCalled++
-	m.restartKioskContext = ctx
-}
-
-func (m *MockCommandExecutor) RebootSystem(ctx context.Context) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.rebootSystemCalled++
-	m.rebootSystemContext = ctx
-}
-
-func (m *MockCommandExecutor) GetRestartKioskCallCount() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.restartKioskCalled
-}
-
-func (m *MockCommandExecutor) GetRebootSystemCallCount() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.rebootSystemCalled
-}
-
-func (m *MockCommandExecutor) Reset() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.restartKioskCalled = 0
-	m.rebootSystemCalled = 0
-	m.restartKioskContext = nil
-	m.rebootSystemContext = nil
-}
-
-// MockTimeProvider for controllable time in tests
-type MockTimeProvider struct {
-	mu          sync.Mutex
-	currentTime time.Time
-}
-
-func NewMockTimeProvider(startTime time.Time) *MockTimeProvider {
-	return &MockTimeProvider{
-		currentTime: startTime,
-	}
-}
-
-func (m *MockTimeProvider) Now() time.Time {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.currentTime
-}
-
-func (m *MockTimeProvider) SetTime(t time.Time) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.currentTime = t
-}
-
-func (m *MockTimeProvider) Advance(d time.Duration) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.currentTime = m.currentTime.Add(d)
-}
 
 // Helper function to create test metrics
 func createTestMetrics(memUsagePercent float64, timestamp time.Time) *metrics.SysMetrics {
@@ -150,8 +26,8 @@ func createTestMetrics(memUsagePercent float64, timestamp time.Time) *metrics.Sy
 }
 
 func TestNewMemoryHandler(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
 
 	handler := NewMemoryHandler(mockLogger, mockCommandExecutor)
 
@@ -189,9 +65,9 @@ func TestNewMemoryHandler(t *testing.T) {
 }
 
 func TestNewMemoryHandlerWithTimeProvider(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
-	mockTimeProvider := NewMockTimeProvider(time.Now())
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
 
 	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
 
@@ -205,9 +81,9 @@ func TestNewMemoryHandlerWithTimeProvider(t *testing.T) {
 }
 
 func TestCheckMemoryUsage_BelowThreshold(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
-	mockTimeProvider := NewMockTimeProvider(time.Now())
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
 	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
 
 	ctx := context.Background()
@@ -216,24 +92,17 @@ func TestCheckMemoryUsage_BelowThreshold(t *testing.T) {
 	handler.CheckMemoryUsage(ctx, testMetrics)
 
 	// Should not trigger any commands
-	if mockCommandExecutor.GetRestartKioskCallCount() != 0 {
-		t.Error("RestartKiosk should not be called when usage is below threshold")
-	}
-
-	if mockCommandExecutor.GetRebootSystemCallCount() != 0 {
-		t.Error("RebootSystem should not be called when usage is below threshold")
-	}
+	mockCommandExecutor.AssertNotCalled(t, "RestartKiosk")
+	mockCommandExecutor.AssertNotCalled(t, "RebootSystem")
 
 	// Should not be monitoring
-	if handler.highMemoryMonitoring {
-		t.Error("Should not be monitoring when usage is below threshold")
-	}
+	assert.False(t, handler.highMemoryMonitoring, "Should not be monitoring when usage is below threshold")
 }
 
 func TestCheckMemoryUsage_AboveThreshold_StartMonitoring(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
-	mockTimeProvider := NewMockTimeProvider(time.Now())
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
 	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
 
 	ctx := context.Background()
@@ -242,30 +111,22 @@ func TestCheckMemoryUsage_AboveThreshold_StartMonitoring(t *testing.T) {
 	handler.CheckMemoryUsage(ctx, testMetrics)
 
 	// Should start monitoring
-	if !handler.highMemoryMonitoring {
-		t.Error("Should start monitoring when usage exceeds threshold")
-	}
+	assert.True(t, handler.highMemoryMonitoring, "Should start monitoring when usage exceeds threshold")
 
 	// Should not trigger commands yet
-	if mockCommandExecutor.GetRestartKioskCallCount() != 0 {
-		t.Error("RestartKiosk should not be called immediately after threshold is exceeded")
-	}
-
-	if mockCommandExecutor.GetRebootSystemCallCount() != 0 {
-		t.Error("RebootSystem should not be called immediately after threshold is exceeded")
-	}
+	mockCommandExecutor.AssertNotCalled(t, "RestartKiosk")
+	mockCommandExecutor.AssertNotCalled(t, "RebootSystem")
 
 	// Should log warning
 	lastMessage := mockLogger.GetLastMessage()
-	if lastMessage == nil || lastMessage.Level != "warn" {
-		t.Error("Should log warning when monitoring starts")
-	}
+	assert.NotNil(t, lastMessage, "Should log a message")
+	assert.Equal(t, "warn", lastMessage.Level, "Should log warning when monitoring starts")
 }
 
 func TestCheckMemoryUsage_AboveThreshold_WithinDuration(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
-	mockTimeProvider := NewMockTimeProvider(time.Now())
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
 	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
 
 	ctx := context.Background()
@@ -280,22 +141,20 @@ func TestCheckMemoryUsage_AboveThreshold_WithinDuration(t *testing.T) {
 	handler.CheckMemoryUsage(ctx, testMetrics2)
 
 	// Should not trigger commands yet
-	if mockCommandExecutor.GetRestartKioskCallCount() != 0 {
-		t.Error("RestartKiosk should not be called within threshold duration")
-	}
-
-	if mockCommandExecutor.GetRebootSystemCallCount() != 0 {
-		t.Error("RebootSystem should not be called within threshold duration")
-	}
+	mockCommandExecutor.AssertNotCalled(t, "RestartKiosk")
+	mockCommandExecutor.AssertNotCalled(t, "RebootSystem")
 }
 
 func TestCheckMemoryUsage_AboveThreshold_ExceedsDuration_FirstRestart(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
-	mockTimeProvider := NewMockTimeProvider(time.Now())
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
 	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
 
 	ctx := context.Background()
+
+	// Set up expectation for RestartKiosk to be called with specific context
+	mockCommandExecutor.On("RestartKiosk", ctx).Return().Once()
 
 	// First call to start monitoring
 	testMetrics1 := createTestMetrics(96.0, mockTimeProvider.Now())
@@ -306,33 +165,27 @@ func TestCheckMemoryUsage_AboveThreshold_ExceedsDuration_FirstRestart(t *testing
 	testMetrics2 := createTestMetrics(97.0, mockTimeProvider.Now())
 	handler.CheckMemoryUsage(ctx, testMetrics2)
 
-	// Should trigger kiosk restart (first action)
-	if mockCommandExecutor.GetRestartKioskCallCount() != 1 {
-		t.Errorf("RestartKiosk should be called once, got %d", mockCommandExecutor.GetRestartKioskCallCount())
-	}
-
-	if mockCommandExecutor.GetRebootSystemCallCount() != 0 {
-		t.Error("RebootSystem should not be called on first intervention")
-	}
+	// Verify the exact call was made with the correct context
+	mockCommandExecutor.AssertCalled(t, "RestartKiosk", ctx)
+	mockCommandExecutor.AssertNotCalled(t, "RebootSystem")
 
 	// Should set lastKioskRestart
-	if handler.lastKioskRestart.IsZero() {
-		t.Error("lastKioskRestart should be set after restart")
-	}
+	assert.False(t, handler.lastKioskRestart.IsZero(), "lastKioskRestart should be set after restart")
 
 	// Should reset monitoring
-	if handler.highMemoryMonitoring {
-		t.Error("Should reset monitoring after restart")
-	}
+	assert.False(t, handler.highMemoryMonitoring, "Should reset monitoring after restart")
 }
 
 func TestCheckMemoryUsage_AboveThreshold_ExceedsDuration_SecondRestart_ShouldReboot(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
-	mockTimeProvider := NewMockTimeProvider(time.Now())
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
 	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
 
 	ctx := context.Background()
+
+	// Set up expectation for RebootSystem to be called with specific context
+	mockCommandExecutor.On("RebootSystem", ctx).Return().Once()
 
 	// Set lastKioskRestart to simulate a recent restart (30 seconds ago, less than 60s threshold)
 	handler.lastKioskRestart = mockTimeProvider.Now().Add(-30 * time.Second)
@@ -346,20 +199,15 @@ func TestCheckMemoryUsage_AboveThreshold_ExceedsDuration_SecondRestart_ShouldReb
 	testMetrics2 := createTestMetrics(97.0, mockTimeProvider.Now())
 	handler.CheckMemoryUsage(ctx, testMetrics2)
 
-	// Should trigger reboot (second action)
-	if mockCommandExecutor.GetRebootSystemCallCount() != 1 {
-		t.Errorf("RebootSystem should be called once, got %d", mockCommandExecutor.GetRebootSystemCallCount())
-	}
-
-	if mockCommandExecutor.GetRestartKioskCallCount() != 0 {
-		t.Error("RestartKiosk should not be called when recent restart exists")
-	}
+	// Verify the exact call was made with the correct context
+	mockCommandExecutor.AssertCalled(t, "RebootSystem", ctx)
+	mockCommandExecutor.AssertNotCalled(t, "RestartKiosk")
 }
 
 func TestCheckMemoryUsage_Cooldown(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
-	mockTimeProvider := NewMockTimeProvider(time.Now())
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
 	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
 
 	ctx := context.Background()
@@ -371,23 +219,16 @@ func TestCheckMemoryUsage_Cooldown(t *testing.T) {
 	handler.CheckMemoryUsage(ctx, testMetrics)
 
 	// Should do nothing during cooldown
-	if mockCommandExecutor.GetRestartKioskCallCount() != 0 {
-		t.Error("Should not call RestartKiosk during cooldown")
-	}
+	mockCommandExecutor.AssertNotCalled(t, "RestartKiosk")
+	mockCommandExecutor.AssertNotCalled(t, "RebootSystem")
 
-	if mockCommandExecutor.GetRebootSystemCallCount() != 0 {
-		t.Error("Should not call RebootSystem during cooldown")
-	}
-
-	if handler.highMemoryMonitoring {
-		t.Error("Should not start monitoring during cooldown")
-	}
+	assert.False(t, handler.highMemoryMonitoring, "Should not start monitoring during cooldown")
 }
 
 func TestCheckMemoryUsage_MemoryError(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
-	mockTimeProvider := NewMockTimeProvider(time.Now())
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
 	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
 
 	ctx := context.Background()
@@ -405,24 +246,18 @@ func TestCheckMemoryUsage_MemoryError(t *testing.T) {
 
 	// Should log error and return early
 	lastMessage := mockLogger.GetLastMessage()
-	if lastMessage == nil || lastMessage.Level != "error" {
-		t.Error("Should log error when memory calculation fails")
-	}
+	assert.NotNil(t, lastMessage, "Should log a message")
+	assert.Equal(t, "error", lastMessage.Level, "Should log error when memory calculation fails")
 
 	// Should not trigger any commands
-	if mockCommandExecutor.GetRestartKioskCallCount() != 0 {
-		t.Error("Should not call RestartKiosk when memory calculation fails")
-	}
-
-	if mockCommandExecutor.GetRebootSystemCallCount() != 0 {
-		t.Error("Should not call RebootSystem when memory calculation fails")
-	}
+	mockCommandExecutor.AssertNotCalled(t, "RestartKiosk")
+	mockCommandExecutor.AssertNotCalled(t, "RebootSystem")
 }
 
 func TestCheckMemoryUsage_ResetMonitoring(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
-	mockTimeProvider := NewMockTimeProvider(time.Now())
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
 	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
 
 	ctx := context.Background()
@@ -436,19 +271,14 @@ func TestCheckMemoryUsage_ResetMonitoring(t *testing.T) {
 	handler.CheckMemoryUsage(ctx, testMetrics)
 
 	// Should reset monitoring
-	if handler.highMemoryMonitoring {
-		t.Error("Should reset monitoring when usage drops below threshold")
-	}
-
-	if !handler.highMemStartTime.IsZero() {
-		t.Error("Should reset highMemStartTime when monitoring is reset")
-	}
+	assert.False(t, handler.highMemoryMonitoring, "Should reset monitoring when usage drops below threshold")
+	assert.True(t, handler.highMemStartTime.IsZero(), "Should reset highMemStartTime when monitoring is reset")
 }
 
 func TestResetMonitoring(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
-	mockTimeProvider := NewMockTimeProvider(time.Now())
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
 	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
 
 	// Set monitoring state
@@ -458,68 +288,56 @@ func TestResetMonitoring(t *testing.T) {
 	handler.resetMonitoring()
 
 	// Should reset all monitoring state
-	if handler.highMemoryMonitoring {
-		t.Error("resetMonitoring should set highMemoryMonitoring to false")
-	}
-
-	if !handler.highMemStartTime.IsZero() {
-		t.Error("resetMonitoring should reset highMemStartTime to zero")
-	}
+	assert.False(t, handler.highMemoryMonitoring, "resetMonitoring should set highMemoryMonitoring to false")
+	assert.True(t, handler.highMemStartTime.IsZero(), "resetMonitoring should reset highMemStartTime to zero")
 
 	// Should log debug message
 	lastMessage := mockLogger.GetLastMessage()
-	if lastMessage == nil || lastMessage.Level != "debug" {
-		t.Error("resetMonitoring should log debug message")
-	}
+	assert.NotNil(t, lastMessage, "resetMonitoring should log a message")
+	assert.Equal(t, "debug", lastMessage.Level, "resetMonitoring should log debug message")
 }
 
 // Integration-like tests
 func TestCheckMemoryUsage_CompleteScenario(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockCommandExecutor := &MockCommandExecutor{}
-	mockTimeProvider := NewMockTimeProvider(time.Now())
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
 	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
 
 	ctx := context.Background()
+
+	// Set up expectations for both RestartKiosk and RebootSystem to be called once each
+	mockCommandExecutor.On("RestartKiosk", ctx).Return()
+	mockCommandExecutor.On("RebootSystem", ctx).Return()
 
 	// Step 1: Memory usage is normal
 	testMetrics1 := createTestMetrics(85.0, mockTimeProvider.Now())
 	handler.CheckMemoryUsage(ctx, testMetrics1)
 
-	if handler.highMemoryMonitoring {
-		t.Error("Should not be monitoring when usage is normal")
-	}
+	assert.False(t, handler.highMemoryMonitoring, "Should not be monitoring when usage is normal")
 
 	// Step 2: Memory usage exceeds threshold - start monitoring
 	mockTimeProvider.Advance(5 * time.Second)
 	testMetrics2 := createTestMetrics(96.0, mockTimeProvider.Now())
 	handler.CheckMemoryUsage(ctx, testMetrics2)
 
-	if !handler.highMemoryMonitoring {
-		t.Error("Should start monitoring when threshold is exceeded")
-	}
+	assert.True(t, handler.highMemoryMonitoring, "Should start monitoring when threshold is exceeded")
 
 	// Step 3: Memory usage still high but within duration - continue monitoring
 	mockTimeProvider.Advance(5 * time.Second)
 	testMetrics3 := createTestMetrics(97.0, mockTimeProvider.Now())
 	handler.CheckMemoryUsage(ctx, testMetrics3)
 
-	if mockCommandExecutor.GetRestartKioskCallCount() != 0 {
-		t.Error("Should not restart kiosk yet")
-	}
+	mockCommandExecutor.AssertNotCalled(t, "RestartKiosk")
 
 	// Step 4: Memory usage high and exceeds duration - restart kiosk
 	mockTimeProvider.Advance(15 * time.Second)
 	testMetrics4 := createTestMetrics(98.0, mockTimeProvider.Now())
 	handler.CheckMemoryUsage(ctx, testMetrics4)
 
-	if mockCommandExecutor.GetRestartKioskCallCount() != 1 {
-		t.Errorf("Should restart kiosk once, got %d", mockCommandExecutor.GetRestartKioskCallCount())
-	}
+	mockCommandExecutor.AssertNumberOfCalls(t, "RestartKiosk", 1)
 
-	if handler.highMemoryMonitoring {
-		t.Error("Should reset monitoring after restart")
-	}
+	assert.False(t, handler.highMemoryMonitoring, "Should reset monitoring after restart")
 
 	// Step 5: Memory usage still high and exceeds duration again - reboot system
 	mockTimeProvider.Advance(5 * time.Second)
@@ -530,7 +348,126 @@ func TestCheckMemoryUsage_CompleteScenario(t *testing.T) {
 	testMetrics6 := createTestMetrics(97.0, mockTimeProvider.Now())
 	handler.CheckMemoryUsage(ctx, testMetrics6)
 
-	if mockCommandExecutor.GetRebootSystemCallCount() != 1 {
-		t.Errorf("Should reboot system once, got %d", mockCommandExecutor.GetRebootSystemCallCount())
-	}
+	mockCommandExecutor.AssertNumberOfCalls(t, "RebootSystem", 1)
+}
+
+// Test với different contexts để verify parameter passing
+func TestCheckMemoryUsage_DifferentContexts(t *testing.T) {
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
+	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
+
+	// Create different contexts
+	ctx1 := context.WithValue(context.Background(), "test", "ctx1")
+	ctx2 := context.WithValue(context.Background(), "test", "ctx2")
+
+	// Set up expectation for RestartKiosk with ctx1
+	mockCommandExecutor.On("RestartKiosk", ctx1).Return().Once()
+	// Set up expectation for RebootSystem with ctx2
+	mockCommandExecutor.On("RebootSystem", ctx2).Return().Once()
+
+	// First scenario: RestartKiosk with ctx1
+	testMetrics1 := createTestMetrics(96.0, mockTimeProvider.Now())
+	handler.CheckMemoryUsage(ctx1, testMetrics1)
+
+	mockTimeProvider.Advance(20 * time.Second)
+	testMetrics2 := createTestMetrics(97.0, mockTimeProvider.Now())
+	handler.CheckMemoryUsage(ctx1, testMetrics2)
+
+	// Verify RestartKiosk was called with ctx1
+	mockCommandExecutor.AssertCalled(t, "RestartKiosk", ctx1)
+
+	// Second scenario: RebootSystem with ctx2
+	mockTimeProvider.Advance(5 * time.Second)
+	testMetrics3 := createTestMetrics(96.0, mockTimeProvider.Now())
+	handler.CheckMemoryUsage(ctx2, testMetrics3)
+
+	mockTimeProvider.Advance(20 * time.Second)
+	testMetrics4 := createTestMetrics(97.0, mockTimeProvider.Now())
+	handler.CheckMemoryUsage(ctx2, testMetrics4)
+
+	// Verify RebootSystem was called with ctx2
+	mockCommandExecutor.AssertCalled(t, "RebootSystem", ctx2)
+
+	// Verify each method was called exactly once with the right context
+	mockCommandExecutor.AssertNumberOfCalls(t, "RestartKiosk", 1)
+	mockCommandExecutor.AssertNumberOfCalls(t, "RebootSystem", 1)
+}
+
+// Test sequence of calls và exact order
+func TestCheckMemoryUsage_CallSequence(t *testing.T) {
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
+	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
+
+	ctx := context.Background()
+
+	// Set up expectations in order
+	mockCommandExecutor.On("RestartKiosk", ctx).Return().Once()
+	mockCommandExecutor.On("RebootSystem", ctx).Return().Once()
+
+	// Step 1: Trigger RestartKiosk
+	testMetrics1 := createTestMetrics(96.0, mockTimeProvider.Now())
+	handler.CheckMemoryUsage(ctx, testMetrics1)
+
+	mockTimeProvider.Advance(20 * time.Second)
+	testMetrics2 := createTestMetrics(97.0, mockTimeProvider.Now())
+	handler.CheckMemoryUsage(ctx, testMetrics2)
+
+	// At this point RestartKiosk should be called
+	mockCommandExecutor.AssertCalled(t, "RestartKiosk", ctx)
+
+	// Step 2: Trigger RebootSystem (memory still high after restart)
+	mockTimeProvider.Advance(5 * time.Second)
+	testMetrics3 := createTestMetrics(96.0, mockTimeProvider.Now())
+	handler.CheckMemoryUsage(ctx, testMetrics3)
+
+	mockTimeProvider.Advance(20 * time.Second)
+	testMetrics4 := createTestMetrics(97.0, mockTimeProvider.Now())
+	handler.CheckMemoryUsage(ctx, testMetrics4)
+
+	// Verify the complete call sequence
+	mockCommandExecutor.AssertCalled(t, "RebootSystem", ctx)
+
+	// Verify call order using mock's call history
+	calls := mockCommandExecutor.Calls
+	assert.Len(t, calls, 2, "Should have exactly 2 calls")
+	assert.Equal(t, "RestartKiosk", calls[0].Method, "First call should be RestartKiosk")
+	assert.Equal(t, "RebootSystem", calls[1].Method, "Second call should be RebootSystem")
+
+	// Verify arguments for each call
+	assert.Equal(t, ctx, calls[0].Arguments[0], "RestartKiosk should be called with correct context")
+	assert.Equal(t, ctx, calls[1].Arguments[0], "RebootSystem should be called with correct context")
+}
+
+// Test demonstrating advanced mock capabilities - testing với custom matchers
+func TestCheckMemoryUsage_ContextMatching(t *testing.T) {
+	mockLogger := mock.NewMockLogger()
+	mockCommandExecutor := mock.NewMockCommandExecutor()
+	mockTimeProvider := mock.NewMockTime(time.Now())
+	handler := NewMemoryHandlerWithTimeProvider(mockLogger, mockCommandExecutor, mockTimeProvider)
+
+	// Create context with deadline
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Set up expectation using testify's argument matchers
+	mockCommandExecutor.On("RestartKiosk", testifyMock.MatchedBy(func(ctx context.Context) bool {
+		// Verify that the context has a deadline
+		_, hasDeadline := ctx.Deadline()
+		return hasDeadline
+	})).Return().Once()
+
+	// Trigger the call
+	testMetrics1 := createTestMetrics(96.0, mockTimeProvider.Now())
+	handler.CheckMemoryUsage(ctx, testMetrics1)
+
+	mockTimeProvider.Advance(20 * time.Second)
+	testMetrics2 := createTestMetrics(97.0, mockTimeProvider.Now())
+	handler.CheckMemoryUsage(ctx, testMetrics2)
+
+	// Verify the call was made with a context that has a deadline
+	mockCommandExecutor.AssertExpectations(t)
 }

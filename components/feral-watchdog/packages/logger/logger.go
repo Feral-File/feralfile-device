@@ -5,6 +5,12 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+type LoggerInterface interface {
+	Error(msg string, fields ...zap.Field)
+	Warn(msg string, fields ...zap.Field)
+	Debug(msg string, fields ...zap.Field)
+}
+
 func New(debug bool) (*zap.Logger, error) {
 	var config zap.Config
 	if debug {
