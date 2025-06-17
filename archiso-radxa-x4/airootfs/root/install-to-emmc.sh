@@ -28,6 +28,11 @@ cleanup() {
   sync
 
   echo
+  echo "After shutdown, please remove the installation USB stick."
+  echo "Please press any key to shutdown the system safely."
+  read -n 1 -s -r -p ""
+
+  echo
   echo "🔌 Shutting down now..."
   sleep 2
   shutdown -h now
@@ -97,17 +102,7 @@ mount "$BOOT_PART" /mnt/boot
 # ─── Copy root filesystem ──────────────────────────────────────────────
 echo
 echo "Copying root filesystem..."
-rm -rf /home/soaktest
-rm -f /usr/local/bin/websocat
 rsync -aAX --info=progress2 --exclude={"/dev/*","/proc/*","/root/*","/sys/*","/tmp/*","/run/*","/mnt/*","/live-efi/*","/media/*","/lost+found"} / /mnt
-cat > /mnt/etc/systemd/system/getty@tty1.service.d/autologin.conf <<EOF
-[Service]
-ExecStart=
-ExecStart=-/usr/bin/agetty --noclear --autologin feralfile %I $TERM
-EOF
-cat > /mnt/home/feralfile/.config/environment <<EOF
-live
-EOF
 rm -f /mnt/etc/NetworkManager/system-connections/*
 echo -n > /mnt/etc/machine-id
 rm -f /mnt/var/lib/systemd/random-seed
@@ -165,15 +160,7 @@ title   Feral File X1
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
-EOF
-
-cat > /mnt/boot/loader/entries/factory_reset.conf <<EOF
-title   Feral File X1 - Factory Reset
-linux   /vmlinuz-linux
-initrd  /initramfs-linux.img
-initrd  /intel-ucode.img
-options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
+options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID  script=/home/soaktest/soak-test.sh ipv6.disable=1 rw
 EOF
 
 chmod 644 /mnt/boot/loader/entries/*.conf
@@ -183,9 +170,6 @@ mount --bind /proc /mnt/proc
 mount --bind /sys /mnt/sys
 
 arch-chroot /mnt /bin/bash <<EOF
-echo "Removing soaktest account..."
-id soaktest &>/dev/null && userdel soaktest || true
-
 echo "Overwriting mkinitcpio.conf HOOKS..."
 sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block keyboard keymap btrfs-rollback btrfs filesystems fsck)/' /etc/mkinitcpio.conf
 
@@ -199,18 +183,6 @@ chmod 600 /boot/loader/random-seed 2>/dev/null || true
 echo "Installing systemd-boot to disk..."
 bootctl install
 EOF
-
-# ─── Create Factory Reset Snapshot ─────────────────────────────────────
-echo
-echo "Creating factory reset snapshot..."
-# Create a read-only snapshot of the current root (mounted at /mnt)
-# into the .snapshots directory (mounted at /mnt/.snapshots)
-if btrfs subvolume snapshot -r /mnt /mnt/.snapshots/@factory_reset; then
-  echo "✅ Factory reset snapshot '@factory_reset' created successfully in '/.snapshots'."
-  echo "   This is a read-only snapshot of your initial system state."
-else
-  echo "❌ Error: Failed to create factory reset snapshot."
-fi
 
 # ─── Post-install cleanup and prompt ───────────────────────────────────
 sleep 5
