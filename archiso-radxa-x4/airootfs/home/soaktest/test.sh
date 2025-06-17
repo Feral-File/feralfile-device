@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ARTWORK_URL="file:///home/soaktest/36-point/index.html?edition_number=0&artwork_number=1&blockchain=bitmark#02_hex_hole_open"
+ARTWORK_URL="file:///home/soaktest/uneasy-dream/index.html"
 TEMP_VIEWER_URL="http://localhost:8000"
 
 DURATION_SECONDS=$1
@@ -12,7 +12,7 @@ HTML_PATH="/home/soaktest/temp_viewer.html"
 
 rm -f "$LOG_FILE"
 
-chromium "$ARTWORK_URL" & disown
+chromium --kiosk "$ARTWORK_URL" & disown
 ARTWORK_PID=$!
 
 python3 "$SERVER_PY" & disown
@@ -27,5 +27,3 @@ if (( DURATION_SECONDS > 0 )); then
 else
   wait
 fi
-
-echo "[INFO] Soak test completed. Logs saved to: $LOG_FILE"

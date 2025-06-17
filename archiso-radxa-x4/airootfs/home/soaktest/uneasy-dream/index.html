@@ -3,6 +3,20 @@
     <script src="p5.min.js"></script>
     <link rel="stylesheet" type="text/css" href="style.css">
     <meta charset="utf-8">
+    <script>
+      async function fetchTemp() {
+        try {
+          const res = await fetch('http://localhost:8000/temp');
+          const data = await res.json();
+          document.getElementById('temp').textContent = `${data.temp} °C`;
+        } catch {
+          document.getElementById('temp').textContent = 'Error';
+        }
+      }
+
+      setInterval(fetchTemp, 5000);
+      window.onload = fetchTemp;
+    </script>
   </head>
   <body>
     <script src="sketch.js"></script>

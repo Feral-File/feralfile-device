@@ -1,8 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-export LANG=zh_CN.UTF-8
-export LC_ALL=zh_CN.UTF-8
+LOG_FILE="/home/soaktest/cpu_temp_log.csv"
+
+clear
 
 echo "🔧 Choose the testing duration:"
 select choice in "1 min" "1 hr" "3 hrs" "24 hrs" "forever"; do
@@ -19,6 +20,8 @@ done
 cage -s /home/soaktest/test.sh -- $DURATION_SECONDS
 
 clear
+
+echo "Soak test completed. Logs saved to: $LOG_FILE"
 
 # --- Select USB device to mount and copy CSV ---
 echo -e "\n🔌 Please insert a USB drive to save the log."
@@ -40,10 +43,10 @@ while true; do
 
     # Check if there are any options
     if [[ ${#options[@]} -eq 0 ]]; then
-        echo "⚠️  No USB devices found. Press r to refresh, or q to quit."
+        echo "⚠️  No USB devices found. Press r to refresh, or q to quit and manually copy the file."
         read -n1 -rp "> " input
         echo
-        [[ "$input" == "q" ]] && echo "🚫 Cancelled. 取消操作。" && exit 1
+        [[ "$input" == "q" ]] && echo "🚫 Cancelled." && exit 1
         continue
     fi
 
@@ -64,16 +67,20 @@ while true; do
             # Try to mount
             echo -e "📦 Mounting $PART to $USB_MOUNT..."
 
-            if mount | grep -q "$USB_MOUNT"; then umount "$USB_MOUNT"; fi
-            if mount "$PART" "$USB_MOUNT"; then
+            if sudo mount | grep -q "$USB_MOUNT"; then sudo umount "$USB_MOUNT"; fi
+            if sudo mount "$PART" "$USB_MOUNT"; then
                 echo "✅ Mounted successfully."
-                cp "$LOG_FILE" "$USB_MOUNT/"
+                sudo cp "$LOG_FILE" "$USB_MOUNT/"
                 echo "📁 Log file copied to $USB_MOUNT/cpu_temp_log.csv"
-                umount "$USB_MOUNT"
+                sudo umount "$USB_MOUNT"
                 echo "💾 USB safely unmounted."
+                echo "Please press any key to shut down the system safely."
+                read -n 1 -s -r -p ""
+                shutdown -h now
                 break 2 # Done, break outer loop
             else
                 echo "❌ Failed to mount $PART."
+                echo "Please manually copy the file."
             fi
         else
             echo "⚠️ Invalid selection. Press number or choose again."
