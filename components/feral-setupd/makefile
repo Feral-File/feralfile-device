@@ -89,3 +89,19 @@ stop-silent-all:
 
 .PHONY: start-silent-monitord start-silent-connectd start-silent-setupd
 .PHONY: start-silent-all stop-silent-all
+
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Docker
+
+.PHONY: docker-build
+docker-build:
+	@docker build -t arch-dev .
+
+.PHONY: docker-run
+docker-run:
+	@docker run --rm -it \
+		-v "$(CURDIR)/..":/workspace \
+		arch-dev
+
+# ───────────────────────────────────────────────────────────────────────────────

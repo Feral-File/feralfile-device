@@ -22,6 +22,7 @@ pub const DEVICE_ID_PREFIX: &str = "FF-X1-";
 pub const BLE_SUCCESS_CODE: u8 = 0;
 pub const BLE_ERR_CODE_WRONG_WIFI_PWD: u8 = 1;
 pub const BLE_ERR_CODE_NO_INTERNET: u8 = 2;
+pub const BLE_ERR_CODE_SERVER_UNREACHABLE: u8 = 3;
 pub const BLE_ERR_CODE_UNKNOWN_ERROR: u8 = 255;
 
 // Chrome configuration

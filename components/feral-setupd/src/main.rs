@@ -6,11 +6,12 @@ mod dbus_utils;
 mod encoding;
 mod wifi_utils;
 
-use crate::wifi_utils::SSIDsCacher;
+use crate::wifi_utils::{Error as WifiError, SSIDsCacher};
+use anyhow::Context;
+use anyhow::Result;
 use ble::BLE;
 use cache::Cache;
 use cdp::CDP;
-use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -37,20 +38,16 @@ struct AppState {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn main() -> Result<()> {
     // Initialize dependencies
-    let chrome = match CDP::connect(constant::CDP_URL).await {
-        Ok(chrome) => chrome,
-        Err(e) => {
-            eprintln!("MAIN: Error connecting to CDP: {}", e);
-            return Err(format!("Error connecting to CDP: {}", e).into());
-        }
-    };
+    let chrome = CDP::connect(constant::CDP_URL)
+        .await
+        .context("connecting to CDP")?;
     let chrome = Arc::new(chrome);
     let ble_service = Arc::new(BLE::new());
     let app_state = Arc::new(AppState {
         device_id: ble_service.get_device_id().await,
-        app_cache: Cache::new(constant::CACHE_FILEPATH),
+        app_cache: Cache::new(constant::CACHE_FILEPATH)?,
         internet: AtomicBool::new(dbus_utils::internet_availability()),
         page: Mutex::new(Page::None),
     });
@@ -61,7 +58,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let connect_wifi_cb = create_connect_wifi_cb(app_state.clone(), chrome.clone());
     let get_info_cb = create_get_info_cb(app_state.clone());
     let ssids_cacher = Arc::new(SSIDsCacher::new());
-    match ble_service
+    ble_service
         .start(
             bt_connected_cb,
             connect_wifi_cb,
@@ -69,13 +66,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             ssids_cacher.clone(),
         )
         .await
-    {
-        Ok(_) => println!("MAIN: Bluetooth advertising started successfully"),
-        Err(e) => {
-            eprintln!("MAIN: Error starting Bluetooth advertising: {}", e);
-            return Err(format!("Error starting Bluetooth advertising: {}", e).into());
-        }
-    }
+        .context("starting Bluetooth advertising")?;
+    println!("MAIN: Bluetooth advertising started successfully");
 
     let has_internet = app_state.internet.load(Ordering::Relaxed);
     let has_cache = app_state.app_cache.get(cache::TOPIC_ID).is_some();
@@ -155,16 +147,19 @@ fn create_connect_wifi_cb(
                     start_time.elapsed().as_millis(),
                     e
                 );
+                // Tell user that the wifi connection failed
                 task::spawn(async move {
                     let _ = show_message(&chromium, constant::WIFI_FAILED_TO_CONNECT_MSG).await;
                 });
                 // This is a bit of a hack to detect wrong password
                 // But the command doesn't provide a reliable way to detect this
-                return if e.to_string().contains("password") {
-                    Err(constant::BLE_ERR_CODE_WRONG_WIFI_PWD)
-                } else {
-                    Err(constant::BLE_ERR_CODE_UNKNOWN_ERROR)
+                let err_code = match &e {
+                    WifiError::NmcliFailure { stderr, .. } if stderr.contains("password") => {
+                        constant::BLE_ERR_CODE_WRONG_WIFI_PWD
+                    }
+                    _ => constant::BLE_ERR_CODE_UNKNOWN_ERROR,
                 };
+                return Err(err_code);
             }
 
             // Return early if there is no internet
@@ -181,12 +176,17 @@ fn create_connect_wifi_cb(
                 Ok(info) => info,
                 Err(e) => {
                     eprintln!("BLE: can't get relayer data from connectd: {}", e);
-                    return Err(constant::BLE_ERR_CODE_UNKNOWN_ERROR);
+                    return Err(constant::BLE_ERR_CODE_SERVER_UNREACHABLE);
                 }
             };
 
             app_state.app_cache.set(cache::TOPIC_ID, &topic_id);
-            app_state.app_cache.save(constant::CACHE_FILEPATH);
+            match app_state.app_cache.save(constant::CACHE_FILEPATH) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("MAIN: Error saving cache: {}", e);
+                }
+            }
             app_state.internet.store(true, Ordering::Relaxed);
             task::spawn(async move {
                 // This is a workaround to avoid Err Network Changed from Chrome
@@ -268,21 +268,17 @@ async fn show_qrcode(
     app_state: &Arc<AppState>,
     chrome: &Arc<CDP>,
     redirect_when_online: bool,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> Result<()> {
     let qrcode_url = build_qrcode_url(&app_state);
     // QRCode url is dynamically built
     // So we always navigate to make sure the url is correct
     let mut page = app_state.page.lock().await;
-    match chrome.navigate(&qrcode_url).await {
-        Ok(_) => {
-            println!("MAIN: Navigated to {}", qrcode_url);
-            *page = Page::QRCode;
-        }
-        Err(e) => {
-            println!("MAIN: Error navigating to qrcode: {}", e);
-            return Err(e);
-        }
-    };
+    chrome
+        .navigate(&qrcode_url)
+        .await
+        .with_context(|| format!("navigating to {}", qrcode_url))?;
+    println!("MAIN: Navigated to {}", qrcode_url);
+    *page = Page::QRCode;
     if redirect_when_online {
         let stop_listening = Arc::new(AtomicBool::new(false));
         let app_state = app_state.clone();
@@ -302,10 +298,7 @@ async fn show_qrcode(
     Ok(())
 }
 
-async fn show_webapp(
-    app_state: &Arc<AppState>,
-    chrome: &Arc<CDP>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<CDP>) -> Result<()> {
     let mut page = app_state.page.lock().await;
     // For webapp, we only navigate if the page is not it already
     if *page == Page::WebApp {
@@ -315,32 +308,21 @@ async fn show_webapp(
     // This is to avoid Err Network Changed from Chrome
     time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
 
-    match chrome.navigate(constant::WEBAPP_URL).await {
-        Ok(_) => {
-            println!("MAIN: Navigated to {}", constant::WEBAPP_URL);
-            *page = Page::WebApp;
-        }
-        Err(e) => {
-            println!("MAIN: Error navigating to webapp: {}", e);
-            return Err(e);
-        }
-    };
+    chrome
+        .navigate(constant::WEBAPP_URL)
+        .await
+        .with_context(|| format!("navigating to {}", constant::WEBAPP_URL))?;
+    println!("MAIN: Navigated to {}", constant::WEBAPP_URL);
+    *page = Page::WebApp;
     Ok(())
 }
 
-async fn show_message(
-    chrome: &Arc<CDP>,
-    message: &str,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn show_message(chrome: &Arc<CDP>, message: &str) -> Result<()> {
     let message_url = format!("{}{}", constant::MSG_URL_PREFIX, message);
-    match chrome.navigate(&message_url).await {
-        Ok(_) => {
-            println!("MAIN: Navigated to {}", message_url);
-            Ok(())
-        }
-        Err(e) => {
-            println!("MAIN: Error showing message: {}", e);
-            Err(e)
-        }
-    }
+    chrome
+        .navigate(&message_url)
+        .await
+        .with_context(|| format!("navigating to {}", message_url))?;
+    println!("MAIN: Navigated to {}", message_url);
+    Ok(())
 }

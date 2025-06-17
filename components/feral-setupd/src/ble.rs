@@ -20,13 +20,14 @@ use bluer::{
     },
 };
 use futures_util::future::FutureExt;
-use std::error::Error;
 use std::pin::Pin;
 use std::process::Command;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
 use tokio::task;
+
+use anyhow::{Result, anyhow};
 
 pub type BTConnectedCallback =
     Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>;
@@ -65,7 +66,7 @@ impl BLE {
         connect_wifi_cb: ConnectWifiCallback,
         get_info_cb: GetInfoCallback,
         ssids_cacher: Arc<SSIDsCacher>,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<()> {
         let mut inner = self.inner.lock().await;
         if inner.advertised {
             return Ok(());
@@ -115,7 +116,7 @@ impl BLE {
         Ok(())
     }
 
-    pub async fn stop(&self) -> Result<(), Box<dyn Error>> {
+    pub async fn stop(&self) -> Result<()> {
         let (adv, app, adapter) = {
             let mut inner = self.inner.lock().await;
             if !inner.advertised {
@@ -259,31 +260,33 @@ async fn handle_scan_wifi(
     ssids_cacher: Arc<SSIDsCacher>,
 ) -> Result<(), ReqError> {
     // Scan available SSIDs using the helper
+    let mut reply = Vec::with_capacity(2);
+    reply.push(reply_id.as_bytes());
+
     let start_time = Instant::now();
-    let ssids = match ssids_cacher.get().await {
-        Ok(v) => v,
+    let ssids: Vec<String>; // To own the returned value
+    let error_code: [u8; 1]; // To own the returned value
+    match ssids_cacher.get().await {
+        Ok(v) => {
+            println!(
+                "BLE: Found SSIDs \n{:?} in {:?} ms",
+                v,
+                start_time.elapsed().as_millis()
+            );
+            ssids = v;
+            reply.push(&[constant::BLE_SUCCESS_CODE]);
+            reply.extend(ssids.iter().map(|s| s.as_bytes()));
+        }
         Err(e) => {
             eprintln!("BLE: Failed to scan wifi: {}", e);
-            return Ok(());
+            error_code = [constant::BLE_ERR_CODE_UNKNOWN_ERROR];
+            reply.push(&error_code);
         }
     };
-    println!(
-        "BLE: Found SSIDs \n{:?} in {:?} ms",
-        ssids,
-        start_time.elapsed().as_millis()
-    );
-
-    // Build BLE reply payload
-    let mut reply = Vec::with_capacity(ssids.len() + 2);
-    reply.push(reply_id.as_bytes());
-    reply.push(&[constant::BLE_SUCCESS_CODE]);
-    reply.extend(ssids.iter().map(|s| s.as_bytes()));
-    println!("BLE: Reply: {:?}", reply);
-    let payload = encoding::encode_payload(&reply);
 
     // Notify the central (if notifier is already registered)
-    let mut guard = notifier.lock().await;
-    if let Some(notifier) = guard.as_mut() {
+    if let Some(notifier) = notifier.lock().await.as_mut() {
+        let payload = encoding::encode_payload(&reply);
         match notifier.notify(payload).await {
             Ok(_) => (),
             Err(e) => {
@@ -396,15 +399,15 @@ async fn handle_set_time(
         let timezone = &params[0];
         let time = &params[1];
         let result = Command::new(constant::TIMEZONE_CMD)
-            .args(&[constant::TIMEZONE_INSTRUCTION, timezone, time])
+            .args([constant::TIMEZONE_INSTRUCTION, timezone, time])
             .output();
         println!("BLE: Result: {:?}", result);
         if result.is_ok() {
             println!("BLE: Time set successfully");
-            Ok::<(), Box<dyn Error + Send + Sync>>(())
+            Ok::<(), anyhow::Error>(())
         } else {
             println!("BLE: Failed to set time");
-            Err("Failed to set time".into())
+            Err(anyhow!("failed to set time"))
         }
     })
     .await
