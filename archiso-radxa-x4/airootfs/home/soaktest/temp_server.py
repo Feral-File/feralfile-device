@@ -38,6 +38,7 @@ class TempHandler(BaseHTTPRequestHandler):
     def _send_json(self, payload):
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         self.wfile.write(json.dumps(payload).encode())
 
@@ -47,6 +48,7 @@ class TempHandler(BaseHTTPRequestHandler):
                 content = f.read()
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(content)
         except:
