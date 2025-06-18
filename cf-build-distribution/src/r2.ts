@@ -13,6 +13,7 @@ interface FileInfo {
 
 interface VersionInfo {
   latest_version: string;
+  min_version: string;
   image_url: string;
   app_url: string;
   image_fingerprint?: string;
@@ -120,6 +121,7 @@ export async function getLatestVersion(bucket: R2Bucket, branch: string): Promis
   const latest = branchFiles[0];
   return {
     latest_version: latest.version,
+    min_version: latest.version,
     image_url: latest.zipUrl ? `/download/${latest.zipUrl}` : '',
     app_url: latest.debUrl ? `/download/${latest.debUrl}` : '',
     image_fingerprint: latest.zipEtag,
