@@ -61,11 +61,12 @@ while true; do
             # List partitions under selected disk
             PARTITIONS=()
             while IFS= read -r line; do
-                name=$(awk '{print $1}' <<< "$line")
+                part_name=$(awk '{print $1}' <<< "$line")
+                [[ "/dev/$part_name" == "$TARGET_DISK" ]] && continue # skip whole disk
                 size=$(awk '{print $2}' <<< "$line")
                 fstype=$(awk '{print $3}' <<< "$line")
-                PARTITIONS+=("/dev/$name ($size, $fstype)")
-            done < <(lsblk -ln -o NAME,SIZE,FSTYPE "/dev/$TARGET_DISK" | grep "^${TARGET_DISK}[0-9]")
+                PARTITIONS+=("/dev/$part_name ($size, $fstype)")
+            done < <(lsblk -ln -o NAME,SIZE,FSTYPE "$TARGET_DISK")
 
             if [[ ${#PARTITIONS[@]} -eq 0 ]]; then
                 echo "⚠️  No partitions found on $TARGET_DISK. Trying entire disk mount."
@@ -79,7 +80,7 @@ while true; do
                         PART=$(awk '{print $1}' <<< "$p")
                         break
                     else
-                        echo "⚠️ Invalid selection."
+                        echo "⚠️ Invalid selection. Please try again."
                     fi
                 done
             fi
