@@ -15,14 +15,16 @@ pub const CMD_CONNECT_WIFI: &str = "connect_wifi";
 pub const CMD_SCAN_WIFI: &str = "scan_wifi";
 pub const CMD_GET_INFO: &str = "get_info";
 pub const CMD_SET_TIME: &str = "set_time";
+pub const CMD_KEEP_WIFI: &str = "keep_wifi";
 pub const MAX_SSIDS: usize = 9;
 pub const MD5_LENGTH: usize = 8; // Used for conversion to device ID
 pub const DEVICE_ID_PREFIX: &str = "FF-X1-";
 // Bluetooth communication codes
 pub const BLE_SUCCESS_CODE: u8 = 0;
 pub const BLE_ERR_CODE_WRONG_WIFI_PWD: u8 = 1;
-pub const BLE_ERR_CODE_NO_INTERNET: u8 = 2;
+pub const BLE_ERR_CODE_NO_INTERNET: u8 = 2; // Used when user connects to wifi but no internet
 pub const BLE_ERR_CODE_SERVER_UNREACHABLE: u8 = 3;
+pub const BLE_ERR_CODE_WIFI_REQUIRED: u8 = 4; // Used when user doesn't have wifi but asks to proceed
 pub const BLE_ERR_CODE_UNKNOWN_ERROR: u8 = 255;
 
 // Chrome configuration

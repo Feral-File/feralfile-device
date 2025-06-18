@@ -242,7 +242,7 @@ pub fn internet_availability() -> bool {
         constant::DBUS_SYSMONITORD_OBJECT,
         constant::DBUS_SYSMONITORD_INTERFACE,
         constant::DBUS_CONNECTIVITY_METHOD,
-        Some(true), // payload
+        Some(true), // payload: true means forcing the check instead of using cached value from monitord
         constant::DBUS_INTERNET_CHECK_TIMEOUT,
     ) {
         Ok(response) => response.read1::<bool>().unwrap_or(false),

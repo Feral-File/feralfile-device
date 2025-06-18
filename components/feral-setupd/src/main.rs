@@ -56,12 +56,14 @@ async fn main() -> Result<()> {
     // Start bluetooth advertising with callbacks
     let bt_connected_cb = create_bt_connected_cb(chrome.clone());
     let connect_wifi_cb = create_connect_wifi_cb(app_state.clone(), chrome.clone());
+    let keep_wifi_cb = create_keep_wifi_cb(app_state.clone(), chrome.clone());
     let get_info_cb = create_get_info_cb(app_state.clone());
     let ssids_cacher = Arc::new(SSIDsCacher::new());
     ble_service
         .start(
             bt_connected_cb,
             connect_wifi_cb,
+            keep_wifi_cb,
             get_info_cb,
             ssids_cacher.clone(),
         )
@@ -168,6 +170,45 @@ fn create_connect_wifi_cb(
                 task::spawn(async move {
                     let _ = show_message(&chromium, constant::INTERNET_FAILED_TO_CONNECT_MSG).await;
                 });
+                return Err(constant::BLE_ERR_CODE_NO_INTERNET);
+            }
+
+            // Get topic id from connectd
+            let topic_id = match dbus_utils::get_relayer_info() {
+                Ok(info) => info,
+                Err(e) => {
+                    eprintln!("BLE: can't get relayer data from connectd: {}", e);
+                    return Err(constant::BLE_ERR_CODE_SERVER_UNREACHABLE);
+                }
+            };
+
+            app_state.app_cache.set(cache::TOPIC_ID, &topic_id);
+            match app_state.app_cache.save(constant::CACHE_FILEPATH) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("MAIN: Error saving cache: {}", e);
+                }
+            }
+            app_state.internet.store(true, Ordering::Relaxed);
+            task::spawn(async move {
+                // This is a workaround to avoid Err Network Changed from Chrome
+                // This potentially also avoids the white screen issue
+                let _ = show_message(&chromium, constant::SETUP_SUCCESSFULLY_MSG).await;
+                time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
+                let _ = show_webapp(&app_state, &chromium).await;
+            });
+            Ok(topic_id)
+        })
+    })
+}
+
+fn create_keep_wifi_cb(app_state: Arc<AppState>, chromium: Arc<CDP>) -> ble::KeepWifiCallback {
+    Box::new(move || {
+        let app_state = app_state.clone();
+        let chromium = chromium.clone();
+        Box::pin(async move {
+            let internet = dbus_utils::internet_availability();
+            if !internet {
                 return Err(constant::BLE_ERR_CODE_NO_INTERNET);
             }
 
