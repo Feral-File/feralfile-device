@@ -58,10 +58,30 @@ while true; do
             TARGET_DISK=$(awk '{print $1}' <<< "$opt")
             echo -e "\n✅ You selected: $TARGET_DISK"
 
-            PART="${TARGET_DISK}1"
-            if ! lsblk "$PART" &>/dev/null; then
-                echo "⚠️  No partition found on $TARGET_DISK. Trying entire disk mount."
+            # List partitions under selected disk
+            PARTITIONS=()
+            while IFS= read -r line; do
+                name=$(awk '{print $1}' <<< "$line")
+                size=$(awk '{print $2}' <<< "$line")
+                fstype=$(awk '{print $3}' <<< "$line")
+                PARTITIONS+=("/dev/$name ($size, $fstype)")
+            done < <(lsblk -ln -o NAME,SIZE,FSTYPE "/dev/$TARGET_DISK" | grep "^${TARGET_DISK}[0-9]")
+
+            if [[ ${#PARTITIONS[@]} -eq 0 ]]; then
+                echo "⚠️  No partitions found on $TARGET_DISK. Trying entire disk mount."
                 PART="$TARGET_DISK"
+            else
+                echo -e "\n📂 Found partitions:"
+                select p in "${PARTITIONS[@]}" "🔄 Cancel and rescan"; do
+                    if [[ "$REPLY" == "$(( ${#PARTITIONS[@]} + 1 ))" ]]; then
+                        break 2
+                    elif [[ -n "$p" ]]; then
+                        PART=$(awk '{print $1}' <<< "$p")
+                        break
+                    else
+                        echo "⚠️ Invalid selection."
+                    fi
+                done
             fi
 
             # Try to mount
