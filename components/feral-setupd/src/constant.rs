@@ -8,6 +8,14 @@ pub const SSID_CACHE_TTL: u64 = 10 * 60 * 1000; // 10 minutes
 pub const BLE_SHUTDOWN_DELAY: u64 = 1000; // 1 second
 pub const WIFI_WEBAPP_DELAY: u64 = 3 * 1000; // 3 seconds
 
+// Updater configuration
+pub const UPDATER_LOCAL_CONFIG_PATH: &str = "/home/feralfile/x1-config.json";
+pub const UPDATER_UPSTREAM_CONFIG_URL_PREFIX: &str =
+    "https://feralfile-device-distribution.bitmark-development.workers.dev/api/latest/";
+pub const UPDATER_PROCESS_LOG_FILE: &str = "/home/feralfile/.logs/updaterd.log";
+pub const UPDATER_FAILED_TO_CHECK_VERSION_MSG: &str =
+    "Failed to check for updates, please try again later.";
+
 // Bluetooth configuration
 pub const SERVICE_UUID: Uuid = Uuid::from_u128(0xf7826da64fa24e988024bc5b71e0893e_u128);
 pub const CMD_CHAR_UUID: Uuid = Uuid::from_u128(0x6e400002b5a3f393e0a9e50e24dcca9e_u128);
@@ -25,6 +33,8 @@ pub const BLE_ERR_CODE_WRONG_WIFI_PWD: u8 = 1;
 pub const BLE_ERR_CODE_NO_INTERNET: u8 = 2; // Used when user connects to wifi but no internet
 pub const BLE_ERR_CODE_SERVER_UNREACHABLE: u8 = 3;
 pub const BLE_ERR_CODE_WIFI_REQUIRED: u8 = 4; // Used when user doesn't have wifi but asks to proceed
+pub const BLE_ERR_CODE_DEVICE_UPDATING: u8 = 5;
+pub const BLE_ERR_CODE_VERSION_CHECK_FAILED: u8 = 6;
 pub const BLE_ERR_CODE_UNKNOWN_ERROR: u8 = 255;
 
 // Chrome configuration

@@ -4,6 +4,7 @@ mod cdp;
 mod constant;
 mod dbus_utils;
 mod encoding;
+mod updater;
 mod wifi_utils;
 
 use crate::wifi_utils::{Error as WifiError, SSIDsCacher};
@@ -172,32 +173,7 @@ fn create_connect_wifi_cb(
                 });
                 return Err(constant::BLE_ERR_CODE_NO_INTERNET);
             }
-
-            // Get topic id from connectd
-            let topic_id = match dbus_utils::get_relayer_info() {
-                Ok(info) => info,
-                Err(e) => {
-                    eprintln!("BLE: can't get relayer data from connectd: {}", e);
-                    return Err(constant::BLE_ERR_CODE_SERVER_UNREACHABLE);
-                }
-            };
-
-            app_state.app_cache.set(cache::TOPIC_ID, &topic_id);
-            match app_state.app_cache.save(constant::CACHE_FILEPATH) {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("MAIN: Error saving cache: {}", e);
-                }
-            }
-            app_state.internet.store(true, Ordering::Relaxed);
-            task::spawn(async move {
-                // This is a workaround to avoid Err Network Changed from Chrome
-                // This potentially also avoids the white screen issue
-                let _ = show_message(&chromium, constant::SETUP_SUCCESSFULLY_MSG).await;
-                time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
-                let _ = show_webapp(&app_state, &chromium).await;
-            });
-            Ok(topic_id)
+            internet_setup_successfully_cb(&app_state, &chromium).await
         })
     })
 }
@@ -209,36 +185,62 @@ fn create_keep_wifi_cb(app_state: Arc<AppState>, chromium: Arc<CDP>) -> ble::Kee
         Box::pin(async move {
             let internet = dbus_utils::internet_availability();
             if !internet {
-                return Err(constant::BLE_ERR_CODE_NO_INTERNET);
+                return Err(constant::BLE_ERR_CODE_WIFI_REQUIRED);
             }
-
-            // Get topic id from connectd
-            let topic_id = match dbus_utils::get_relayer_info() {
-                Ok(info) => info,
-                Err(e) => {
-                    eprintln!("BLE: can't get relayer data from connectd: {}", e);
-                    return Err(constant::BLE_ERR_CODE_SERVER_UNREACHABLE);
-                }
-            };
-
-            app_state.app_cache.set(cache::TOPIC_ID, &topic_id);
-            match app_state.app_cache.save(constant::CACHE_FILEPATH) {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("MAIN: Error saving cache: {}", e);
-                }
-            }
-            app_state.internet.store(true, Ordering::Relaxed);
-            task::spawn(async move {
-                // This is a workaround to avoid Err Network Changed from Chrome
-                // This potentially also avoids the white screen issue
-                let _ = show_message(&chromium, constant::SETUP_SUCCESSFULLY_MSG).await;
-                time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
-                let _ = show_webapp(&app_state, &chromium).await;
-            });
-            Ok(topic_id)
+            internet_setup_successfully_cb(&app_state, &chromium).await
         })
     })
+}
+
+async fn internet_setup_successfully_cb(
+    app_state: &Arc<AppState>,
+    chromium: &Arc<CDP>,
+) -> Result<String, u8> {
+    // Update the firmware / software if required
+    match updater::is_update_required().await {
+        Ok(true) => {
+            // Spawn the update process in the background
+            // This is to avoid blocking Error code to mobile app
+            // The update process will take over chromium and show the update progress
+            task::spawn(update(chromium.clone()));
+            return Err(constant::BLE_ERR_CODE_DEVICE_UPDATING);
+        }
+        Ok(false) => {} // No update required, proceed with the normal flow
+        Err(e) => {
+            eprintln!("MAIN: Error checking for update: {}", e);
+            let _ = show_message(&chromium, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
+            return Err(constant::BLE_ERR_CODE_VERSION_CHECK_FAILED);
+        }
+    }
+
+    // Get topic id from connectd
+    let topic_id = match dbus_utils::get_relayer_info() {
+        Ok(info) => info,
+        Err(e) => {
+            eprintln!("BLE: can't get relayer data from connectd: {}", e);
+            return Err(constant::BLE_ERR_CODE_SERVER_UNREACHABLE);
+        }
+    };
+
+    app_state.app_cache.set(cache::TOPIC_ID, &topic_id);
+    match app_state.app_cache.save(constant::CACHE_FILEPATH) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("MAIN: Error saving cache: {}", e);
+        }
+    }
+    app_state.internet.store(true, Ordering::Relaxed);
+
+    let app_state = app_state.clone();
+    let chromium = chromium.clone();
+    task::spawn(async move {
+        // This is a workaround to avoid Err Network Changed from Chrome
+        // This potentially also avoids the white screen issue
+        let _ = show_message(&chromium, constant::SETUP_SUCCESSFULLY_MSG).await;
+        time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
+        let _ = show_webapp(&app_state, &chromium).await;
+    });
+    Ok(topic_id)
 }
 
 fn create_get_info_cb(app_state: Arc<AppState>) -> ble::GetInfoCallback {
@@ -335,6 +337,14 @@ async fn show_qrcode(
             },
             stop_listening,
         );
+    }
+    Ok(())
+}
+
+async fn update(chrome: Arc<CDP>) -> Result<()> {
+    let mut rx = updater::spawn_updater()?;
+    while let Some(msg) = rx.recv().await {
+        let _ = show_message(&chrome, &msg).await;
     }
     Ok(())
 }

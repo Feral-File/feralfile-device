@@ -421,7 +421,7 @@ async fn handle_set_time(
 
 async fn notify_central(
     notifier: Arc<Mutex<Option<CharacteristicNotifier>>>,
-    payload: Vec<u8>,
+    payload: Vec<&[u8]>,
 ) -> Result<(), ReqError> {
     let mut guard = notifier.lock().await;
     if let Some(notifier) = guard.as_mut() {
