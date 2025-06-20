@@ -1,6 +1,7 @@
 mod ble;
 mod cache;
 mod cdp;
+mod connectivity;
 mod constant;
 mod dbus_utils;
 mod encoding;
@@ -34,8 +35,16 @@ enum Page {
 struct AppState {
     device_id: String,
     app_cache: Cache,
-    internet: AtomicBool,
+    internet: Connectivity,
     page: Mutex<Page>,
+
+    // This is the flag to indicate whether we should automatically redirect to webapp
+    // when internet is available.
+    // On a second boot, if the internet is unavailable, users have 2 choices
+    // 1. Fix the internet connection, it will automatically redirect to webapp
+    // 2. Scan the QRCode, provide a different wifi
+    // We need this flag to coordinate between the 2 choices
+    auto_proceed: AtomicBool,
 }
 
 #[tokio::main]
@@ -49,8 +58,9 @@ async fn main() -> Result<()> {
     let app_state = Arc::new(AppState {
         device_id: ble_service.get_device_id().await,
         app_cache: Cache::new(constant::CACHE_FILEPATH)?,
-        internet: AtomicBool::new(dbus_utils::internet_availability()),
+        internet: Connectivity::spawn().await,
         page: Mutex::new(Page::None),
+        auto_proceed: AtomicBool::new(false),
     });
     println!("MAIN: App state initialized: {:?}", app_state);
 
@@ -72,12 +82,12 @@ async fn main() -> Result<()> {
         .context("starting Bluetooth advertising")?;
     println!("MAIN: Bluetooth advertising started successfully");
 
-    let has_internet = app_state.internet.load(Ordering::Relaxed);
+    let has_internet = app_state.internet.is_online(true).await;
     let has_cache = app_state.app_cache.get(cache::TOPIC_ID).is_some();
     if !has_cache {
         // First time using the app, just show the QRCode
         ssids_cacher.trigger_refresh();
-        let _ = show_qrcode(&app_state, &chrome, false).await;
+        let _ = show_qrcode(&app_state, &chrome).await;
     } else {
         // Second time using the app
         if has_internet {
@@ -86,7 +96,34 @@ async fn main() -> Result<()> {
         } else {
             // No internet, show QRCode and wait for user to fix it
             ssids_cacher.trigger_refresh();
-            let _ = show_qrcode(&app_state, &chrome, true).await;
+            let _ = show_qrcode(&app_state, &chrome).await;
+            let app_state = app_state.clone();
+            let chrome = chrome.clone();
+            app_state.auto_proceed.store(true, Ordering::Release);
+            tokio::spawn(async move {
+                app_state.internet.wait_for_online().await;
+                // If the user has not scanned the QRCode to set up the new wifi
+                // We automatically proceed with update flow & webapp
+                if app_state.auto_proceed.load(Ordering::Acquire) {
+                    // Update the firmware / software if required
+                    match updater::is_update_required().await {
+                        Ok(true) => {
+                            task::spawn(update(chromium.clone()));
+                        }
+                        Ok(false) => {
+                            let _ = show_webapp(&app_state, &chrome).await;
+                        }
+                        Err(e) => {
+                            eprintln!("MAIN: Error checking for update: {}", e);
+                            let _ = show_message(
+                                &chromium,
+                                constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG,
+                            )
+                            .await;
+                        }
+                    }
+                }
+            });
         }
     }
 
@@ -142,6 +179,10 @@ fn create_connect_wifi_cb(
             )
             .await;
 
+            // Disable auto proceed since users want to setup another wifi
+            // Instead of fixing the current internet (if there is any)
+            app_state.auto_proceed.store(false, Ordering::Release);
+
             // Connect to wifi & return early if failed
             if let Err(e) = wifi_utils::connect(&ssid, &pwd) {
                 eprintln!(
@@ -166,8 +207,7 @@ fn create_connect_wifi_cb(
             }
 
             // Return early if there is no internet
-            let internet = dbus_utils::internet_availability();
-            if !internet {
+            if !app_state.internet.is_online(true).await {
                 task::spawn(async move {
                     let _ = show_message(&chromium, constant::INTERNET_FAILED_TO_CONNECT_MSG).await;
                 });
@@ -183,8 +223,7 @@ fn create_keep_wifi_cb(app_state: Arc<AppState>, chromium: Arc<CDP>) -> ble::Kee
         let app_state = app_state.clone();
         let chromium = chromium.clone();
         Box::pin(async move {
-            let internet = dbus_utils::internet_availability();
-            if !internet {
+            if !app_state.internet.is_online(true).await {
                 return Err(constant::BLE_ERR_CODE_WIFI_REQUIRED);
             }
             internet_setup_successfully_cb(&app_state, &chromium).await
@@ -229,7 +268,6 @@ async fn internet_setup_successfully_cb(
             eprintln!("MAIN: Error saving cache: {}", e);
         }
     }
-    app_state.internet.store(true, Ordering::Relaxed);
 
     let app_state = app_state.clone();
     let chromium = chromium.clone();
@@ -268,7 +306,7 @@ fn create_qrcode_switch_cb(
         }
         task::spawn(async move {
             if qrcode_requested {
-                let _ = show_qrcode(&app_state, &chromium, false).await;
+                let _ = show_qrcode(&app_state, &chromium).await;
             } else {
                 let _ = show_webapp(&app_state, &chromium).await;
             }
@@ -278,7 +316,7 @@ fn create_qrcode_switch_cb(
 
 // The url format is like this
 // url?step=qr&device_id=<device_id>|<topic_id>|<internet>
-fn build_qrcode_url(app_state: &Arc<AppState>) -> String {
+async fn build_qrcode_url(app_state: &Arc<AppState>) -> String {
     let mut qrcode_url = format!("{}{}", constant::QRCODE_URL_PREFIX, app_state.device_id);
     if app_state.app_cache.get(cache::TOPIC_ID).is_some() {
         qrcode_url = format!(
@@ -286,7 +324,7 @@ fn build_qrcode_url(app_state: &Arc<AppState>) -> String {
             qrcode_url,
             app_state.app_cache.get(cache::TOPIC_ID).unwrap()
         );
-        let has_internet = app_state.internet.load(Ordering::Relaxed);
+        let has_internet = app_state.internet.is_online(false).await;
         qrcode_url = format!("{}|{}", qrcode_url, {
             if has_internet { "true" } else { "false" }
         });
@@ -307,12 +345,8 @@ async fn wait_for_shutdown() {
     }
 }
 
-async fn show_qrcode(
-    app_state: &Arc<AppState>,
-    chrome: &Arc<CDP>,
-    redirect_when_online: bool,
-) -> Result<()> {
-    let qrcode_url = build_qrcode_url(&app_state);
+async fn show_qrcode(app_state: &Arc<AppState>, chrome: &Arc<CDP>) -> Result<()> {
+    let qrcode_url = build_qrcode_url(&app_state).await;
     // QRCode url is dynamically built
     // So we always navigate to make sure the url is correct
     let mut page = app_state.page.lock().await;
@@ -322,22 +356,6 @@ async fn show_qrcode(
         .with_context(|| format!("navigating to {}", qrcode_url))?;
     println!("MAIN: Navigated to {}", qrcode_url);
     *page = Page::QRCode;
-    if redirect_when_online {
-        let stop_listening = Arc::new(AtomicBool::new(false));
-        let app_state = app_state.clone();
-        let chrome = chrome.clone();
-        dbus_utils::on_internet_available(
-            move || {
-                app_state.internet.store(true, Ordering::Relaxed);
-                let app_state = app_state.clone();
-                let chrome = chrome.clone();
-                task::spawn(async move {
-                    let _ = show_webapp(&app_state, &chrome).await;
-                });
-            },
-            stop_listening,
-        );
-    }
     Ok(())
 }
 

@@ -52,7 +52,7 @@ pub fn spawn_updater() -> Result<mpsc::Receiver<String>> {
 async fn run_update_and_send(tx: mpsc::Sender<String>) -> Result<()> {
     // 1. Start the systemd transient service
     let mut child = Command::new("systemctl")
-        .args(["start", "feral-updater@00:00.service"])
+        .args(["start", "feral-updater-run@setupd.service"])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
