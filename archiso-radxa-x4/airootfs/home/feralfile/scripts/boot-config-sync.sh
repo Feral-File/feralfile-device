@@ -1,10 +1,29 @@
 #!/bin/bash
 set -euo pipefail
 
+log_info() {
+  local message="$1"
+  echo "$(date '+%Y-%m-%dT%H:%M:%S%z') [INFO] id=$UNIQUE_ID message=\"$message\""
+}
+
+log_error() {
+  local message="$1"
+  echo "$(date '+%Y-%m-%dT%H:%M:%S%z') [ERROR] id=$UNIQUE_ID message=\"$message\""
+}
+
+trap 'code=$?; log_error "EXCEPTION ERR: LINE=$LINENO CMD=\"$BASH_COMMAND\""; exit $code' ERR
+
+if [[ $# -lt 1 || -z "${1:-}" ]]; then
+  echo "ERROR: Usage: $0 2025-06-19T16:00:00"
+  exit 1
+fi
+UNIQUE_ID="$1"
+
 TMP_DIR="/var/tmp/ota"
 BOOT_MOUNT="/mnt/ota-boot"
 
 cleanup() {
+  trap - ERR
   umount "$BOOT_MOUNT" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -22,7 +41,7 @@ rsync -a "$BOOT_MOUNT"/arch/boot/intel-ucode.img /boot/intel-ucode.img
 rsync -a "$BOOT_MOUNT"/loader /boot
 rsync -a "$BOOT_MOUNT"/EFI /boot
 
-echo "🔍 Detecting root partition PARTUUID..."
+log_info "Detecting root partition PARTUUID..."
 ROOT_DEV=$(findmnt / -no SOURCE)
 ROOT_DEV="${ROOT_DEV%%\[*}"
 PARTUUID=$(blkid -s PARTUUID -o value "$ROOT_DEV")
@@ -57,13 +76,13 @@ initrd  /intel-ucode.img
 options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
 EOF
 
-echo "Overwriting mkinitcpio.conf HOOKS..."
+log_info "Overwriting mkinitcpio.conf HOOKS..."
 sed -i 's/^HOOKS=.*/HOOKS=(base udev modconf autodetect block keyboard keymap btrfs-rollback btrfs filesystems fsck)/' /etc/mkinitcpio.conf
 
 echo "Generating initramfs..."
 mkinitcpio -P
 
-echo "Installing systemd-boot to disk..."
+log_info "Installing systemd-boot to disk..."
 bootctl install
 
 umount "$BOOT_MOUNT"
