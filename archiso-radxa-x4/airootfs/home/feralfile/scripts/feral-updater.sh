@@ -21,11 +21,10 @@ else
 fi
 
 if [[ "${FLOCK_ACTIVE:-}" != "1" ]]; then
-  export FLOCK_ACTIVE=1
-  exec /usr/bin/flock -n /run/feral-updater.lock "$0" "$@" || {
-    log_error "Lock already held. Another instance is running."
+  if ! /usr/bin/flock -n /run/feral-updater.lock bash -c 'exec env FLOCK_ACTIVE=1 "$0" "$@"' "$0" "$@"; then
+    log_error "Exception: either Lock already held by another instance or some error happened."
     exit 0
-  }
+  fi
 fi
 
 if ! ping -q -c 1 -W 2 8.8.8.8 >/dev/null; then

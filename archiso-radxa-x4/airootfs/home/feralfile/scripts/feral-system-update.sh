@@ -47,6 +47,8 @@ trap cleanup EXIT
 log_info "=== OTA Update: Version-aware SquashFS Sync with Btrfs Snapshot ==="
 
 # --- Step 1: Load local config ------------------------------------------------
+log_progress "0" "Loading config from $CONFIG_FILE..."
+
 log_info "Loading config from $CONFIG_FILE"
 auth_user=$(jq -r '.distribution_acc' "$CONFIG_FILE")
 auth_pass=$(jq -r '.distribution_pass' "$CONFIG_FILE")
