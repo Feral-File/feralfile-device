@@ -14,6 +14,7 @@ use anyhow::Result;
 use ble::BLE;
 use cache::Cache;
 use cdp::CDP;
+use connectivity::Connectivity;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -101,14 +102,14 @@ async fn main() -> Result<()> {
             let chrome = chrome.clone();
             app_state.auto_proceed.store(true, Ordering::Release);
             tokio::spawn(async move {
-                app_state.internet.wait_for_online().await;
+                app_state.internet.wait_until_online().await;
                 // If the user has not scanned the QRCode to set up the new wifi
                 // We automatically proceed with update flow & webapp
                 if app_state.auto_proceed.load(Ordering::Acquire) {
                     // Update the firmware / software if required
                     match updater::is_update_required().await {
                         Ok(true) => {
-                            task::spawn(update(chromium.clone()));
+                            task::spawn(update(chrome.clone()));
                         }
                         Ok(false) => {
                             let _ = show_webapp(&app_state, &chrome).await;
@@ -116,7 +117,7 @@ async fn main() -> Result<()> {
                         Err(e) => {
                             eprintln!("MAIN: Error checking for update: {}", e);
                             let _ = show_message(
-                                &chromium,
+                                &chrome,
                                 constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG,
                             )
                             .await;

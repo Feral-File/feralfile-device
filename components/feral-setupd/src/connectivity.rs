@@ -5,15 +5,16 @@ use crate::dbus_utils;
 use std::{sync::Arc, time::Duration};
 use tokio::{
     sync::{Mutex, watch},
-    task, time,
+    time,
 };
 
 /// Clone-able handle you keep in `AppState`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Connectivity {
     inner: Arc<Inner>,
 }
 
+#[derive(Debug)]
 struct Inner {
     tx: watch::Sender<bool>,   // authoritative state
     rx: watch::Receiver<bool>, // everybody listens on this
