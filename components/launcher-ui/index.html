@@ -63,6 +63,7 @@
     <div id="qrScreen" class="hidden">
         <div id="qrcode"></div>
         <div id="qrError" style="margin-top: 12px; padding-top: 32px; color: #ff4d4f; font-size: 16px; display: none;"></div>
+        <div id="qrMessage" style="margin-top: 8px; color: #fffbe0; font-size: 16px; display: none;"></div>
     </div>
     <div id="welcomeScreen" class="hidden">
         <p id="welcomeText"></p>
@@ -119,6 +120,16 @@
                     } else {
                         qrError.textContent = '';
                         qrError.style.display = 'none';
+                    }
+
+                    const message = params.get("message");
+                    const qrMessage = document.getElementById("qrMessage");
+                    if (message) {
+                        qrMessage.textContent = message;
+                        qrMessage.style.display = '';
+                    } else {
+                        qrMessage.textContent = '';
+                        qrMessage.style.display = 'none';
                     }
                 }
             },
