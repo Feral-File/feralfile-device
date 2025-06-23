@@ -42,9 +42,10 @@ struct AppState {
     // This is the flag to indicate whether we should automatically redirect to webapp
     // when internet is available.
     // On a second boot, if the internet is unavailable, users have 2 choices
-    // 1. Fix the internet connection, it will automatically redirect to webapp
-    // 2. Scan the QRCode, provide a different wifi
-    // We need this flag to coordinate between the 2 choices
+    // 1. Fix the internet connection, it will automatically check for update & play artwork
+    // 2. Scan the QRCode and start everything over again
+    // We need this flag to turn off the first flow if the user has chosen to provide a different wifi
+    // true = auto proceed, false = user has chosen to provide a different wifi
     auto_proceed: AtomicBool,
 }
 

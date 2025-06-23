@@ -13,10 +13,10 @@ mac_address   = "1.1.8"
 md5 = "0.7.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-reqwest = { version = "0.12.15", features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "native-tls"] }
 url = "2.5.4"
-tungstenite = "0.26.2"
-tokio-tungstenite = "0.26.2"
+tungstenite = { version = "0.26.2", default-features = false, features = ["native-tls"] }
+tokio-tungstenite = { version = "0.26.2", default-features = false, features = ["connect", "native-tls"] }
 futures = "0.3.31"
 thiserror = "2.0.12"
 parking_lot = "0.12.4"

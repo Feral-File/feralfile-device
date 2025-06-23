@@ -73,13 +73,15 @@ impl Connectivity {
 
     /// Suspends until the state flips to *online*.
     pub async fn wait_until_online(&self) {
+        // Clone the receiver so we can hold a mutable handle locally.
+        let mut rx = self.inner.rx.clone();
         loop {
-            if *self.inner.rx.borrow() {
+            // Fast‑path: already online
+            if *rx.borrow() {
                 return;
             }
-            // `.changed()` wakes the moment *any* update is pushed.
-            // If the sender is dropped `changed()` returns Err`; bail out.
-            if self.inner.rx.changed().await.is_err() {
+            // Suspend until the next update; bail out if the sender is gone.
+            if rx.changed().await.is_err() {
                 return;
             }
         }
