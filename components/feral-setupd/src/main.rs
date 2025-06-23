@@ -320,17 +320,13 @@ fn create_qrcode_switch_cb(
 // url?step=qr&device_id=<device_id>|<topic_id>|<internet>
 async fn build_qrcode_url(app_state: &Arc<AppState>) -> String {
     let mut qrcode_url = format!("{}{}", constant::QRCODE_URL_PREFIX, app_state.device_id);
-    if app_state.app_cache.get(cache::TOPIC_ID).is_some() {
-        qrcode_url = format!(
-            "{}|{}",
-            qrcode_url,
-            app_state.app_cache.get(cache::TOPIC_ID).unwrap()
-        );
-        let has_internet = app_state.internet.is_online(false).await;
-        qrcode_url = format!("{}|{}", qrcode_url, {
-            if has_internet { "true" } else { "false" }
-        });
-    }
+    let topic_id = app_state.app_cache.get(cache::TOPIC_ID).unwrap_or_default();
+    let has_internet = if app_state.internet.is_online(false).await {
+        "true"
+    } else {
+        "false"
+    };
+    qrcode_url = format!("{}|{}|{}", qrcode_url, topic_id, has_internet);
     qrcode_url
 }
 
