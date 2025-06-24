@@ -73,6 +73,7 @@
     </div>
     <div id="messageScreen" class="hidden">
         <p id="messageText"></p>
+        <div id="messageSubText" style="margin-top: 8px; color: #888; font-size: 0.7em; display: none;"></div>
     </div>
     <!-- Version display -->
     <div id="versionDisplay" style="position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); color: #ccc; border-radius: 16px; padding: 4px 18px; font-size: 16px; z-index: 1000; pointer-events: none; user-select: none; display: none; border: 1px solid #444;"></div>
@@ -154,6 +155,15 @@
                 requiredParams: ["message"],
                 render: (params) => {
                     document.getElementById("messageText").textContent = params.get("message");
+                    const subText = params.get("subText");
+                    const subTextDiv = document.getElementById("messageSubText");
+                    if (subText) {
+                        subTextDiv.textContent = subText;
+                        subTextDiv.style.display = '';
+                    } else {
+                        subTextDiv.textContent = '';
+                        subTextDiv.style.display = 'none';
+                    }
                 },
             },
         };
