@@ -102,7 +102,7 @@ log_info "Total file size to download: $TOTAL_SIZE bytes"
 PROGRESS_PID=$!
 
 # Actual download
-curl -u "$auth_user:$auth_pass" -fL "https://feralfile-device-distribution.bitmark-development.workers.dev$IMAGE_URL" -o "$ZIP_FILE"
+curl -u "$auth_user:$auth_pass" --silent --show-error -fL "https://feralfile-device-distribution.bitmark-development.workers.dev$IMAGE_URL" -o "$ZIP_FILE"
 
 kill "$PROGRESS_PID" 2>/dev/null || true
 
