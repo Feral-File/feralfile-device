@@ -8,9 +8,9 @@ set -euo pipefail
 
 LOCAL_DIR="${1:-.}/"
 REMOTE_USER="feralfile"
-REMOTE_HOST="192.168.31.92"
-REMOTE_PASS="portal"
-REMOTE_DIR="${2:-/home/${REMOTE_USER}/project/}"
+REMOTE_HOST="192.168.31.182"
+REMOTE_PASS="feralfile"
+REMOTE_DIR="${2:-/home/${REMOTE_USER}/src/components/}"
 
 # ensure sshpass is installed
 if ! command -v sshpass &>/dev/null; then

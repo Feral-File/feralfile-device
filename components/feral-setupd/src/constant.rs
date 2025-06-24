@@ -12,6 +12,8 @@ pub const WIFI_WEBAPP_DELAY: u64 = 3 * 1000; // 3 seconds
 pub const UPDATER_LOCAL_CONFIG_PATH: &str = "/home/feralfile/x1-config.json";
 pub const UPDATER_UPSTREAM_CONFIG_URL_PREFIX: &str =
     "https://feralfile-device-distribution.bitmark-development.workers.dev/api/latest/";
+pub const UPDATER_USERNAME: &str = "feralfile";
+pub const UPDATER_PASSWORD: &str = "portal";
 pub const UPDATER_PROCESS_LOG_FILE: &str = "/home/feralfile/.logs/updaterd.log";
 pub const UPDATER_FAILED_TO_CHECK_VERSION_MSG: &str =
     "Failed to check for updates, please try again later.";
@@ -50,6 +52,7 @@ pub const WIFI_FAILED_TO_CONNECT_MSG: &str =
     "Failed to connect to the wifi network, please try again.";
 pub const INTERNET_FAILED_TO_CONNECT_MSG: &str =
     "Failed to connect to the internet, please try again.";
+pub const UPDATING_MSG_PREFIX: &str = "Updating your device to the version ";
 pub const SETUP_SUCCESSFULLY_MSG: &str = "Bringing art to your screen…";
 
 // D-Bus configuration

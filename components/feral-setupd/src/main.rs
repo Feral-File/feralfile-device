@@ -35,6 +35,7 @@ enum Page {
 #[derive(Debug)]
 struct AppState {
     device_id: String,
+    current_version: String,
     app_cache: Cache,
     internet: Connectivity,
     page: Mutex<Page>,
@@ -59,6 +60,7 @@ async fn main() -> Result<()> {
     let ble_service = Arc::new(BLE::new());
     let app_state = Arc::new(AppState {
         device_id: ble_service.get_device_id().await,
+        current_version: updater::current_version().await.unwrap_or_default(),
         app_cache: Cache::new(constant::CACHE_FILEPATH)?,
         internet: Connectivity::spawn().await,
         page: Mutex::new(Page::None),
@@ -327,6 +329,7 @@ async fn build_qrcode_url(app_state: &Arc<AppState>) -> String {
         "false"
     };
     qrcode_url = format!("{}|{}|{}", qrcode_url, topic_id, has_internet);
+    qrcode_url = format!("{}&version={}", qrcode_url, &app_state.current_version);
     qrcode_url
 }
 
@@ -358,6 +361,12 @@ async fn show_qrcode(app_state: &Arc<AppState>, chrome: &Arc<CDP>) -> Result<()>
 }
 
 async fn update(chrome: Arc<CDP>) -> Result<()> {
+    let latest_version = updater::latest_version().await.unwrap_or_default();
+    let _ = show_message(
+        &chrome,
+        &format!("{}{}", &constant::UPDATING_MSG_PREFIX, latest_version),
+    )
+    .await;
     let mut rx = updater::spawn_updater()?;
     while let Some(msg) = rx.recv().await {
         let _ = show_message(&chrome, &msg).await;

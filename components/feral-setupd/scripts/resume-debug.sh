@@ -1,1 +1,5 @@
-clear && cargo run
+cargo build
+sudo systemctl stop feral-setupd.service
+sudo cp ~/feral-setupd/target/debug/feral-setupd /usr/bin/feral-setupd
+sudo systemctl daemon-reload
+sudo systemctl start feral-setupd.service

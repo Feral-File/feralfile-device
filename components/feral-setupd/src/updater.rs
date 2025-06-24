@@ -4,7 +4,7 @@ use crate::constant;
 use anyhow::{Context, Result};
 use semver::Version;
 use serde::Deserialize;
-use std::{path::Path, process::Stdio, time::Duration};
+use std::{process::Stdio, sync::OnceLock, time::Duration};
 use tokio::{
     fs,
     io::{AsyncBufReadExt, BufReader},
@@ -15,19 +15,37 @@ use tokio::{
     time,
 };
 
+/// ---------- Cache ----------
+
+static CURRENT_BUILD: OnceLock<RunningBuild> = OnceLock::new();
+static REMOTE_VERSIONS: OnceLock<UpstreamVersion> = OnceLock::new();
+
 /// ---------- Public API ----------
+
+pub async fn current_version() -> Result<String> {
+    let current = read_branch_and_version().await?;
+    Ok(current.version.to_string())
+}
+
+pub async fn latest_version() -> Result<String> {
+    let current = read_branch_and_version().await?;
+    let remote_versions = fetch_remote_version(&current.branch).await?;
+    let latest = remote_versions.latest_version;
+    Ok(latest.to_string())
+}
 
 /// Return `Ok(true)` when the running build is **below** the distributor’s
 /// minimum supported version and an update is therefore required.
 pub async fn is_update_required() -> Result<bool> {
-    let current = read_branch_and_version(constant::UPDATER_LOCAL_CONFIG_PATH).await?;
-    let latest = fetch_min_version(&current.branch).await?;
+    let current = read_branch_and_version().await?;
+    let remote_versions = fetch_remote_version(&current.branch).await?;
+    let min_version = remote_versions.min_version;
     println!(
-        "Updater: current={:?}, latest={:?}",
-        current.version, latest
+        "Updater: current={:?}, min={:?}, latest={:?}",
+        current.version, min_version, remote_versions.latest_version
     );
 
-    Ok(current.version < latest)
+    Ok(current.version < min_version)
 }
 
 /// Spawn the updater in a background task and return a channel receiver that
@@ -99,40 +117,79 @@ async fn run_update_and_send(tx: mpsc::Sender<String>) -> Result<()> {
 /// ---------- Internal helpers ----------
 
 #[derive(Deserialize)]
-struct LocalConfig {
+struct LocalConfigJSON {
     branch: String,
     version: String,
 }
 
+#[derive(Debug, Clone)]
 struct RunningBuild {
     branch: String,
     version: Version,
 }
 
-async fn read_branch_and_version<P: AsRef<Path>>(config_path: P) -> Result<RunningBuild> {
-    let buf = fs::read_to_string(&config_path)
+async fn read_branch_and_version() -> Result<RunningBuild> {
+    if let Some(build) = CURRENT_BUILD.get() {
+        return Ok(build.clone());
+    }
+
+    let buf = fs::read_to_string(constant::UPDATER_LOCAL_CONFIG_PATH)
         .await
-        .with_context(|| format!("reading {}", config_path.as_ref().display()))?;
-    let cfg: LocalConfig = serde_json::from_str(&buf).context("parsing local config JSON")?;
+        .context("reading local config")?;
+    let cfg: LocalConfigJSON = serde_json::from_str(&buf).context("parsing local config JSON")?;
     let version = Version::parse(&cfg.version).context("parsing local semver")?;
-    Ok(RunningBuild {
+    let build = RunningBuild {
         branch: cfg.branch,
         version,
-    })
+    };
+    CURRENT_BUILD.set(build.clone()).unwrap();
+    Ok(build)
 }
 
 #[derive(Deserialize)]
 struct UpstreamInfo {
     min_version: String,
+    latest_version: String,
 }
 
-async fn fetch_min_version(branch: &str) -> Result<Version> {
+#[derive(Debug, Clone)]
+struct UpstreamVersion {
+    min_version: Version,
+    latest_version: Version,
+}
+
+async fn fetch_remote_version(branch: &str) -> Result<UpstreamVersion> {
+    if let Some(versions) = REMOTE_VERSIONS.get() {
+        return Ok(versions.clone());
+    }
+
     let url = format!("{}{}", constant::UPDATER_UPSTREAM_CONFIG_URL_PREFIX, branch);
-    let resp = reqwest::get(&url)
+    let resp = reqwest::Client::new()
+        .get(&url)
+        .basic_auth(constant::UPDATER_USERNAME, Some(constant::UPDATER_PASSWORD))
+        .send()
         .await
-        .with_context(|| format!("fetching {}", url))?
-        .error_for_status()
-        .context("non-200 from distributor")?;
+        .with_context(|| format!("fetching {}", url))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read response body".to_string());
+        return Err(anyhow::anyhow!(
+            "HTTP {} from distributor at {}: {}",
+            status,
+            url,
+            body
+        ));
+    }
+
     let info: UpstreamInfo = resp.json().await.context("decoding distributor JSON")?;
-    Version::parse(&info.min_version).context("parsing upstream semver")
+    let versions = UpstreamVersion {
+        min_version: Version::parse(&info.min_version).context("parsing upstream semver")?,
+        latest_version: Version::parse(&info.latest_version).context("parsing upstream semver")?,
+    };
+    REMOTE_VERSIONS.set(versions.clone()).unwrap();
+    Ok(versions)
 }
