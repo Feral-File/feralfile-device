@@ -77,7 +77,9 @@ mkdir -p "$TMP_DIR"
 log_progress "10" "Starting download..."
 
 ZIP_FILE="$TMP_DIR/image.zip"
-TOTAL_SIZE=$(curl -u "$auth_user:$auth_pass" -sI "https://feralfile-device-distribution.bitmark-development.workers.dev$IMAGE_URL" | awk '/Content-Length/ {print $2}' | tr -d '\r')
+TOTAL_SIZE=$(curl -u "$auth_user:$auth_pass" -sI "https://feralfile-device-distribution.bitmark-development.workers.dev$IMAGE_URL" \
+  | tr -d '\r' \
+  | awk 'BEGIN{IGNORECASE=1} /^content-length:/ {print $2}')
 
 if [[ -z "$TOTAL_SIZE" ]]; then
   log_error "Failed to retrieve content length for image."
