@@ -47,13 +47,13 @@ trap cleanup EXIT
 log_info "=== OTA Update: Version-aware SquashFS Sync with Btrfs Snapshot ==="
 
 # --- Step 1: Load local config ------------------------------------------------
-log_progress "0" "Loading config from $CONFIG_FILE..."
+log_progress "0" "Getting device information..."
 
 log_info "Loading config from $CONFIG_FILE"
 auth_user=$(jq -r '.distribution_acc' "$CONFIG_FILE")
 auth_pass=$(jq -r '.distribution_pass' "$CONFIG_FILE")
 
-log_progress "15" "Creating Btrfs snapshot..."
+log_progress "5" "Saving current system state..."
 
 # --- Step 2: Create Btrfs snapshot of current @ subvolume ----------------------
 log_info "Creating readonly snapshot of current system (subvol @) ..."
@@ -70,12 +70,40 @@ else
   exit 0
 fi
 
-log_progress "30" "Downloading new version image..."
-
 # --- Step 3: Download and extract new image ------------------------------------
 log_info "Downloading new image..."
 mkdir -p "$TMP_DIR"
-curl -u "$auth_user:$auth_pass" -f -L "https://feralfile-device-distribution.bitmark-development.workers.dev$IMAGE_URL" -o "$ZIP_FILE"
+
+log_progress "10" "Starting download..."
+
+ZIP_FILE="$TMP_DIR/image.zip"
+TOTAL_SIZE=$(curl -u "$auth_user:$auth_pass" -sI "https://feralfile-device-distribution.bitmark-development.workers.dev$IMAGE_URL" | awk '/Content-Length/ {print $2}' | tr -d '\r')
+
+if [[ -z "$TOTAL_SIZE" ]]; then
+  log_error "Failed to retrieve content length for image."
+  exit 1
+fi
+
+log_info "Total file size to download: $TOTAL_SIZE bytes"
+
+# Background progress loop
+(
+  while sleep 3; do
+    if [[ -f "$ZIP_FILE" ]]; then
+      CUR_SIZE=$(stat -c %s "$ZIP_FILE")
+      PERCENT=$(awk "BEGIN { printf \"%d\", (80 * $CUR_SIZE / $TOTAL_SIZE) + 10 }")
+      [[ $PERCENT -gt 89 ]] && PERCENT=89
+      log_progress "$PERCENT" "Downloading the latest update..."
+    fi
+  done
+) &
+PROGRESS_PID=$!
+
+# Actual download
+curl -u "$auth_user:$auth_pass" -fL "https://feralfile-device-distribution.bitmark-development.workers.dev$IMAGE_URL" -o "$ZIP_FILE"
+
+kill "$PROGRESS_PID" 2>/dev/null || true
+
 unzip -o "$ZIP_FILE" -d "$TMP_DIR"
 ISO_FILE=$(find "$TMP_DIR" -name '*.iso' | head -n1)
 
@@ -93,7 +121,7 @@ log_info "Mounting SquashFS: $SFS_PATH"
 mkdir -p "$SFS_MOUNT"
 mount -t squashfs -o loop "$SFS_PATH" "$SFS_MOUNT"
 
-log_progress "45" "Rsync selective update from image..."
+log_progress "90" "Installing the new update..."
 
 # --- Step 5: Rsync selective update from SquashFS ------------------------------
 log_info "Syncing filesystem (excluding persistent & sensitive paths) into '/' (subvol @)..."
@@ -109,7 +137,7 @@ id soaktest &>/dev/null && sudo userdel soaktest || true
 echo -n > /etc/machine-id
 rm -f /var/lib/systemd/random-seed
 
-log_progress "60" "Rebuilding boot loader..."
+log_progress "95" "Preparing the system for restart..."
 
 /home/feralfile/scripts/boot-config-sync.sh "$UNIQUE_ID"
 
@@ -117,7 +145,7 @@ log_info "Applying systemd presets..."
 systemctl preset-all --preset-mode=enable-only
 
 # Set up pacman
-log_progress "75" "Setting up pacman..."
+log_progress "98" "Finishing final setup..."
 log_info "Setting up pacman..."
 systemctl restart NetworkManager
 sleep 3
@@ -126,11 +154,11 @@ pacman-key --populate archlinux
 pacman -Syy
 
 # --- Step 6: Clean up and reboot ------------------------------------------------
-log_progress "90" "Cleaning up mounts and temporary data..."
+log_progress "99" "Cleaning up..."
 log_info "Cleaning up mounts and temporary data..."
 cleanup
 trap - EXIT
 
-log_progress "100" "OTA system update complete."
+log_progress "100" "Update complete! Restarting device..."
 log_info "OTA update complete. Rebooting now..."
 systemctl reboot --no-wall --no-block
