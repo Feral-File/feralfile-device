@@ -115,7 +115,10 @@ export function generateHtml(files: FileInfo[]): string {
                                             </a>
                                             ` : ''}
                                         </td>
-                                        <td>${branchFiles[0].version}</td>
+                                        <td>
+                                            ${branchFiles[0].version}
+                                            ${branchFiles[0].tag === 'development' ? '<span class="ms-2 badge bg-danger">DEV</span>' : ''}
+                                        </td>
                                         <td class="timestamp" data-timestamp="${branchFiles[0].lastUpdated || Date.now()}"></td>
                                         <td>
                                             ${branchFiles[0].zipUrl ? `
@@ -144,7 +147,10 @@ export function generateHtml(files: FileInfo[]): string {
                                     <tr class="version-history d-none" data-branch="${branch}">
                                         <td></td>
                                         <td></td>
-                                        <td>${file.version}</td>
+                                        <td>
+                                            ${file.version}
+                                            ${file.tag === 'development' ? '<span class="ms-2 badge bg-danger">DEV</span>' : ''}
+                                        </td>
                                         <td class="timestamp" data-timestamp="${file.lastUpdated || Date.now()}"></td>
                                         <td>
                                             ${file.zipUrl ? `
