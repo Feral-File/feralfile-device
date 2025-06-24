@@ -53,6 +53,8 @@ pub const WIFI_FAILED_TO_CONNECT_MSG: &str =
 pub const INTERNET_FAILED_TO_CONNECT_MSG: &str =
     "Failed to connect to the internet, please try again.";
 pub const UPDATING_MSG_PREFIX: &str = "Updating your device to the version ";
+pub const UPDATING_MSG_SUBTEXT: &str =
+    "This process may take 5–10 minutes depending on your internet speed.";
 pub const SETUP_SUCCESSFULLY_MSG: &str = "Bringing art to your screen…";
 
 // D-Bus configuration

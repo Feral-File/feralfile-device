@@ -362,7 +362,12 @@ async fn update_on_startup_if_required(app_state: &Arc<AppState>, chrome: &Arc<C
 async fn update(chrome: Arc<CDP>) -> Result<()> {
     let latest_version = updater::latest_version().await.unwrap_or_default();
     let base_msg = format!("{} {}", &constant::UPDATING_MSG_PREFIX, latest_version);
-    let _ = show_message(&chrome, &base_msg).await;
+    let default_subtext = constant::UPDATING_MSG_SUBTEXT;
+    let _ = show_message(
+        &chrome,
+        &format!("{}&subtext={}", base_msg, default_subtext),
+    )
+    .await;
     let mut rx = updater::spawn_updater()?;
     while let Some(msg) = rx.recv().await {
         let _ = show_message(&chrome, &format!("{}&subtext={}", &base_msg, msg)).await;
