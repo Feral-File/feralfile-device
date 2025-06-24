@@ -155,7 +155,7 @@
                 requiredParams: ["message"],
                 render: (params) => {
                     document.getElementById("messageText").textContent = params.get("message");
-                    const subText = params.get("subText");
+                    const subText = params.get("subtext");
                     const subTextDiv = document.getElementById("messageSubText");
                     if (subText) {
                         subTextDiv.textContent = subText;

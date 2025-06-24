@@ -96,7 +96,7 @@ async fn main() -> Result<()> {
         // Second time using the app
         if has_internet {
             // All good, show webapp
-            let _ = show_webapp(&app_state, &chrome).await;
+            update_on_startup_if_required(&app_state, &chrome).await;
         } else {
             // No internet, show QRCode and wait for user to fix it
             ssids_cacher.trigger_refresh();
@@ -109,23 +109,7 @@ async fn main() -> Result<()> {
                 // If the user has not scanned the QRCode to set up the new wifi
                 // We automatically proceed with update flow & webapp
                 if app_state.auto_proceed.load(Ordering::Acquire) {
-                    // Update the firmware / software if required
-                    match updater::is_update_required().await {
-                        Ok(true) => {
-                            task::spawn(update(chrome.clone()));
-                        }
-                        Ok(false) => {
-                            let _ = show_webapp(&app_state, &chrome).await;
-                        }
-                        Err(e) => {
-                            eprintln!("MAIN: Error checking for update: {}", e);
-                            let _ = show_message(
-                                &chrome,
-                                constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG,
-                            )
-                            .await;
-                        }
-                    }
+                    update_on_startup_if_required(&app_state, &chrome).await;
                 }
             });
         }
@@ -360,16 +344,28 @@ async fn show_qrcode(app_state: &Arc<AppState>, chrome: &Arc<CDP>) -> Result<()>
     Ok(())
 }
 
+async fn update_on_startup_if_required(app_state: &Arc<AppState>, chrome: &Arc<CDP>) {
+    match updater::is_update_required().await {
+        Ok(true) => {
+            let _ = update(chrome.clone()).await;
+        }
+        Ok(false) => {
+            let _ = show_webapp(app_state, chrome).await;
+        }
+        Err(e) => {
+            eprintln!("MAIN: Error checking for update: {}", e);
+            let _ = show_message(chrome, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
+        }
+    }
+}
+
 async fn update(chrome: Arc<CDP>) -> Result<()> {
     let latest_version = updater::latest_version().await.unwrap_or_default();
-    let _ = show_message(
-        &chrome,
-        &format!("{}{}", &constant::UPDATING_MSG_PREFIX, latest_version),
-    )
-    .await;
+    let base_msg = format!("{} {}", &constant::UPDATING_MSG_PREFIX, latest_version);
+    let _ = show_message(&chrome, &base_msg).await;
     let mut rx = updater::spawn_updater()?;
     while let Some(msg) = rx.recv().await {
-        let _ = show_message(&chrome, &msg).await;
+        let _ = show_message(&chrome, &format!("{}&subtext={}", &base_msg, msg)).await;
     }
     Ok(())
 }

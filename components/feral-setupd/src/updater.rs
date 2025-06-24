@@ -2,6 +2,7 @@
 
 use crate::constant;
 use anyhow::{Context, Result};
+use regex::Regex;
 use semver::Version;
 use serde::Deserialize;
 use std::{process::Stdio, sync::OnceLock, time::Duration};
@@ -58,7 +59,7 @@ pub fn spawn_updater() -> Result<mpsc::Receiver<String>> {
     // Detach the async task; errors are logged.
     tokio::spawn(async move {
         if let Err(e) = run_update_and_send(tx).await {
-            eprintln!("updater error: {e}");
+            eprintln!("updater error: {:#?}", e);
         }
     });
 
@@ -68,6 +69,11 @@ pub fn spawn_updater() -> Result<mpsc::Receiver<String>> {
 /// Internal async worker: starts the systemd unit, tails the log file,
 /// and forwards each `[progress] …` line into the provided `mpsc::Sender`.
 async fn run_update_and_send(tx: mpsc::Sender<String>) -> Result<()> {
+    // Compile regex patterns once
+    let id_regex = Regex::new(r"id=(\w+)").context("compiling id regex")?;
+    let progress_regex = Regex::new(r"progress=(\d+)").context("compiling progress regex")?;
+    let message_regex = Regex::new(r#"message="([^"]*)""#).context("compiling message regex")?;
+
     // 1. Start the systemd transient service
     let mut child = Command::new("systemctl")
         .args(["start", "feral-updater-run@setupd.service"])
@@ -79,7 +85,6 @@ async fn run_update_and_send(tx: mpsc::Sender<String>) -> Result<()> {
     // 2. Open (and create if missing) the log file, then seek to end
     let log_path = constant::UPDATER_PROCESS_LOG_FILE;
     let file = fs::OpenOptions::new()
-        .create(true)
         .read(true)
         .open(log_path)
         .await
@@ -94,10 +99,34 @@ async fn run_update_and_send(tx: mpsc::Sender<String>) -> Result<()> {
         select! {
             maybe_line = reader.next_line() => {
                 match maybe_line? {
-                    Some(line) if line.starts_with("[progress]") => {
-                      let payload = line.trim_start_matches("[progress]").trim().to_string();
-                      // Best‑effort send; ignore if receiver dropped (app shutting down)
-                      let _ = tx.send(payload).await;
+                    Some(line) if line.contains("[PROGRESS]") => {
+                        println!("Updater: {}", line);
+                        // Check if id=setupd and ignore other lines
+                        let id_caps = id_regex.captures(&line);
+                        if id_caps.is_none() || &id_caps.unwrap()[1] != "setupd" {
+                            continue;
+                        }
+
+                        println!("Parsing progress {}", line);
+                        let mut payload = String::new();
+                        let progress_caps = progress_regex.captures(&line);
+                        if progress_caps.is_some() {
+                            payload.push_str(&format!("{}%", &progress_caps.as_ref().unwrap()[1]));
+                        }
+                        println!("Payload: {}", payload);
+
+                        let message_caps = message_regex.captures(&line);
+                        if message_caps.is_some() {
+                            if progress_caps.is_some() {
+                                payload.push_str(&format!(" - {}", &message_caps.as_ref().unwrap()[1]));
+                            } else {
+                                payload.push_str(&format!("{}", &message_caps.as_ref().unwrap()[1]));
+                            }
+                        }
+                        println!("Payload: {}", payload);
+
+                        // Best‑effort send; ignore if receiver dropped (app shutting down)
+                        let _ = tx.send(payload).await;
                     }
                     Some(_) => { /* ignore other lines */ }
                     None => { time::sleep(Duration::from_millis(200)).await; }
