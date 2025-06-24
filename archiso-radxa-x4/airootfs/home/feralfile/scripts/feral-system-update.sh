@@ -88,14 +88,26 @@ fi
 
 log_info "Total file size to download: $TOTAL_SIZE bytes"
 
-# Background progress loop
+# Background progress loop with speed tracking
 (
+  LAST_SIZE=0
+  LAST_TIME=$(date +%s)
+
   while sleep 3; do
     if [[ -f "$ZIP_FILE" ]]; then
       CUR_SIZE=$(stat -c %s "$ZIP_FILE")
+      CUR_TIME=$(date +%s)
+      ELAPSED=$((CUR_TIME - LAST_TIME))
+      DIFF=$((CUR_SIZE - LAST_SIZE))
+
+      SPEED_MBPS=$(awk "BEGIN { printf \"%.3f\", $DIFF / $ELAPSED / 1024 / 1024 }")
       PERCENT=$(awk "BEGIN { printf \"%d\", (80 * $CUR_SIZE / $TOTAL_SIZE) + 10 }")
       [[ $PERCENT -gt 89 ]] && PERCENT=89
-      log_progress "$PERCENT" "Downloading the latest update..."
+
+      log_progress "$PERCENT" "Downloading the update... ($SPEED_MBPS MB/s)"
+
+      LAST_SIZE=$CUR_SIZE
+      LAST_TIME=$CUR_TIME
     fi
   done
 ) &
