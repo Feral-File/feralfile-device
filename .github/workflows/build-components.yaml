@@ -74,6 +74,7 @@ on:
 
 jobs:
   build-component:
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
