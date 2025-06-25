@@ -369,8 +369,15 @@ async fn update(chrome: Arc<CDP>) -> Result<()> {
     )
     .await;
     let mut rx = updater::spawn_updater()?;
-    while let Some(msg) = rx.recv().await {
-        let _ = show_message(&chrome, &format!("{}&subtext={}", &base_msg, msg)).await;
+    while let Some(res) = rx.recv().await {
+        match res {
+            Ok(msg) => {
+                let _ = show_message(&chrome, &format!("{}&subtext={}", &base_msg, msg)).await;
+            }
+            Err(e) => {
+                eprintln!("MAIN: Update process failed: {:#}", e);
+            }
+        }
     }
     Ok(())
 }

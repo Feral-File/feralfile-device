@@ -316,6 +316,7 @@ dependencies = [
  "mac_address",
  "md5",
  "parking_lot",
+ "rand",
  "regex",
  "reqwest",
  "semver",
