@@ -1,0 +1,11 @@
+name = "x1"
+main = "src/index.ts"
+compatibility_date = "2024-02-23"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "ff-device-images"
+
+[vars]
+AUTH_USERNAME = "feralfile"
+# Set AUTH_PASSWORD in the Cloudflare dashboard or using wrangler secret 
