@@ -180,8 +180,12 @@ func (m *mediator) handleRelayerMessage(ctx context.Context, payload relayer.Pay
 		m.tracer.FinishSpanWithError(systemSpan, nil)
 
 	default:
+		dp1Call := payload.Message.DP1Call
+		dp1Intent := payload.Message.Intent
+		isDP1Request := dp1Call != nil && dp1Intent != nil
+
 		cmd := payload.Message.Command
-		if cmd == nil {
+		if !isDP1Request && cmd == nil {
 			parseErr = fmt.Errorf("received relayer message with no command")
 			m.logger.Warn("Received relayer message with no command", zap.Any("payload", payload))
 			m.tracer.FinishSpanWithError(parseSpan, parseErr)
@@ -192,7 +196,7 @@ func (m *mediator) handleRelayerMessage(ctx context.Context, payload relayer.Pay
 		// Parsing successful
 		m.tracer.FinishSpanWithError(parseSpan, nil)
 
-		if cmd.ConnectdCmd() {
+		if !isDP1Request && cmd.ConnectdCmd() {
 			// Handle command directly
 			execSpan := m.tracer.StartCommandExecutionSpan(tracedCtx, *cmd)
 

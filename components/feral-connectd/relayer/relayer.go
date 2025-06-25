@@ -70,6 +70,8 @@ type Payload struct {
 		Command *RelayerCmd            `json:"command,omitempty"`
 		Args    map[string]interface{} `json:"request,omitempty"`
 		TopicID *string                `json:"topicID,omitempty"`
+		DP1Call *map[string]interface{} `json:"dp1_call,omitempty"`
+		Intent  *map[string]interface{} `json:"intent,omitempty"`
 	} `json:"message"`
 }
 
