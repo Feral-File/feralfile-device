@@ -9,6 +9,7 @@ interface FileInfo {
   zipEtag?: string;
   lastUpdated?: number;  // timestamp in milliseconds
   hasReleaseNotes?: boolean; 
+  tag: 'development' | 'production';
 }
 
 interface VersionInfo {
@@ -36,16 +37,18 @@ function formatFileSize(bytes: number): string {
 export async function listFiles(bucket: R2Bucket): Promise<FileInfo[]> {
   const objects = await bucket.list();
   const files: FileInfo[] = [];
-  
+
   for (const obj of objects.objects) {
     const parts = obj.key.split('/');
     const filename = parts.pop();
     const branch = parts.join('/');
     if (!filename) continue;
 
-    const match = filename.match(/^radxa-x4-arch-(\d+\.\d+\.\d+)\.zip$/);
+    const match = filename.match(/^radxa-x4-arch-(dev-)?(\d+\.\d+\.\d+)\.zip$/);
     if (match) {
-      const version = match[1];
+      const isDev = !!match[1];
+      const version = match[2];
+
       files.push({
         branch,
         version,
@@ -56,11 +59,11 @@ export async function listFiles(bucket: R2Bucket): Promise<FileInfo[]> {
         debSize: undefined,
         debEtag: undefined,
         lastUpdated: obj.uploaded?.getTime(),
+        tag: isDev ? 'development' : 'production',
       });
     }
   }
 
-  // Scan for release notes
   for (const obj of objects.objects) {
     const match = obj.key.match(/release_notes_(.+?)\.md$/);
     if (match) {
@@ -73,23 +76,19 @@ export async function listFiles(bucket: R2Bucket): Promise<FileInfo[]> {
     }
   }
 
-  // Sort files by branch (main first) and then by version
   files.sort((a, b) => {
-    // If one is main branch, it should come first
     if (a.branch === 'main') return -1;
     if (b.branch === 'main') return 1;
-    
-    // Otherwise sort branches alphabetically
+
     const branchCompare = a.branch.localeCompare(b.branch);
     if (branchCompare !== 0) return branchCompare;
-    
-    // If branches are equal, sort by version (assuming semantic versioning)
+
     const versionA = a.version.split('.').map(Number);
     const versionB = b.version.split('.').map(Number);
-    
+
     for (let i = 0; i < 3; i++) {
       if (versionA[i] !== versionB[i]) {
-        return versionB[i] - versionA[i]; // Descending order for versions
+        return versionB[i] - versionA[i];
       }
     }
     return 0;
