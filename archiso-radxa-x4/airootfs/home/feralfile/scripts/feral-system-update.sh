@@ -116,6 +116,8 @@ curl -u "$auth_user:$auth_pass" --silent --show-error -fL "https://feralfile-dev
 
 kill "$PROGRESS_PID" 2>/dev/null || true
 
+log_progress "90" "Extracting the new image..."
+
 unzip -o "$ZIP_FILE" -d "$TMP_DIR"
 ISO_FILE=$(find "$TMP_DIR" -name '*.iso' | head -n1)
 
@@ -133,7 +135,7 @@ log_info "Mounting SquashFS: $SFS_PATH"
 mkdir -p "$SFS_MOUNT"
 mount -t squashfs -o loop "$SFS_PATH" "$SFS_MOUNT"
 
-log_progress "90" "Installing the new update..."
+log_progress "92" "Installing the new update..."
 
 # --- Step 5: Rsync selective update from SquashFS ------------------------------
 log_info "Syncing filesystem (excluding persistent & sensitive paths) into '/' (subvol @)..."
