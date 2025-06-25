@@ -52,6 +52,7 @@ log_progress "0" "Loading config from $CONFIG_FILE..."
 log_info "Loading config from $CONFIG_FILE"
 auth_user=$(jq -r '.distribution_acc' "$CONFIG_FILE")
 auth_pass=$(jq -r '.distribution_pass' "$CONFIG_FILE")
+ENDPOINT=$(jq -r '.endpoint' "$CONFIG_FILE")
 
 log_progress "15" "Creating Btrfs snapshot..."
 
@@ -75,7 +76,7 @@ log_progress "30" "Downloading new version image..."
 # --- Step 3: Download and extract new image ------------------------------------
 log_info "Downloading new image..."
 mkdir -p "$TMP_DIR"
-curl -u "$auth_user:$auth_pass" -f -L "https://feralfile-device-distribution.bitmark-development.workers.dev$IMAGE_URL" -o "$ZIP_FILE"
+curl -u "$auth_user:$auth_pass" -f -L "$ENDPOINT$IMAGE_URL" -o "$ZIP_FILE"
 unzip -o "$ZIP_FILE" -d "$TMP_DIR"
 ISO_FILE=$(find "$TMP_DIR" -name '*.iso' | head -n1)
 

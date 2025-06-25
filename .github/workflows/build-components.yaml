@@ -23,7 +23,7 @@ on:
         default: 'GitHub Actions'
       environment:
         description: 'Environment for Sentry release'
-        required: false
+        required: true
         type: string
         default: 'Development'
     secrets:
@@ -53,6 +53,24 @@ on:
         description: 'Package version'
         required: true
         type: string
+      environment:
+        description: "Environment to build"
+        required: true
+        default: "Development"
+        type: choice
+        options:
+          - Development
+          - Production
+      maintainer:
+        description: 'Package maintainer'
+        required: false
+        type: string
+        default: 'GitHub Actions'
+      description:
+        description: 'Package description'
+        required: false
+        type: string
+        default: 'Go application packaged for Arch Linux'
 
 jobs:
   build-component:
