@@ -37,6 +37,7 @@ func setup(t *testing.T) *testSetup {
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.FatalLevel))
 	ctx := context.Background()
 
+	// Dependencies
 	mockDialer := mocks.NewMockWebSocketDialerInterface(ctrl)
 	mockConn := mocks.NewMockWebSocketConn(ctrl)
 	mockRandomizer := mocks.NewMockRandomizer(ctrl)
@@ -1349,9 +1350,9 @@ func TestClient_Ping_ContextCanceled(t *testing.T) {
 		// Good, no pings after cancellation
 	}
 
-	// Verify that ping calls stopped (should be <= 2 total calls)
+	// Verify that ping calls stopped (should be 1 total calls)
 	finalPingCount := atomic.LoadInt32(&pingCallCount)
-	assert.LessOrEqual(t, int(finalPingCount), 2, "expected ping calls to stop after context cancellation, got %d calls", finalPingCount)
+	assert.Equal(t, int(finalPingCount), 1, "expected ping calls to stop after context cancellation, got %d calls", finalPingCount)
 
 	// Properly close the client to prevent goroutine leaks
 	ts.client.Close()

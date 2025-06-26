@@ -74,7 +74,7 @@ func main() {
 	}
 
 	// Initialize CDP client
-	cdpClient := cdp.NewClient(config.CDPConfig, logger)
+	cdpClient := cdp.NewDefault(config.CDPConfig, logger)
 	err = cdpClient.Init(ctx)
 	if err != nil {
 		logger.Fatal("CDP init failed", zap.Error(err))

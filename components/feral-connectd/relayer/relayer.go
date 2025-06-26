@@ -147,18 +147,23 @@ type ClientInterface interface {
 type Client struct {
 	sync.Mutex
 
+	// Wrappers to be injected
+	dialer     wrapper.WebSocketDialerInterface
+	randomizer wrapper.Randomizer
+	clock      wrapper.ClockInterface
+
+	// Internal state
 	config       *Config
-	dialer       wrapper.WebSocketDialerInterface
 	conn         wrapper.WebSocketConnInterface
-	randomizer   wrapper.Randomizer
-	clock        wrapper.ClockInterface
 	done         chan struct{}
 	pingDoneChan chan struct{}
-	logger       *zap.Logger
 	handlers     []Handler
+
+	// Logger
+	logger *zap.Logger
 }
 
-// NewDefault creates a new default Relayer client
+// NewDefault creates a new Relayer client with the default wrappers
 func NewDefault(config *Config, logger *zap.Logger) *Client {
 	d := websocket.DefaultDialer
 	d.HandshakeTimeout = 5 * time.Second
@@ -171,7 +176,7 @@ func NewDefault(config *Config, logger *zap.Logger) *Client {
 	)
 }
 
-// NewClient creates a new Relayer client with a custom fields
+// NewClient creates a new Relayer client with custom injected wrappers
 func NewClient(
 	config *Config,
 	logger *zap.Logger,

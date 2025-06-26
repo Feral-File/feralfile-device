@@ -110,7 +110,7 @@ func (c *Client) GetRelayerTopicID() (string, *dbus.Error) {
 	defer c.relayer.RemoveRelayerMessage(handler)
 
 	// Connect to the relayer
-	err := c.relayer.Connect(c.ctx)
+	err := c.relayer.RetryableConnect(deadlineCtx)
 	if errors.Is(err, relayer.ErrAlreadyConnected) {
 		return state.GetState().Relayer.TopicID, nil
 	}
