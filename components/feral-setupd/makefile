@@ -1,17 +1,17 @@
 .PHONY: sync
 sync:
 	@echo "📡 Syncing to X4..."
-	@./scripts/sync-to-x4.sh . /home/feralfile/$(notdir $(PWD))
+	@./scripts/sync-to-x4.sh . /home/feralfile/src/components/$(notdir $(PWD))
 
 .PHONY: sync-connectd
 sync-connectd:
 	@echo "📡 Syncing connectd..."
-	@./scripts/sync-to-x4.sh ../feral-connectd /home/feralfile/feral-connectd
+	@./scripts/sync-to-x4.sh ../feral-connectd /home/feralfile/src/components/feral-connectd
 
 .PHONY: sync-sys-monitord
 sync-sys-monitord:
 	@echo "📡 Syncing sys-monitord..."
-	@./scripts/sync-to-x4.sh ../feral-sys-monitord /home/feralfile/feral-sys-monitord
+	@./scripts/sync-to-x4.sh ../feral-sys-monitord /home/feralfile/src/components/feral-sys-monitord
 
 .PHONY: sync-launcher-ui
 sync-launcher-ui:
@@ -89,3 +89,19 @@ stop-silent-all:
 
 .PHONY: start-silent-monitord start-silent-connectd start-silent-setupd
 .PHONY: start-silent-all stop-silent-all
+
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Docker
+
+.PHONY: docker-build
+docker-build:
+	@docker build -t arch-dev .
+
+.PHONY: docker-run
+docker-run:
+	@docker run --rm -it \
+		-v "$(CURDIR)/..":/workspace \
+		arch-dev
+
+# ───────────────────────────────────────────────────────────────────────────────
