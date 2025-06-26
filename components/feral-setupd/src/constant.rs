@@ -12,8 +12,6 @@ pub const WIFI_WEBAPP_DELAY: u64 = 3 * 1000; // 3 seconds
 pub const UPDATER_LOCAL_CONFIG_PATH: &str = "/home/feralfile/x1-config.json";
 pub const UPDATER_UPSTREAM_CONFIG_URL_PREFIX: &str =
     "https://feralfile-device-distribution.bitmark-development.workers.dev/api/latest/";
-pub const UPDATER_USERNAME: &str = "feralfile";
-pub const UPDATER_PASSWORD: &str = "portal";
 pub const UPDATER_PROCESS_LOG_FILE: &str = "/home/feralfile/.logs/updaterd.log";
 pub const UPDATER_FAILED_TO_CHECK_VERSION_MSG: &str =
     "Failed to check for updates, please try again later.";
@@ -42,8 +40,7 @@ pub const BLE_ERR_CODE_UNKNOWN_ERROR: u8 = 255;
 // Chrome configuration
 pub const CDP_URL: &str = "http://127.0.0.1:9222/json";
 pub const CDP_ID_START: u64 = 1_000_000;
-pub const WEBAPP_URL: &str =
-    "https://feat-handle-cdp-request.feralfile-display-prod.pages.dev?platform=ff-device";
+pub const WEBAPP_URL: &str = "https://display.feralfile.com";
 pub const QRCODE_URL_PREFIX: &str = "file:///opt/feral/ui/launcher/index.html?step=qr&device_id=";
 pub const MSG_URL_PREFIX: &str = "file:///opt/feral/ui/launcher/index.html?step=message&message=";
 pub const WELCOME_MSG: &str = "Welcome to the Portal (FF-X1)";

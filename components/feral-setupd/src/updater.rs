@@ -25,13 +25,13 @@ static REMOTE_VERSIONS: OnceLock<UpstreamVersion> = OnceLock::new();
 /// ---------- Public API ----------
 
 pub async fn current_version() -> Result<String> {
-    let current = read_branch_and_version().await?;
+    let current = read_local_cfg().await?;
     Ok(current.version.to_string())
 }
 
 pub async fn latest_version() -> Result<String> {
-    let current = read_branch_and_version().await?;
-    let remote_versions = fetch_remote_version(&current.branch).await?;
+    let current = read_local_cfg().await?;
+    let remote_versions = fetch_remote_version(&current.branch, &current.acc, &current.pwd).await?;
     let latest = remote_versions.latest_version;
     Ok(latest.to_string())
 }
@@ -39,14 +39,9 @@ pub async fn latest_version() -> Result<String> {
 /// Return `Ok(true)` when the running build is **below** the distributor’s
 /// minimum supported version and an update is therefore required.
 pub async fn is_update_required() -> Result<bool> {
-    let current = read_branch_and_version().await?;
-    let remote_versions = fetch_remote_version(&current.branch).await?;
+    let current = read_local_cfg().await?;
+    let remote_versions = fetch_remote_version(&current.branch, &current.acc, &current.pwd).await?;
     let min_version = remote_versions.min_version;
-    println!(
-        "Updater: current={:?}, min={:?}, latest={:?}",
-        current.version, min_version, remote_versions.latest_version
-    );
-
     Ok(current.version < min_version)
 }
 
@@ -173,15 +168,19 @@ async fn run_update_and_send(tx: mpsc::Sender<Result<String, anyhow::Error>>) ->
 struct LocalConfigJSON {
     branch: String,
     version: String,
+    distribution_acc: String,
+    distribution_pass: String,
 }
 
 #[derive(Debug, Clone)]
 struct RunningBuild {
     branch: String,
     version: Version,
+    acc: String,
+    pwd: String,
 }
 
-async fn read_branch_and_version() -> Result<RunningBuild> {
+async fn read_local_cfg() -> Result<RunningBuild> {
     if let Some(build) = CURRENT_BUILD.get() {
         return Ok(build.clone());
     }
@@ -194,6 +193,8 @@ async fn read_branch_and_version() -> Result<RunningBuild> {
     let build = RunningBuild {
         branch: cfg.branch,
         version,
+        acc: cfg.distribution_acc,
+        pwd: cfg.distribution_pass,
     };
     CURRENT_BUILD.set(build.clone()).unwrap();
     Ok(build)
@@ -211,7 +212,7 @@ struct UpstreamVersion {
     latest_version: Version,
 }
 
-async fn fetch_remote_version(branch: &str) -> Result<UpstreamVersion> {
+async fn fetch_remote_version(branch: &str, acc: &str, pwd: &str) -> Result<UpstreamVersion> {
     if let Some(versions) = REMOTE_VERSIONS.get() {
         return Ok(versions.clone());
     }
@@ -219,7 +220,7 @@ async fn fetch_remote_version(branch: &str) -> Result<UpstreamVersion> {
     let url = format!("{}{}", constant::UPDATER_UPSTREAM_CONFIG_URL_PREFIX, branch);
     let resp = reqwest::Client::new()
         .get(&url)
-        .basic_auth(constant::UPDATER_USERNAME, Some(constant::UPDATER_PASSWORD))
+        .basic_auth(acc, Some(pwd))
         .send()
         .await
         .with_context(|| format!("fetching {}", url))?;

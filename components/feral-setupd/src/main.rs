@@ -69,17 +69,17 @@ async fn main() -> Result<()> {
     println!("MAIN: App state initialized: {:?}", app_state);
 
     // Start bluetooth advertising with callbacks
-    let bt_connected_cb = create_bt_connected_cb(chrome.clone());
-    let connect_wifi_cb = create_connect_wifi_cb(app_state.clone(), chrome.clone());
-    let keep_wifi_cb = create_keep_wifi_cb(app_state.clone(), chrome.clone());
-    let get_info_cb = create_get_info_cb(app_state.clone());
+    // let bt_connected_cb = create_bt_connected_cb(chrome.clone());
+    // let connect_wifi_cb = create_connect_wifi_cb(app_state.clone(), chrome.clone());
+    // let keep_wifi_cb = create_keep_wifi_cb(app_state.clone(), chrome.clone());
+    // let get_info_cb = create_get_info_cb(app_state.clone());
     let ssids_cacher = Arc::new(SSIDsCacher::new());
     ble_service
         .start(
-            bt_connected_cb,
-            connect_wifi_cb,
-            keep_wifi_cb,
-            get_info_cb,
+            create_bt_connected_cb(chrome.clone()),
+            create_connect_wifi_cb(app_state.clone(), chrome.clone()),
+            create_keep_wifi_cb(app_state.clone(), chrome.clone()),
+            create_get_info_cb(app_state.clone()),
             ssids_cacher.clone(),
         )
         .await
@@ -87,32 +87,22 @@ async fn main() -> Result<()> {
     println!("MAIN: Bluetooth advertising started successfully");
 
     let has_internet = app_state.internet.is_online(true).await;
-    let has_cache = app_state.app_cache.get(cache::TOPIC_ID).is_some();
-    if !has_cache {
-        // First time using the app, just show the QRCode
-        ssids_cacher.trigger_refresh();
+    if !has_internet {
+        // Show the QRCode so the user can do something with the internet
         let _ = show_qrcode(&app_state, &chrome).await;
+        app_state.auto_proceed.store(true, Ordering::Release);
+        let app_state = app_state.clone();
+        let chrome = chrome.clone();
+        tokio::spawn(async move {
+            app_state.internet.wait_until_online().await;
+            // If the user has chosen to provide a different wifi
+            // This will be false and we should not proceed
+            if app_state.auto_proceed.load(Ordering::Acquire) {
+                on_startup_with_internet(app_state, chrome).await;
+            }
+        });
     } else {
-        // Second time using the app
-        if has_internet {
-            // All good, show webapp
-            update_on_startup_if_required(&app_state, &chrome).await;
-        } else {
-            // No internet, show QRCode and wait for user to fix it
-            ssids_cacher.trigger_refresh();
-            let _ = show_qrcode(&app_state, &chrome).await;
-            let app_state = app_state.clone();
-            let chrome = chrome.clone();
-            app_state.auto_proceed.store(true, Ordering::Release);
-            tokio::spawn(async move {
-                app_state.internet.wait_until_online().await;
-                // If the user has not scanned the QRCode to set up the new wifi
-                // We automatically proceed with update flow & webapp
-                if app_state.auto_proceed.load(Ordering::Acquire) {
-                    update_on_startup_if_required(&app_state, &chrome).await;
-                }
-            });
-        }
+        on_startup_with_internet(app_state.clone(), chrome.clone()).await;
     }
 
     // Listen for QRCode switch signal
@@ -344,18 +334,30 @@ async fn show_qrcode(app_state: &Arc<AppState>, chrome: &Arc<CDP>) -> Result<()>
     Ok(())
 }
 
-async fn update_on_startup_if_required(app_state: &Arc<AppState>, chrome: &Arc<CDP>) {
+async fn on_startup_with_internet(app_state: Arc<AppState>, chrome: Arc<CDP>) {
+    // If the update process is triggered and it takes over the chromium
+    // We should not proceed with the normal flow any more
+    // The device needs to automatically restart to apply the update
+    // So we just return
     match updater::is_update_required().await {
         Ok(true) => {
             let _ = update(chrome.clone()).await;
-        }
-        Ok(false) => {
-            let _ = show_webapp(app_state, chrome).await;
+            return;
         }
         Err(e) => {
             eprintln!("MAIN: Error checking for update: {}", e);
-            let _ = show_message(chrome, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
+            let _ = show_message(&chrome, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
+            return;
         }
+        Ok(false) => {}
+    }
+
+    // Otherwise, proceed with the normal flow
+    let has_cache = app_state.app_cache.get(cache::TOPIC_ID).is_some();
+    if has_cache {
+        let _ = show_webapp(&app_state, &chrome).await;
+    } else {
+        let _ = show_qrcode(&app_state, &chrome).await;
     }
 }
 
