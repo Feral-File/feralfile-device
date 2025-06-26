@@ -2,7 +2,22 @@ name: Update Pacman Repo DB
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to build"
+        required: true
+        default: "Development"
+        type: choice
+        options:
+          - Development
+          - Production
   workflow_call:
+    inputs:
+      environment:
+        description: 'Environment for the build'
+        required: true
+        type: string
+        default: 'Development'
     secrets:
         CLOUDFLARE_ACCOUNT_ID:
           required: true
@@ -13,6 +28,7 @@ on:
 
 jobs:
   update-repo:
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest

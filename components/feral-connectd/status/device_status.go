@@ -95,6 +95,7 @@ func GetDeviceStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 			Branch           string `json:"branch"`
 			DistributionAcc  string `json:"distribution_acc"`
 			DistributionPass string `json:"distribution_pass"`
+			Endpoint         string `json:"endpoint"`
 		}
 
 		if err := json.Unmarshal(configBytes, &config); err != nil {
@@ -104,8 +105,8 @@ func GetDeviceStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 		installedVersion = config.Version
 
 		// Get latest version from API if credentials are available
-		if config.Branch != "" && config.DistributionAcc != "" && config.DistributionPass != "" {
-			version, err := fetchLatestVersion(ctx, config.Branch, config.DistributionAcc, config.DistributionPass)
+		if config.Branch != "" && config.DistributionAcc != "" && config.DistributionPass != "" && config.Endpoint != "" {
+			version, err := fetchLatestVersion(ctx, config.Endpoint, config.Branch, config.DistributionAcc, config.DistributionPass)
 			if err != nil {
 				return fmt.Errorf("failed to fetch latest version: %w", err)
 			}
@@ -130,9 +131,8 @@ func GetDeviceStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 }
 
 // fetchLatestVersion retrieves the latest version from the distribution API
-func fetchLatestVersion(ctx context.Context, branch, account, pass string) (string, error) {
-	otaAPI := "https://feralfile-device-distribution.bitmark-development.workers.dev/api/latest"
-	apiURL := fmt.Sprintf("%s/%s", otaAPI, branch)
+func fetchLatestVersion(ctx context.Context, endpoint, branch, account, pass string) (string, error) {
+	apiURL := fmt.Sprintf("%s/api/latest/%s", endpoint, branch)
 
 	// Create HTTP client with 2-second timeout
 	client := &http.Client{

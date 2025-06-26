@@ -9,6 +9,7 @@ import (
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/cdp"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/command"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/dbus"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/logger"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/state"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/status"
@@ -31,6 +32,7 @@ type Mediator struct {
 	cmd          command.HandlerInterface
 	statusPoller status.PollerInterface
 	logger       *zap.Logger
+	tracer       *logger.RelayerMessageTracer
 }
 
 func New(
@@ -38,13 +40,14 @@ func New(
 	dbus dbus.ClientInterface,
 	cdp cdp.ClientInterface,
 	cmd command.HandlerInterface,
-	logger *zap.Logger) *Mediator {
+	l *zap.Logger) *Mediator {
 	return &Mediator{
 		relayer: relayer,
 		dbus:    dbus,
 		cdp:     cdp,
 		cmd:     cmd,
-		logger:  logger,
+		logger:  l,
+		tracer:  logger.NewRelayerMessageTracer(l),
 	}
 }
 
@@ -123,13 +126,37 @@ func (m *Mediator) handleDBusSignal(
 func (m *Mediator) handleRelayerMessage(ctx context.Context, payload relayer.Payload) error {
 	m.logger.Info("handle received relayer message", zap.Any("payload", payload))
 
+	// Start Sentry transaction for this relayer message
+	transaction, tracedCtx := m.tracer.StartTransaction(ctx, payload)
+	var finalErr error
+	defer func() {
+		// Always finish the transaction at the end
+		m.tracer.FinishTransactionWithError(transaction, finalErr)
+	}()
+
+	// Create parsing span
+	parseSpan := m.tracer.StartParsingSpan(tracedCtx)
+	var parseErr error
+
 	switch payload.MessageID {
 	case relayer.MESSAGE_ID_SYSTEM:
 		topicID := payload.Message.TopicID
 		if topicID == nil {
+			parseErr = fmt.Errorf("payload doesn't contain topicID")
 			m.logger.Error("Payload doesn't contain topicID", zap.Any("payload", payload))
-			return fmt.Errorf("payload doesn't contain topicID")
+			m.tracer.FinishSpanWithError(parseSpan, parseErr)
+			finalErr = parseErr
+			return parseErr
 		}
+
+		// Parsing successful
+		m.tracer.FinishSpanWithError(parseSpan, nil)
+
+		// Create system handling span
+		systemSpan := m.tracer.StartSpan(tracedCtx, "relayer.system")
+		systemSpan.Description = "handle_system_message"
+		systemSpan.SetData("stage", "system_handling")
+		systemSpan.SetData("topic_id", *topicID)
 
 		// Save state
 		s := state.GetState()
@@ -137,37 +164,71 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload relayer.Pay
 		err := s.Save()
 		if err != nil {
 			m.logger.Error("Failed to persist state", zap.Error(err))
+			m.tracer.FinishSpanWithError(systemSpan, err)
+			finalErr = err
 			return err
 		}
+
+		// Update global Sentry scope with new topic ID
+		m.tracer.SetTopicIDGlobally(*topicID)
+
+		m.tracer.FinishSpanWithError(systemSpan, nil)
+
 	default:
 		cmd := payload.Message.Command
 		if cmd == nil {
+			parseErr = fmt.Errorf("received relayer message with no command")
 			m.logger.Warn("Received relayer message with no command", zap.Any("payload", payload))
+			m.tracer.FinishSpanWithError(parseSpan, parseErr)
+			// Not setting finalErr since this is not really an error, just no command
 			return nil
 		}
 
+		// Parsing successful
+		m.tracer.FinishSpanWithError(parseSpan, nil)
+
 		if cmd.ConnectdCmd() {
-			result, err := m.cmd.Execute(ctx,
+			// Handle command directly
+			execSpan := m.tracer.StartCommandExecutionSpan(tracedCtx, *cmd)
+
+			result, err := m.cmd.Execute(tracedCtx,
 				command.Command{
 					Command:   *cmd,
 					Arguments: payload.Message.Args,
 				})
 			if err != nil {
 				m.logger.Error("Failed to execute command", zap.Error(err))
+				m.tracer.FinishSpanWithError(execSpan, err)
+				finalErr = err
 				return err
 			}
 
-			return m.relayer.Send(ctx,
+			m.tracer.FinishSpanWithError(execSpan, nil)
+
+			// Send response
+			responseSpan := m.tracer.StartResponseSpan(tracedCtx)
+			responseSpan.SetData("response_type", "RPC")
+
+			err = m.relayer.Send(tracedCtx,
 				map[string]interface{}{
 					"type":      "RPC",
 					"messageID": payload.MessageID,
 					"message":   result,
 				})
 
+			m.tracer.FinishSpanWithError(responseSpan, err)
+			finalErr = err
+			return err
+
 		} else {
+			// Forward to CDP
+			cdpSpan := m.tracer.StartCDPRequestSpan(tracedCtx)
+
 			p, err := payload.JSON()
 			if err != nil {
 				m.logger.Error("Failed to marshal payload", zap.Error(err))
+				m.tracer.FinishSpanWithError(cdpSpan, err)
+				finalErr = err
 				return err
 			}
 
@@ -176,13 +237,30 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload relayer.Pay
 			})
 			if err != nil {
 				m.logger.Error("Failed to send CDP request", zap.Error(err))
+				m.tracer.FinishSpanWithError(cdpSpan, err)
+				finalErr = err
 				return err
 			}
+
+			m.tracer.FinishSpanWithError(cdpSpan, nil)
+
+			// Add brief pause as in original code
 			time.Sleep(500 * time.Millisecond)
 
-			m.statusPoller.ForceRefresh()
+			// Force refresh status poller
+			if m.statusPoller != nil {
+				m.statusPoller.ForceRefresh()
+			}
 
-			return m.relayer.Send(ctx, result)
+			// Send response
+			responseSpan := m.tracer.StartResponseSpan(tracedCtx)
+			responseSpan.SetData("response_type", "CDP_RESULT")
+
+			err = m.relayer.Send(tracedCtx, result)
+
+			m.tracer.FinishSpanWithError(responseSpan, err)
+			finalErr = err
+			return err
 		}
 	}
 

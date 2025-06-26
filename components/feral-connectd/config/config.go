@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/cdp"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/logger"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"go.uber.org/zap"
 )
@@ -20,8 +21,9 @@ var (
 
 // Configuration for all components
 type Config struct {
-	CDPConfig     *cdp.Config     `json:"cdp"`
-	RelayerConfig *relayer.Config `json:"relayer"`
+	CDPConfig     *cdp.Config          `json:"cdp"`
+	RelayerConfig *relayer.Config      `json:"relayer"`
+	SentryConfig  *logger.SentryConfig `json:"sentry"`
 }
 
 // Load loads the configuration from a JSON file
@@ -58,6 +60,7 @@ func Get() *Config {
 		config = &Config{
 			CDPConfig:     &cdp.Config{},
 			RelayerConfig: &relayer.Config{},
+			SentryConfig:  &logger.SentryConfig{},
 		}
 	}
 	return config

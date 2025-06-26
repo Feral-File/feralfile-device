@@ -4,7 +4,7 @@ use uuid::Uuid;
 pub const CACHE_FILEPATH: &str = "/home/feralfile/.state/setupd";
 pub const TIMEZONE_CMD: &str = "/home/feralfile/scripts/feral-timesyncd.sh";
 pub const TIMEZONE_INSTRUCTION: &str = "set-time";
-pub const SSID_CACHE_TTL: u64 = 5 * 60 * 1000; // 5 minutes
+pub const SSID_CACHE_TTL: u64 = 10 * 60 * 1000; // 10 minutes
 pub const BLE_SHUTDOWN_DELAY: u64 = 1000; // 1 second
 pub const WIFI_WEBAPP_DELAY: u64 = 3 * 1000; // 3 seconds
 
@@ -61,5 +61,5 @@ pub const DBUS_RELAYER_TOPIC_ID_METHOD: &str = "GetRelayerTopicID";
 pub const DBUS_MAX_RETRIES: usize = 6;
 pub const DBUS_ACK_TIMEOUT: u64 = 5 * 1000; // 5 seconds
 pub const DBUS_INTERNET_CHECK_TIMEOUT: u64 = 1 * 1000; // 1 second
-pub const DBUS_RELAYER_CHECK_TIMEOUT: u64 = 6 * 1000; // 1 second
+pub const DBUS_RELAYER_CHECK_TIMEOUT: u64 = 31 * 1000; // 31 seconds
 pub const DBUS_LISTEN_WAKE_UP_INTERVAL: u64 = 1000; // 1 second
