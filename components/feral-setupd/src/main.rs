@@ -90,6 +90,7 @@ async fn main() -> Result<()> {
     let used_to_connect = app_state.app_cache.get(cache::CONNECTED);
     if !has_internet {
         // Show the QRCode so the user can do something with the internet
+        ssids_cacher.trigger_refresh();
         let _ = show_qrcode(&app_state, &chrome).await;
         app_state.auto_proceed.store(true, Ordering::Release);
         let app_state = app_state.clone();
