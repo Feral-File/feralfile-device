@@ -87,6 +87,7 @@ async fn main() -> Result<()> {
     println!("MAIN: Bluetooth advertising started successfully");
 
     let has_internet = app_state.internet.is_online(true).await;
+    let used_to_connect = app_state.app_cache.get(cache::CONNECTED);
     if !has_internet {
         // Show the QRCode so the user can do something with the internet
         let _ = show_qrcode(&app_state, &chrome).await;
@@ -94,7 +95,19 @@ async fn main() -> Result<()> {
         let app_state = app_state.clone();
         let chrome = chrome.clone();
         tokio::spawn(async move {
-            app_state.internet.wait_until_online().await;
+            // If the device used to be able to connect to the internet
+            // We should be more aggressive with the polling (we want to take action as soon as users fix the internet)
+            // Otherwise, we should be more conservative as users might plug in the LAN cable, but this is rare
+            let urgency = if used_to_connect.is_some() {
+                Duration::from_secs(2)
+            } else {
+                Duration::from_secs(10)
+            };
+            app_state.internet.wait_until_online(urgency).await;
+            if used_to_connect.is_none() {
+                app_state.app_cache.set(cache::CONNECTED, "true");
+                app_state.app_cache.save(constant::CACHE_FILEPATH).unwrap();
+            }
             // If the user has chosen to provide a different wifi
             // This will be false and we should not proceed
             if app_state.auto_proceed.load(Ordering::Acquire) {
@@ -102,6 +115,10 @@ async fn main() -> Result<()> {
             }
         });
     } else {
+        if used_to_connect.is_none() {
+            app_state.app_cache.set(cache::CONNECTED, "true");
+            app_state.app_cache.save(constant::CACHE_FILEPATH).unwrap();
+        }
         on_startup_with_internet(app_state.clone(), chrome.clone()).await;
     }
 

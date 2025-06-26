@@ -22,6 +22,7 @@ pub struct Cache {
 }
 
 pub const TOPIC_ID: &str = "topic_id";
+pub const CONNECTED: &str = "connected"; // This key determines whether the device is used to connect to the internet
 
 impl Cache {
     pub fn new(filepath: &str) -> Result<Self> {

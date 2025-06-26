@@ -72,18 +72,17 @@ impl Connectivity {
     }
 
     /// Suspends until the state flips to *online*.
-    pub async fn wait_until_online(&self) {
-        // Clone the receiver so we can hold a mutable handle locally.
-        let mut rx = self.inner.rx.clone();
+    /// Duration allows the caller to set the urgency of the wait.
+    pub async fn wait_until_online(&self, duration: Duration) {
         loop {
-            // Fast‑path: already online
-            if *rx.borrow() {
+            // Force a fresh check so callers don't have to wait for
+            // the 30‑second background refresher.
+            if self.is_online(true).await {
                 return;
             }
-            // Suspend until the next update; bail out if the sender is gone.
-            if rx.changed().await.is_err() {
-                return;
-            }
+            // Poll again after a short delay—fast enough for UX, but
+            // still light on DBus calls.
+            time::sleep(duration).await;
         }
     }
 }
@@ -93,7 +92,7 @@ impl Connectivity {
 // -------------------------------------------------------------------------
 
 async fn background_refresher(tx: watch::Sender<bool>) {
-    let mut ticker = time::interval(Duration::from_secs(30));
+    let mut ticker = time::interval(Duration::from_secs(60));
 
     loop {
         ticker.tick().await;
