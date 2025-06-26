@@ -10,8 +10,8 @@
 |-----------|----------|--------------|----------|
 | **feral-connectd** | Go | ![feral-connectd](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml/badge.svg) | [![feral-connectd coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg?flag=feral-connectd)](https://codecov.io/gh/feral-file/feralfile-device) |
 | **feral-setupd** | Rust | ![feral-setupd](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml/badge.svg) | [![feral-setupd coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg?flag=feral-setupd)](https://codecov.io/gh/feral-file/feralfile-device) |
-| **feral-sys-monitord** | Go | ![feral-sys-monitord](https://github.com/feral-file/feralfile-device/workflows/Component%20Testing/badge.svg?job=test-feral-sys-monitord) | [![feral-sys-monitord coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg?flag=feral-sys-monitord)](https://codecov.io/gh/feral-file/feralfile-device) |
-| **feral-watchdog** | Go | ![feral-watchdog](https://github.com/feral-file/feralfile-device/workflows/Component%20Testing/badge.svg?job=test-feral-watchdog) | [![feral-watchdog coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg?flag=feral-watchdog)](https://codecov.io/gh/feral-file/feralfile-device) |
+| **feral-sys-monitord** | Go | ![feral-sys-monitord](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml/badge.svg) | [![feral-sys-monitord coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg?flag=feral-sys-monitord)](https://codecov.io/gh/feral-file/feralfile-device) |
+| **feral-watchdog** | Go | ![feral-watchdog](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml/badge.svg) | [![feral-watchdog coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg?flag=feral-watchdog)](https://codecov.io/gh/feral-file/feralfile-device) |
 
 ---
 
