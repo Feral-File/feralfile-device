@@ -31,7 +31,7 @@ pub async fn current_version() -> Result<String> {
 
 pub async fn latest_version() -> Result<String> {
     let current = read_local_cfg().await?;
-    let remote_versions = fetch_remote_version(&current.branch, &current.acc, &current.pwd).await?;
+    let remote_versions = fetch_remote_version(&current).await?;
     let latest = remote_versions.latest_version;
     Ok(latest.to_string())
 }
@@ -40,7 +40,7 @@ pub async fn latest_version() -> Result<String> {
 /// minimum supported version and an update is therefore required.
 pub async fn is_update_required() -> Result<bool> {
     let current = read_local_cfg().await?;
-    let remote_versions = fetch_remote_version(&current.branch, &current.acc, &current.pwd).await?;
+    let remote_versions = fetch_remote_version(&current).await?;
     let min_version = remote_versions.min_version;
     Ok(current.version < min_version)
 }
@@ -170,6 +170,7 @@ struct LocalConfigJSON {
     version: String,
     distribution_acc: String,
     distribution_pass: String,
+    endpoint: String,
 }
 
 #[derive(Debug, Clone)]
@@ -178,6 +179,7 @@ struct RunningBuild {
     version: Version,
     acc: String,
     pwd: String,
+    endpoint: String,
 }
 
 async fn read_local_cfg() -> Result<RunningBuild> {
@@ -195,6 +197,7 @@ async fn read_local_cfg() -> Result<RunningBuild> {
         version,
         acc: cfg.distribution_acc,
         pwd: cfg.distribution_pass,
+        endpoint: cfg.endpoint,
     };
     CURRENT_BUILD.set(build.clone()).unwrap();
     Ok(build)
@@ -212,15 +215,20 @@ struct UpstreamVersion {
     latest_version: Version,
 }
 
-async fn fetch_remote_version(branch: &str, acc: &str, pwd: &str) -> Result<UpstreamVersion> {
+async fn fetch_remote_version(current: &RunningBuild) -> Result<UpstreamVersion> {
     if let Some(versions) = REMOTE_VERSIONS.get() {
         return Ok(versions.clone());
     }
 
-    let url = format!("{}{}", constant::UPDATER_UPSTREAM_CONFIG_URL_PREFIX, branch);
+    let url = format!(
+        "{}{}{}",
+        current.endpoint,
+        constant::UPDATER_UPSTREAM_CONFIG_URL_SUFFIX,
+        current.branch
+    );
     let resp = reqwest::Client::new()
         .get(&url)
-        .basic_auth(acc, Some(pwd))
+        .basic_auth(&current.acc, Some(&current.pwd))
         .send()
         .await
         .with_context(|| format!("fetching {}", url))?;

@@ -10,8 +10,7 @@ pub const WIFI_WEBAPP_DELAY: u64 = 3 * 1000; // 3 seconds
 
 // Updater configuration
 pub const UPDATER_LOCAL_CONFIG_PATH: &str = "/home/feralfile/x1-config.json";
-pub const UPDATER_UPSTREAM_CONFIG_URL_PREFIX: &str =
-    "https://feralfile-device-distribution.bitmark-development.workers.dev/api/latest/";
+pub const UPDATER_UPSTREAM_CONFIG_URL_SUFFIX: &str = "/api/latest/";
 pub const UPDATER_PROCESS_LOG_FILE: &str = "/home/feralfile/.logs/updaterd.log";
 pub const UPDATER_FAILED_TO_CHECK_VERSION_MSG: &str =
     "Failed to check for updates, please try again later.";
