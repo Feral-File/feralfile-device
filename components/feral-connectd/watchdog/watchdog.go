@@ -1,4 +1,4 @@
-package main
+package watchdog
 
 import (
 	"context"
@@ -8,28 +8,35 @@ import (
 	"go.uber.org/zap"
 )
 
-// Watchdog handles systemd watchdog notifications
-type Watchdog struct {
-	interval time.Duration
-	done     chan struct{}
-	logger   *zap.Logger
+const INTERVAL = 15 * time.Second
+
+//go:generate mockgen -source=watchdog.go -destination=../mocks/mock_watchdog.go -package=mocks -mock_names=Interface=MockWatchdog
+
+type Interface interface {
+	Start(ctx context.Context)
+	Stop()
 }
 
-// NewWatchdog creates a new watchdog with the given interval
-func NewWatchdog(interval time.Duration, logger *zap.Logger) *Watchdog {
+// Watchdog handles systemd watchdog notifications
+type Watchdog struct {
+	done   chan struct{}
+	logger *zap.Logger
+}
+
+// New creates a new watchdog with the given interval
+func New(logger *zap.Logger) *Watchdog {
 	return &Watchdog{
-		interval: interval,
-		done:     make(chan struct{}),
-		logger:   logger,
+		done:   make(chan struct{}),
+		logger: logger,
 	}
 }
 
 // Start starts the watchdog process
 func (w *Watchdog) Start(ctx context.Context) {
-	ticker := time.NewTicker(w.interval)
+	ticker := time.NewTicker(INTERVAL)
 	defer ticker.Stop()
 
-	w.logger.Info("Starting watchdog", zap.Duration("interval", w.interval))
+	w.logger.Info("Starting watchdog", zap.Duration("interval", INTERVAL))
 
 	for {
 		select {

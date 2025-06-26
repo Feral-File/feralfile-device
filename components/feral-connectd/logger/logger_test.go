@@ -1,10 +1,11 @@
-package main
+package logger_test
 
 import (
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/logger"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -15,12 +16,12 @@ func TestSentryCore_Write(t *testing.T) {
 	observedCore, logs := observer.New(zapcore.InfoLevel)
 
 	// Create a mock Sentry config (disabled)
-	sentryConfig := &SentryConfig{
+	sentryConfig := &logger.SentryConfig{
 		DSN: "", // Empty DSN means disabled
 	}
 
 	// Create Sentry core with the observed core
-	sentryCore := NewSentryCore(observedCore, sentryConfig)
+	sentryCore := logger.NewSentryCore(observedCore, sentryConfig)
 
 	// Create logger with the Sentry core
 	logger := zap.New(sentryCore)
@@ -46,7 +47,7 @@ func TestSentryCore_Write(t *testing.T) {
 }
 
 func TestSentryCore_fieldsToMap(t *testing.T) {
-	sentryCore := &SentryCore{}
+	sentryCore := &logger.SentryCore{}
 
 	fields := []zapcore.Field{
 		zap.String("string_field", "test"),
@@ -56,7 +57,7 @@ func TestSentryCore_fieldsToMap(t *testing.T) {
 		zap.Error(errors.New("test error")),
 	}
 
-	result := sentryCore.fieldsToMap(fields)
+	result := sentryCore.FieldsToMap(fields)
 
 	// Verify string field
 	if result["string_field"] != "test" {
@@ -85,7 +86,7 @@ func TestSentryCore_fieldsToMap(t *testing.T) {
 }
 
 func TestSentryCore_findErrorField(t *testing.T) {
-	sentryCore := &SentryCore{}
+	sentryCore := &logger.SentryCore{}
 
 	testError := errors.New("test error")
 	fields := []zapcore.Field{
@@ -94,7 +95,7 @@ func TestSentryCore_findErrorField(t *testing.T) {
 		zap.Int("int_field", 123),
 	}
 
-	foundError := sentryCore.findErrorField(fields)
+	foundError := sentryCore.FindErrorField(fields)
 
 	if foundError == nil {
 		t.Error("Expected to find an error field, but got nil")
@@ -106,14 +107,14 @@ func TestSentryCore_findErrorField(t *testing.T) {
 }
 
 func TestSentryCore_findErrorField_NoError(t *testing.T) {
-	sentryCore := &SentryCore{}
+	sentryCore := &logger.SentryCore{}
 
 	fields := []zapcore.Field{
 		zap.String("string_field", "test"),
 		zap.Int("int_field", 123),
 	}
 
-	foundError := sentryCore.findErrorField(fields)
+	foundError := sentryCore.FindErrorField(fields)
 
 	if foundError != nil {
 		t.Errorf("Expected no error field, but got %v", foundError)

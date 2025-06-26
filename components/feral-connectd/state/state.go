@@ -1,8 +1,7 @@
-package main
+package state
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,12 +17,16 @@ const (
 var (
 	stateLock sync.Mutex
 	state     *State
-
-	errRelayerChanNotReady = errors.New("relayer channel is not ready")
 )
 
 type RelayerState struct {
 	TopicID string `json:"topicId"`
+}
+
+type Device struct {
+	ID       string `json:"device_id"`
+	Name     string `json:"device_name"`
+	Platform int    `json:"platform"`
 }
 
 func (r *RelayerState) IsReady() bool {
@@ -35,8 +38,8 @@ type State struct {
 	Relayer         *RelayerState `json:"relayer"`
 }
 
-// LoadState loads state from file or creates a new one if file doesn't exist
-func LoadState(logger *zap.Logger) (*State, error) {
+// Load loads state from file or creates a new one if file doesn't exist
+func Load(logger *zap.Logger) (*State, error) {
 	logger.Info("Loading state", zap.String("file", STATE_FILE))
 
 	// Ensure directory exists

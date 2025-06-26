@@ -1,4 +1,4 @@
-package main
+package status
 
 import (
 	"context"
@@ -8,39 +8,49 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/cdp"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"go.uber.org/zap"
 )
 
 const (
-	STATUS_POLL_INTERVAL = 5 * time.Second
+	POLL_INTERVAL = 5 * time.Second
 )
 
-// StatusPoller handles periodic polling of both player status via CDP and device status
-type StatusPoller struct {
+//go:generate mockgen -source=status.go -destination=../mocks/mock_status.go -package=mocks -mock_names=PollerInterface=MockStatusPoller
+
+type PollerInterface interface {
+	Start(ctx context.Context)
+	Stop()
+	ForceRefresh()
+}
+
+// Poller handles periodic polling of both player status via CDP and device status
+type Poller struct {
 	sync.RWMutex
-	cdp         *CDPClient
-	relayer     *RelayerClient
+	cdp         cdp.ClientInterface
+	relayer     relayer.ClientInterface
 	logger      *zap.Logger
 	stopChan    chan struct{}
 	refreshChan chan struct{}
 
 	// Store last status hashes for each notification type to avoid duplicate notifications
-	lastStatusHashes map[NotificationType]string
+	lastStatusHashes map[relayer.NotificationType]string
 }
 
-func NewStatusPoller(cdp *CDPClient, relayer *RelayerClient, logger *zap.Logger) *StatusPoller {
-	return &StatusPoller{
+func NewPoller(cdp cdp.ClientInterface, relay relayer.ClientInterface, logger *zap.Logger) *Poller {
+	return &Poller{
 		cdp:              cdp,
-		relayer:          relayer,
+		relayer:          relay,
 		logger:           logger,
 		stopChan:         make(chan struct{}),
 		refreshChan:      make(chan struct{}, 10), // Buffered channel to prevent blocking
-		lastStatusHashes: make(map[NotificationType]string),
+		lastStatusHashes: make(map[relayer.NotificationType]string),
 	}
 }
 
 // computeStatusHash computes a fast MD5 hash of the status data for comparison
-func (s *StatusPoller) computeStatusHash(data interface{}) (string, error) {
+func (s *Poller) computeStatusHash(data interface{}) (string, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return "", err
@@ -52,7 +62,7 @@ func (s *StatusPoller) computeStatusHash(data interface{}) (string, error) {
 
 // shouldSendNotification checks if the status has changed since last notification
 // Returns true if status changed or if this is the first time checking this status type
-func (s *StatusPoller) shouldSendNotification(notificationType NotificationType, data interface{}) bool {
+func (s *Poller) shouldSendNotification(notificationType relayer.NotificationType, data interface{}) bool {
 	if data == nil {
 		return false
 	}
@@ -81,11 +91,11 @@ func (s *StatusPoller) shouldSendNotification(notificationType NotificationType,
 	return false
 }
 
-func (s *StatusPoller) Start(ctx context.Context) {
+func (s *Poller) Start(ctx context.Context) {
 	s.logger.Info("Starting status polling (player and device)")
 
 	// Ticker for player and device status (every 10 seconds)
-	statusTicker := time.NewTicker(STATUS_POLL_INTERVAL)
+	statusTicker := time.NewTicker(POLL_INTERVAL)
 	defer statusTicker.Stop()
 
 	// Poll immediately on start
@@ -111,13 +121,13 @@ func (s *StatusPoller) Start(ctx context.Context) {
 	}
 }
 
-func (s *StatusPoller) Stop() {
+func (s *Poller) Stop() {
 	s.logger.Info("Stopping status polling")
 	close(s.stopChan)
 }
 
 // ForceRefresh triggers an immediate status poll
-func (s *StatusPoller) ForceRefresh() {
+func (s *Poller) ForceRefresh() {
 	select {
 	case s.refreshChan <- struct{}{}:
 		// Successfully queued refresh
@@ -127,7 +137,7 @@ func (s *StatusPoller) ForceRefresh() {
 	}
 }
 
-func (s *StatusPoller) pollPlayerStatus(ctx context.Context) {
+func (s *Poller) pollPlayerStatus(ctx context.Context) {
 	// Check if relayer is connected before polling
 	if !s.relayer.IsConnected() {
 		s.logger.Debug("Relayer not connected, skipping player status poll")
@@ -153,7 +163,7 @@ func (s *StatusPoller) pollPlayerStatus(ctx context.Context) {
 	}
 
 	// Send CDP request using the same format as mediator
-	result, err := s.cdp.SendCDPRequest(CDP_METHOD_EVALUATE, map[string]interface{}{
+	result, err := s.cdp.Send(cdp.METHOD_EVALUATE, map[string]interface{}{
 		"expression": fmt.Sprintf("window.handleCDPRequest(%s)", string(payloadBytes)),
 	})
 	if err != nil {
@@ -176,18 +186,18 @@ func (s *StatusPoller) pollPlayerStatus(ctx context.Context) {
 	}
 
 	// Check if we should send this notification
-	if !s.shouldSendNotification(NOTIFICATION_TYPE_PLAYER_STATUS, message) {
+	if !s.shouldSendNotification(relayer.NOTIFICATION_TYPE_PLAYER_STATUS, message) {
 		s.logger.Debug("Player status unchanged, skipping notification")
 		return
 	}
 
-	err = s.relayer.sendNotification(ctx, NOTIFICATION_TYPE_PLAYER_STATUS, message)
+	err = s.relayer.SendNotification(ctx, relayer.NOTIFICATION_TYPE_PLAYER_STATUS, message)
 	if err != nil {
 		s.logger.Error("Failed to send player status notification", zap.Error(err))
 	}
 }
 
-func (s *StatusPoller) pollDeviceStatus(ctx context.Context) {
+func (s *Poller) pollDeviceStatus(ctx context.Context) {
 	// Check if relayer is connected before polling
 	if !s.relayer.IsConnected() {
 		s.logger.Debug("Relayer not connected, skipping device status poll")
@@ -204,13 +214,13 @@ func (s *StatusPoller) pollDeviceStatus(ctx context.Context) {
 	}
 
 	// Check if we should send this notification
-	if !s.shouldSendNotification(NOTIFICATION_TYPE_DEVICE_STATUS, deviceStatus) {
+	if !s.shouldSendNotification(relayer.NOTIFICATION_TYPE_DEVICE_STATUS, deviceStatus) {
 		s.logger.Debug("Device status unchanged, skipping notification")
 		return
 	}
 
 	// Send the device status as a notification
-	err = s.relayer.sendNotification(ctx, NOTIFICATION_TYPE_DEVICE_STATUS, deviceStatus)
+	err = s.relayer.SendNotification(ctx, relayer.NOTIFICATION_TYPE_DEVICE_STATUS, deviceStatus)
 	if err != nil {
 		s.logger.Error("Failed to send device status notification", zap.Error(err))
 	}

@@ -1,25 +1,27 @@
-package main
+package logger_test
 
 import (
 	"context"
 	"fmt"
 	"testing"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/logger"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"github.com/getsentry/sentry-go"
 	"go.uber.org/zap/zaptest"
 )
 
 func TestRelayerMessageTracer_StartTransaction(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	tracer := NewRelayerMessageTracer(logger)
+	l := zaptest.NewLogger(t)
+	tracer := logger.NewRelayerMessageTracer(l)
 
 	ctx := context.Background()
 
 	// Test system message
-	systemPayload := RelayerPayload{
-		MessageID: RELAYER_MESSAGE_ID_SYSTEM,
+	systemPayload := relayer.Payload{
+		MessageID: relayer.MESSAGE_ID_SYSTEM,
 		Message: struct {
-			Command *RelayerCmd            `json:"command,omitempty"`
+			Command *relayer.RelayerCmd    `json:"command,omitempty"`
 			Args    map[string]interface{} `json:"request,omitempty"`
 			TopicID *string                `json:"topicID,omitempty"`
 		}{
@@ -37,8 +39,8 @@ func TestRelayerMessageTracer_StartTransaction(t *testing.T) {
 	}
 
 	// Verify transaction data
-	if transaction.Data["message_id"] != RELAYER_MESSAGE_ID_SYSTEM {
-		t.Errorf("Expected message_id to be %s, got %v", RELAYER_MESSAGE_ID_SYSTEM, transaction.Data["message_id"])
+	if transaction.Data["message_id"] != relayer.MESSAGE_ID_SYSTEM {
+		t.Errorf("Expected message_id to be %s, got %v", relayer.MESSAGE_ID_SYSTEM, transaction.Data["message_id"])
 	}
 
 	if transaction.Data["topic_id"] != "test-topic-123" {
@@ -49,17 +51,17 @@ func TestRelayerMessageTracer_StartTransaction(t *testing.T) {
 }
 
 func TestRelayerMessageTracer_StartTransaction_WithCommand(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	tracer := NewRelayerMessageTracer(logger)
+	l := zaptest.NewLogger(t)
+	tracer := logger.NewRelayerMessageTracer(l)
 
 	ctx := context.Background()
 
 	// Test command message
-	connectCmd := RELAYER_CMD_CONNECT
-	commandPayload := RelayerPayload{
+	connectCmd := relayer.CMD_CONNECT
+	commandPayload := relayer.Payload{
 		MessageID: "msg-456",
 		Message: struct {
-			Command *RelayerCmd            `json:"command,omitempty"`
+			Command *relayer.RelayerCmd    `json:"command,omitempty"`
 			Args    map[string]interface{} `json:"request,omitempty"`
 			TopicID *string                `json:"topicID,omitempty"`
 		}{
@@ -75,8 +77,8 @@ func TestRelayerMessageTracer_StartTransaction_WithCommand(t *testing.T) {
 	transaction, _ := tracer.StartTransaction(ctx, commandPayload)
 
 	// Verify command data
-	if transaction.Data["command"] != string(RELAYER_CMD_CONNECT) {
-		t.Errorf("Expected command to be %s, got %v", RELAYER_CMD_CONNECT, transaction.Data["command"])
+	if transaction.Data["command"] != string(relayer.CMD_CONNECT) {
+		t.Errorf("Expected command to be %s, got %v", relayer.CMD_CONNECT, transaction.Data["command"])
 	}
 
 	if transaction.Data["has_args"] != true {
@@ -91,8 +93,8 @@ func TestRelayerMessageTracer_StartTransaction_WithCommand(t *testing.T) {
 }
 
 func TestRelayerMessageTracer_StartSpans(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	tracer := NewRelayerMessageTracer(logger)
+	l := zaptest.NewLogger(t)
+	tracer := logger.NewRelayerMessageTracer(l)
 
 	// Initialize Sentry with a dummy DSN for testing
 	_ = sentry.Init(sentry.ClientOptions{
@@ -103,10 +105,10 @@ func TestRelayerMessageTracer_StartSpans(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a transaction first
-	payload := RelayerPayload{
+	payload := relayer.Payload{
 		MessageID: "test-msg",
 		Message: struct {
-			Command *RelayerCmd            `json:"command,omitempty"`
+			Command *relayer.RelayerCmd    `json:"command,omitempty"`
 			Args    map[string]interface{} `json:"request,omitempty"`
 			TopicID *string                `json:"topicID,omitempty"`
 		}{},
@@ -126,7 +128,7 @@ func TestRelayerMessageTracer_StartSpans(t *testing.T) {
 	parseSpan.Finish()
 
 	// Test command execution span
-	connectCmd := RELAYER_CMD_CONNECT
+	connectCmd := relayer.CMD_CONNECT
 	execSpan := tracer.StartCommandExecutionSpan(tracedCtx, connectCmd)
 	if execSpan.Op != "relayer.execute" {
 		t.Errorf("Expected operation to be relayer.execute, got %s", execSpan.Op)
@@ -158,8 +160,8 @@ func TestRelayerMessageTracer_StartSpans(t *testing.T) {
 }
 
 func TestRelayerMessageTracer_FinishSpanWithError(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	tracer := NewRelayerMessageTracer(logger)
+	l := zaptest.NewLogger(t)
+	tracer := logger.NewRelayerMessageTracer(l)
 
 	// Initialize Sentry with a dummy DSN for testing
 	_ = sentry.Init(sentry.ClientOptions{
@@ -184,8 +186,8 @@ func TestRelayerMessageTracer_FinishSpanWithError(t *testing.T) {
 }
 
 func TestRelayerMessageTracer_FinishSpanWithoutError(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	tracer := NewRelayerMessageTracer(logger)
+	l := zaptest.NewLogger(t)
+	tracer := logger.NewRelayerMessageTracer(l)
 
 	// Initialize Sentry with a dummy DSN for testing
 	_ = sentry.Init(sentry.ClientOptions{
