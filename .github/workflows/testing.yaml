@@ -1,4 +1,4 @@
-name: Component Testing
+name: Test
 
 on:
   push:
