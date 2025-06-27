@@ -45,6 +45,7 @@ export default {
       return new Response(object.body, {
         headers: {
           'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
+          'Content-Length': object.size.toString(),
           'Content-Disposition': `attachment; filename="${key.split('/').pop()}"`,
         },
       });
