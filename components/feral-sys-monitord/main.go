@@ -30,7 +30,9 @@ func main() {
 	if err != nil {
 		panic("Failed to initialize logger: " + err.Error())
 	}
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -67,7 +69,9 @@ func main() {
 	if err != nil {
 		logger.Fatal("DBus init failed", zap.Error(err))
 	}
-	defer dbusClient.Stop()
+	defer func() {
+		_ = dbusClient.Stop()
+	}()
 
 	// Initialize SysMonitordDBus
 	sysMonitordDBus := NewSysMonitordDBus(connectivity, logger)

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -153,6 +154,7 @@ func (p *SysResMonitor) monitorCPUFrequency(_ context.Context) error {
 	// Get current frequency (average of all cores)
 	var sum int64
 	for _, file := range cpuFreqFiles {
+		//nolint:gosec
 		data, err := os.ReadFile(file)
 		if err != nil {
 			return err
@@ -252,7 +254,8 @@ func (p *SysResMonitor) monitorGPUFreq(ctx context.Context) error {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	output, err := cmd.Output()
-	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 124 {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 124 {
 		if err != nil {
 			p.logger.Error("Failed to get Intel GPU frequency", zap.String("stderr", stderr.String()), zap.Error(err))
 		}
@@ -301,6 +304,7 @@ func (p *SysResMonitor) monitorGPUFreq(ctx context.Context) error {
 	}
 
 	// Get the max frequency
+	//nolint:gosec
 	cmd = exec.CommandContext(ctx, "cat", "/sys/class/drm/"+card+"/gt_max_freq_mhz")
 	cmd.Stderr = &stderr
 	output, err = cmd.Output()
@@ -324,7 +328,9 @@ func (p *SysResMonitor) monitorMemory(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	scanner := bufio.NewScanner(file)
 	var memTotal, memAvailable int64
