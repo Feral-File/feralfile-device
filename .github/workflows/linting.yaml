@@ -1,0 +1,162 @@
+name: Lint Components
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # Lint Go components
+  lint-feral-connectd:
+    name: Lint feral-connectd (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./components/feral-connectd
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: components/feral-connectd/go.sum
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v2.1.6
+          working-directory: ./components/feral-connectd
+
+      - name: Run go fmt check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted. Please run 'gofmt -s -w .'"
+            gofmt -s -l .
+            exit 1
+          fi
+
+  lint-feral-watchdog:
+    name: Lint feral-watchdog (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./components/feral-watchdog
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: components/feral-watchdog/go.sum
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v2.1.6
+          working-directory: ./components/feral-watchdog
+
+      - name: Run go fmt check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted. Please run 'gofmt -s -w .'"
+            gofmt -s -l .
+            exit 1
+          fi
+
+  lint-feral-sys-monitord:
+    name: Lint feral-sys-monitord (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./components/feral-sys-monitord
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: components/feral-sys-monitord/go.sum
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v2.1.6
+          working-directory: ./components/feral-sys-monitord
+
+      - name: Run go fmt check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted. Please run 'gofmt -s -w .'"
+            gofmt -s -l .
+            exit 1
+          fi
+
+  # Lint Rust component
+  lint-feral-setupd:
+    name: Lint feral-setupd (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./components/feral-setupd
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            components/feral-setupd/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('components/feral-setupd/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Run cargo check
+        run: cargo check --verbose

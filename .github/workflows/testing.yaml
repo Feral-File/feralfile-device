@@ -1,4 +1,4 @@
-name: Test
+name: Test Components
 
 on:
   push:
@@ -170,9 +170,3 @@ jobs:
           slug: feral-file/feralfile-device
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-
-      - name: Check formatting
-        run: cargo fmt -- --check
-
-      - name: Run clippy
-        run: cargo clippy -- -D warnings
