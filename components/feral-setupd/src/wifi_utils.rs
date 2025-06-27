@@ -104,7 +104,7 @@ impl SSIDsCacher {
 
                 if !st.refreshing {
                     // Fast path: fresh cache
-                    if st.expired_at.map_or(false, |exp| exp > Instant::now()) {
+                    if st.expired_at.is_some_and(|exp| exp > Instant::now()) {
                         println!("SSIDsCacher: returning cached SSIDs");
                         let clone = st.cached_ssids.clone();
                         // If the cache is empty, we reset it
@@ -148,7 +148,7 @@ pub fn connect(ssid: &str, pass: &str) -> Result<()> {
 
     println!("Wifi: connecting to {}", ssid);
     let output = Command::new("nmcli")
-        .args(&["device", "wifi", "connect", ssid, "password", pass])
+        .args(["device", "wifi", "connect", ssid, "password", pass])
         .output()?;
 
     if output.status.success() {
@@ -163,7 +163,7 @@ pub fn connect(ssid: &str, pass: &str) -> Result<()> {
 
 fn delete(ssid: &str) -> Result<()> {
     let output = Command::new("nmcli")
-        .args(&["connection", "delete", ssid])
+        .args(["connection", "delete", ssid])
         .output()?;
 
     if output.status.success() {

@@ -1,5 +1,4 @@
 use crate::constant;
-use mac_address;
 
 pub fn decode_varint(buf: &[u8]) -> Option<(u64, usize)> {
     let mut value = 0u64;
@@ -57,7 +56,7 @@ pub fn get_device_id() -> String {
     let mac_address = mac_address::get_mac_address().unwrap_or(None);
     let mac_address = match mac_address {
         Some(mac) => mac.bytes(),
-        None => [0 as u8; 6],
+        None => [0_u8; 6],
     };
 
     let digest = md5::compute(mac_address);

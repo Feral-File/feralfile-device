@@ -151,7 +151,7 @@ fn receive_internal(
         "DBUS: Sending ack signal '{}_ack' to {}, {}",
         member, object_path, interface
     );
-    let mut ack_msg = Message::new_signal(object_path, interface, &format!("{}_ack", member))
+    let mut ack_msg = Message::new_signal(object_path, interface, format!("{}_ack", member))
         .map_err(anyhow::Error::msg)?;
     ack_msg = ack_msg.append1("");
     if conn.send(ack_msg).is_err() {
