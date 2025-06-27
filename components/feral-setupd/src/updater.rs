@@ -17,12 +17,12 @@ use tokio::{
     time,
 };
 
-/// ---------- Cache ----------
+// ---------- Cache ----------
 
 static CURRENT_BUILD: OnceLock<RunningBuild> = OnceLock::new();
 static REMOTE_VERSIONS: OnceLock<UpstreamVersion> = OnceLock::new();
 
-/// ---------- Public API ----------
+// ---------- Public API ----------
 
 pub async fn current_version() -> Result<String> {
     let current = read_local_cfg().await?;
@@ -129,7 +129,7 @@ async fn run_update_and_send(tx: mpsc::Sender<Result<String, anyhow::Error>>) ->
                                 if progress_caps.is_some() {
                                     payload.push_str(&format!(" - {}", &message_caps.as_ref().unwrap()[1]));
                                 } else {
-                                    payload.push_str(&format!("{}", &message_caps.as_ref().unwrap()[1]));
+                                    payload.push_str(&message_caps.as_ref().unwrap()[1]);
                                 }
                             }
 
@@ -162,7 +162,7 @@ async fn run_update_and_send(tx: mpsc::Sender<Result<String, anyhow::Error>>) ->
     Ok(())
 }
 
-/// ---------- Internal helpers ----------
+// ---------- Internal helpers ----------
 
 #[derive(Deserialize)]
 struct LocalConfigJSON {

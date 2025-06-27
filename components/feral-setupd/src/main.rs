@@ -11,9 +11,9 @@ mod wifi_utils;
 use crate::wifi_utils::{Error as WifiError, SSIDsCacher};
 use anyhow::Context;
 use anyhow::Result;
-use ble::BLE;
+use ble::Ble;
 use cache::Cache;
-use cdp::CDP;
+use cdp::Cdp;
 use connectivity::Connectivity;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -53,11 +53,11 @@ struct AppState {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize dependencies
-    let chrome = CDP::connect(constant::CDP_URL)
+    let chrome = Cdp::connect(constant::CDP_URL)
         .await
         .context("connecting to CDP")?;
     let chrome = Arc::new(chrome);
-    let ble_service = Arc::new(BLE::new());
+    let ble_service = Arc::new(Ble::new());
     let app_state = Arc::new(AppState {
         device_id: ble_service.get_device_id().await,
         current_version: updater::current_version().await.unwrap_or_default(),
@@ -148,7 +148,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn create_bt_connected_cb(chromium: Arc<CDP>) -> ble::BTConnectedCallback {
+fn create_bt_connected_cb(chromium: Arc<Cdp>) -> ble::BTConnectedCallback {
     Some(Box::new(move || {
         let chromium = chromium.clone();
         Box::pin(async move {
@@ -159,7 +159,7 @@ fn create_bt_connected_cb(chromium: Arc<CDP>) -> ble::BTConnectedCallback {
 
 fn create_connect_wifi_cb(
     app_state: Arc<AppState>,
-    chromium: Arc<CDP>,
+    chromium: Arc<Cdp>,
 ) -> ble::ConnectWifiCallback {
     Box::new(move |ssid, pwd| {
         let app_state = app_state.clone();
@@ -214,7 +214,7 @@ fn create_connect_wifi_cb(
     })
 }
 
-fn create_keep_wifi_cb(app_state: Arc<AppState>, chromium: Arc<CDP>) -> ble::KeepWifiCallback {
+fn create_keep_wifi_cb(app_state: Arc<AppState>, chromium: Arc<Cdp>) -> ble::KeepWifiCallback {
     Box::new(move || {
         let app_state = app_state.clone();
         let chromium = chromium.clone();
@@ -229,7 +229,7 @@ fn create_keep_wifi_cb(app_state: Arc<AppState>, chromium: Arc<CDP>) -> ble::Kee
 
 async fn internet_setup_successfully_cb(
     app_state: &Arc<AppState>,
-    chromium: &Arc<CDP>,
+    chromium: &Arc<Cdp>,
 ) -> Result<String, u8> {
     // Update the firmware / software if required
     match updater::is_update_required().await {
@@ -243,7 +243,7 @@ async fn internet_setup_successfully_cb(
         Ok(false) => {} // No update required, proceed with the normal flow
         Err(e) => {
             eprintln!("MAIN: Error checking for update: {}", e);
-            let _ = show_message(&chromium, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
+            let _ = show_message(chromium, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
             return Err(constant::BLE_ERR_CODE_VERSION_CHECK_FAILED);
         }
     }
@@ -289,7 +289,7 @@ fn create_get_info_cb(app_state: Arc<AppState>) -> ble::GetInfoCallback {
 
 fn create_qrcode_switch_cb(
     app_state: Arc<AppState>,
-    chromium: Arc<CDP>,
+    chromium: Arc<Cdp>,
 ) -> dbus_utils::ListenCallback {
     Box::new(move |msg| {
         let chromium = chromium.clone();
@@ -338,8 +338,8 @@ async fn wait_for_shutdown() {
     }
 }
 
-async fn show_qrcode(app_state: &Arc<AppState>, chrome: &Arc<CDP>) -> Result<()> {
-    let qrcode_url = build_qrcode_url(&app_state).await;
+async fn show_qrcode(app_state: &Arc<AppState>, chrome: &Arc<Cdp>) -> Result<()> {
+    let qrcode_url = build_qrcode_url(app_state).await;
     // QRCode url is dynamically built
     // So we always navigate to make sure the url is correct
     let mut page = app_state.page.lock().await;
@@ -352,7 +352,7 @@ async fn show_qrcode(app_state: &Arc<AppState>, chrome: &Arc<CDP>) -> Result<()>
     Ok(())
 }
 
-async fn on_startup_with_internet(app_state: Arc<AppState>, chrome: Arc<CDP>) {
+async fn on_startup_with_internet(app_state: Arc<AppState>, chrome: Arc<Cdp>) {
     // If the update process is triggered and it takes over the chromium
     // We should not proceed with the normal flow any more
     // The device needs to automatically restart to apply the update
@@ -379,7 +379,7 @@ async fn on_startup_with_internet(app_state: Arc<AppState>, chrome: Arc<CDP>) {
     }
 }
 
-async fn update(chrome: Arc<CDP>) -> Result<()> {
+async fn update(chrome: Arc<Cdp>) -> Result<()> {
     let latest_version = updater::latest_version().await.unwrap_or_default();
     let base_msg = format!("{} {}", &constant::UPDATING_MSG_PREFIX, latest_version);
     let default_subtext = constant::UPDATING_MSG_SUBTEXT;
@@ -402,7 +402,7 @@ async fn update(chrome: Arc<CDP>) -> Result<()> {
     Ok(())
 }
 
-async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<CDP>) -> Result<()> {
+async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<Cdp>) -> Result<()> {
     let mut page = app_state.page.lock().await;
     // For webapp, we only navigate if the page is not it already
     if *page == Page::WebApp {
@@ -421,7 +421,7 @@ async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<CDP>) -> Result<()>
     Ok(())
 }
 
-async fn show_message(chrome: &Arc<CDP>, message: &str) -> Result<()> {
+async fn show_message(chrome: &Arc<Cdp>, message: &str) -> Result<()> {
     let message_url = format!("{}{}", constant::MSG_URL_PREFIX, message);
     chrome
         .navigate(&message_url)

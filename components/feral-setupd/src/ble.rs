@@ -47,11 +47,11 @@ struct Inner {
     app_handle: Option<ApplicationHandle>,
 }
 
-pub struct BLE {
+pub struct Ble {
     inner: Mutex<Inner>,
 }
 
-impl BLE {
+impl Ble {
     pub fn new() -> Self {
         let device_id = encoding::get_device_id();
         Self {
@@ -394,7 +394,7 @@ async fn handle_set_time(
         );
         return Ok(());
     }
-    match task::spawn_blocking(move || {
+    if let Err(e) = task::spawn_blocking(move || {
         let timezone = &params[0];
         let time = &params[1];
         let result = Command::new(constant::TIMEZONE_CMD)
@@ -411,10 +411,7 @@ async fn handle_set_time(
     })
     .await
     {
-        Err(e) => {
-            eprintln!("BLE: Failed to start time setting thread: {}", e);
-        }
-        _ => (),
+        eprintln!("BLE: Failed to start time setting thread: {}", e);
     };
     Ok(())
 }

@@ -30,16 +30,14 @@ impl Cache {
         if Path::new(filepath).exists() {
             let file = File::open(filepath)?;
             let reader = BufReader::new(file);
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-                    let (key, value) = line
-                        .split_once("=")
-                        .ok_or(Error::InvalidFormat(line.clone()))?;
-                    data.insert(key.to_string(), value.to_string());
+            for line in reader.lines().map_while(std::result::Result::ok) {
+                if line.trim().is_empty() {
+                    continue;
                 }
+                let (key, value) = line
+                    .split_once("=")
+                    .ok_or(Error::InvalidFormat(line.clone()))?;
+                data.insert(key.to_string(), value.to_string());
             }
         }
         Ok(Self {

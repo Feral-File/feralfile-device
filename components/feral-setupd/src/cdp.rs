@@ -49,14 +49,14 @@ struct Target {
     web_socket_debugger_url: Option<String>,
 }
 
-pub struct CDP {
+pub struct Cdp {
     #[allow(dead_code)]
     ws_url: String,
     socket: Arc<Mutex<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
     current_id: AtomicU64,
 }
 
-impl CDP {
+impl Cdp {
     /// Asynchronously create a new CDP client by fetching the WebSocket URL and connecting.
     pub async fn connect(cdp_url: &str) -> Result<Self> {
         let ws_url = Self::get_ws_url(cdp_url).await?;
@@ -119,7 +119,7 @@ impl CDP {
                 if let Message::Text(text) = msg {
                     if let Ok(resp) = serde_json::from_str::<Value>(&text) {
                         // If the response is for the command we sent, return the result.
-                        if resp.get("id").and_then(|v| v.as_u64()) == Some(id as u64) {
+                        if resp.get("id").and_then(|v| v.as_u64()) == Some(id) {
                             println!("CDP: Response for {}: {}", method, resp);
                             if let Some(err) = resp.get("error") {
                                 return Err(Error::Command(err.to_string()));
