@@ -1,9 +1,9 @@
 # Feral File Portal: Radxa X4 Digital Art Display System
 
 [![Build Status](https://github.com/feral-file/feralfile-device/workflows/Test%20Components/badge.svg)](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml)
+[![Linter](https://github.com/feral-file/feralfile-device/workflows/Lint%20Components/badge.svg)](https://github.com/feral-file/feralfile-device/actions/workflows/linting.yaml)
 [![Image Build](https://github.com/feral-file/feralfile-device/workflows/Build%20Arch%20Linux%20Image%20for%20Radxa%20X4/badge.svg)](https://github.com/feral-file/feralfile-device/actions/workflows/build-image-to-cf.yml)
 [![Code Coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg)](https://codecov.io/gh/feral-file/feralfile-device)
-[![Linter](https://github.com/feral-file/feralfile-device/workflows/Lint%20Components/badge.svg)](https://github.com/feral-file/feralfile-device/actions/workflows/linting.yaml)
 
 ## Component Coverage
 
