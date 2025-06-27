@@ -151,7 +151,9 @@ func fetchLatestVersion(ctx context.Context, endpoint, branch, account, pass str
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("API returned status %d", resp.StatusCode)

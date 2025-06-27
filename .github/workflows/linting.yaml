@@ -1,4 +1,4 @@
-name: Test Components
+name: Lint Components
 
 on:
   push:
@@ -6,13 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
-env:
-  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
 jobs:
-  # Test Go components
-  test-feral-connectd:
-    name: Test feral-connectd (Go)
+  # Lint Go components
+  lint-feral-connectd:
+    name: Lint feral-connectd (Go)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -34,21 +31,22 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      - name: Run tests with coverage
-        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
         with:
-          files: ./components/feral-connectd/coverage.out
-          slug: feral-file/feralfile-device
-          flags: feral-connectd
-          name: feral-connectd-coverage
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+          version: v2.1.6
+          working-directory: ./components/feral-connectd
 
-  test-feral-watchdog:
-    name: Test feral-watchdog (Go)
+      - name: Run go fmt check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted. Please run 'gofmt -s -w .'"
+            gofmt -s -l .
+            exit 1
+          fi
+
+  lint-feral-watchdog:
+    name: Lint feral-watchdog (Go)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -70,21 +68,22 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      - name: Run tests with coverage
-        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
         with:
-          files: ./components/feral-watchdog/coverage.out
-          slug: feral-file/feralfile-device
-          flags: feral-watchdog
-          name: feral-watchdog-coverage
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+          version: v2.1.6
+          working-directory: ./components/feral-watchdog
 
-  test-feral-sys-monitord:
-    name: Test feral-sys-monitord (Go)
+      - name: Run go fmt check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted. Please run 'gofmt -s -w .'"
+            gofmt -s -l .
+            exit 1
+          fi
+
+  lint-feral-sys-monitord:
+    name: Lint feral-sys-monitord (Go)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -106,22 +105,23 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      - name: Run tests with coverage
-        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
         with:
-          files: ./components/feral-sys-monitord/coverage.out
-          slug: feral-file/feralfile-device
-          flags: feral-sys-monitord
-          name: feral-sys-monitord-coverage
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+          version: v2.1.6
+          working-directory: ./components/feral-sys-monitord
 
-  # Test Rust component
-  test-feral-setupd:
-    name: Test feral-setupd (Rust)
+      - name: Run go fmt check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted. Please run 'gofmt -s -w .'"
+            gofmt -s -l .
+            exit 1
+          fi
+
+  # Lint Rust component
+  lint-feral-setupd:
+    name: Lint feral-setupd (Rust)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -139,6 +139,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: 1.88.0
+          components: rustfmt, clippy
           override: true
 
       - name: Cache Rust dependencies
@@ -152,21 +153,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
       - name: Run cargo check
-        run: cargo check --verbose
-
-      - name: Run tests with coverage
-        run: |
-          # Install cargo-tarpaulin for coverage
-          cargo install cargo-tarpaulin
-          cargo tarpaulin --out Xml --output-dir coverage
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./components/feral-setupd/coverage/cobertura.xml
-          flags: feral-setupd
-          name: feral-setupd-coverage
-          slug: feral-file/feralfile-device
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+        run: cargo check --all-targets --all-features --verbose

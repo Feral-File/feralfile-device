@@ -301,15 +301,15 @@ func TestClient_Connect_Failed(t *testing.T) {
 
 			switch tt.expectedType {
 			case "BusyErr":
-				var busyErr relayer.BusyErr
+				var busyErr relayer.BusyError
 				assert.True(t, errors.As(err, &busyErr), "Expected BusyErr but got %T", err)
 				assert.Equal(t, tt.inputError, busyErr.Err)
 			case "TransientErr":
-				var transientErr relayer.TransientErr
+				var transientErr relayer.TransientError
 				assert.True(t, errors.As(err, &transientErr), "Expected TransientErr but got %T", err)
 				assert.Equal(t, tt.inputError, transientErr.Err)
 			case "PermanentErr":
-				var permanentErr relayer.PermanentErr
+				var permanentErr relayer.PermanentError
 				assert.True(t, errors.As(err, &permanentErr), "Expected PermanentErr but got %T", err)
 				assert.Equal(t, tt.inputError, permanentErr.Err)
 			default:
@@ -427,7 +427,7 @@ func TestClient_RetryableConnect_PermanentError_NoRetry(t *testing.T) {
 	assert.Error(t, err)
 
 	// Should be a PermanentErr
-	var permanentErr relayer.PermanentErr
+	var permanentErr relayer.PermanentError
 	assert.True(t, errors.As(err, &permanentErr), "Expected PermanentErr")
 
 	assert.False(t, ts.client.IsConnected(), "expected client to remain disconnected")

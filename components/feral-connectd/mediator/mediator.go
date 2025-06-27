@@ -40,7 +40,8 @@ func New(
 	dbus dbus.ClientInterface,
 	cdp cdp.ClientInterface,
 	cmd command.HandlerInterface,
-	l *zap.Logger) *Mediator {
+	l *zap.Logger,
+) *Mediator {
 	return &Mediator{
 		relayer: relayer,
 		dbus:    dbus,

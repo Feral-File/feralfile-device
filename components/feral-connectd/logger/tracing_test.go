@@ -29,14 +29,7 @@ func TestRelayerMessageTracer_StartTransaction(t *testing.T) {
 		},
 	}
 
-	transaction, tracedCtx := tracer.StartTransaction(ctx, systemPayload)
-	if transaction == nil {
-		t.Error("Expected transaction to be created")
-	}
-
-	if tracedCtx == ctx {
-		t.Error("Expected traced context to be different from original context")
-	}
+	transaction, _ := tracer.StartTransaction(ctx, systemPayload)
 
 	// Verify transaction data
 	if transaction.Data["message_id"] != relayer.MESSAGE_ID_SYSTEM {

@@ -44,7 +44,7 @@ func Load(logger *zap.Logger) (*State, error) {
 
 	// Ensure directory exists
 	stateDir := filepath.Dir(STATE_FILE)
-	if err := os.MkdirAll(stateDir, 0755); err != nil {
+	if err := os.MkdirAll(stateDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create state directory: %w", err)
 	}
 
@@ -80,7 +80,7 @@ func (s *State) Save() error {
 
 	// Ensure directory exists
 	stateDir := filepath.Dir(STATE_FILE)
-	if err := os.MkdirAll(stateDir, 0755); err != nil {
+	if err := os.MkdirAll(stateDir, 0750); err != nil {
 		return fmt.Errorf("failed to create state directory: %w", err)
 	}
 
@@ -91,7 +91,7 @@ func (s *State) Save() error {
 
 	// Write to a temporary file first, then rename for atomic updates
 	tempFile := STATE_FILE + ".tmp"
-	if err := os.WriteFile(tempFile, data, 0644); err != nil {
+	if err := os.WriteFile(tempFile, data, 0600); err != nil {
 		return fmt.Errorf("failed to write state file: %w", err)
 	}
 

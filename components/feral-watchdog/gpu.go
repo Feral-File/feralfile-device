@@ -49,7 +49,7 @@ func (g *GPUHandler) scheduleGPUReboot(ctx context.Context) {
 	g.rebootTimer = time.AfterFunc(REBOOT_DELAY, func() {
 		select {
 		case <-ctx.Done():
-			g.logger.Info("GPU: context cancelled, skipping reboot")
+			g.logger.Info("GPU: context canceled, skipping reboot")
 		default:
 			g.mu.Lock()
 			g.rebootScheduled = false
@@ -81,7 +81,7 @@ func (g *GPUHandler) cancelReboot() {
 		return
 	}
 
-	g.logger.Info("GPU: cancelling scheduled reboot")
+	g.logger.Info("GPU: canceling scheduled reboot")
 	if g.rebootTimer == nil {
 		g.logger.Warn("GPU: timer is nil, cannot cancel")
 		return
