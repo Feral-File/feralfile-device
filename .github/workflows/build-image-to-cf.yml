@@ -205,18 +205,26 @@ jobs:
           ENCODED_PASS=$(printf '%s' "$AUTH_PASS" | jq -sRr @uri)
 
           if [ "${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}" = "Production" ]; then
+            BUILD_DOMAIN="x1.feral-file.workers.dev"
             DOMAIN="x1.feral-file.workers.dev"
           else
+            BUILD_DOMAIN="feralfile-device-distribution.bitmark-development.workers.dev"
             DOMAIN="x1.feral-file.workers.dev"
           fi
+
+          cp /build/archiso-radxa-x4/pacman.conf /build/archiso-radxa-x4/airootfs/etc/pacman.conf
 
           cat >> /build/archiso-radxa-x4/pacman.conf << EOF
           [feralfile]
           SigLevel = Optional TrustAll
-          Server = https://${ENCODED_USER}:${ENCODED_PASS}@${DOMAIN}/archlinux/${{ github.ref_name }}/os/\$arch
+          Server = https://${ENCODED_USER}:${ENCODED_PASS}@${BUILD_DOMAIN}/archlinux/${{ github.ref_name }}/os/\$arch
           EOF
 
-          cp /build/archiso-radxa-x4/pacman.conf /build/archiso-radxa-x4/airootfs/etc/pacman.conf
+          cat >> /build/archiso-radxa-x4/airootfs/etc/pacman.conf << EOF
+          [feralfile]
+          SigLevel = Optional TrustAll
+          Server = https://${ENCODED_USER}:${ENCODED_PASS}@${DOMAIN}/archlinux/${{ github.ref_name }}/os/\$arch
+          EOF
 
       - name: Copy UI files
         run: |
