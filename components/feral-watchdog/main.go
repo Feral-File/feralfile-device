@@ -33,7 +33,9 @@ func main() {
 	if err != nil {
 		panic("Failed to initialize logger: " + err.Error())
 	}
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	logger.Info("Starting feral-watchdog daemon")
 
@@ -64,7 +66,9 @@ func main() {
 	if err != nil {
 		logger.Fatal("DBus init failed", zap.Error(err))
 	}
-	defer dbusClient.Stop()
+	defer func() {
+		_ = dbusClient.Stop()
+	}()
 
 	// Initialize system command executor
 	commandHandler := NewCommandHandler(logger)

@@ -14,7 +14,6 @@ run:
 formatters:
   enable:
     - goimports        # keeps import blocks ordered & grouped
-    - gofumpt          # gofmt + opinionated improvements
   settings:
     goimports:
       # change to your project’s import path(s)
@@ -47,6 +46,8 @@ linters:
   settings:
     misspell:
       locale: US       # US or UK spelling dictionary
+      ignore-rules:
+        - MONITORD
 
 # ==========
 # Issues UI
