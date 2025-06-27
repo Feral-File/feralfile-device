@@ -207,7 +207,7 @@ jobs:
           if [ "${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}" = "Production" ]; then
             DOMAIN="x1.feral-file.workers.dev"
           else
-            DOMAIN="feralfile-device-distribution.bitmark-development.workers.dev"
+            DOMAIN="x1.feral-file.workers.dev"
           fi
 
           cat >> /build/archiso-radxa-x4/pacman.conf << EOF
@@ -231,7 +231,7 @@ jobs:
           if [ "${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}" = "Production" ]; then
             ENDPOINT="https://x1.feral-file.workers.dev"
           else
-            ENDPOINT="https://feralfile-device-distribution.bitmark-development.workers.dev"
+            ENDPOINT="https://x1.feral-file.workers.dev"
           fi
 
           # Add connectd config
