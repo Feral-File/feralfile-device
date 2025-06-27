@@ -117,7 +117,11 @@ func (c *Client) Init(ctx context.Context) error {
 		c.mu.Unlock()
 		return fmt.Errorf("failed to fetch debug targets: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			c.logger.Warn("Failed to close response body", zap.Error(err))
+		}
+	}()
 
 	body, err := c.io.ReadAll(resp.Body)
 	if err != nil {

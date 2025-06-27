@@ -90,7 +90,7 @@ func (c *Handler) Execute(ctx context.Context, cmd Command) (interface{}, error)
 
 	bytes, err = json.Marshal(cmd.Arguments)
 	if err != nil {
-		return nil, fmt.Errorf("invalid arguments: %s", err)
+		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
 	var result interface{}
@@ -129,7 +129,7 @@ func (c *Handler) connect(args []byte) (interface{}, error) {
 	}
 	err := json.Unmarshal(args, &cmdArgs)
 	if err != nil {
-		return nil, fmt.Errorf("invalid arguments: %s", err)
+		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
 	s := state.GetState()
@@ -140,7 +140,7 @@ func (c *Handler) connect(args []byte) (interface{}, error) {
 	}
 	err = s.Save()
 	if err != nil {
-		return nil, fmt.Errorf("failed to save state: %s", err)
+		return nil, fmt.Errorf("failed to save state: %w", err)
 	}
 
 	return CmdOK, nil
@@ -152,7 +152,7 @@ func (c *Handler) showPairingQRCode(ctx context.Context, args []byte) (interface
 	}
 	err := json.Unmarshal(args, &cmdArgs)
 	if err != nil {
-		return nil, fmt.Errorf("invalid arguments: %s", err)
+		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
 	err = c.dbus.RetryableSend(ctx,
@@ -162,7 +162,7 @@ func (c *Handler) showPairingQRCode(ctx context.Context, args []byte) (interface
 			Member:    dbus.SETUPD_EVENT_SHOW_PAIRING_QR_CODE,
 			Body:      []interface{}{cmdArgs.Show},
 		})
-	return CmdOK, nil
+	return CmdOK, err
 }
 
 func (c *Handler) deviceStatus(ctx context.Context) (interface{}, error) {
@@ -176,7 +176,7 @@ func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interf
 
 	err := json.Unmarshal(args, &cmdArgs)
 	if err != nil {
-		return nil, fmt.Errorf("invalid arguments: %s", err)
+		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
 	clockwise := cmdArgs.Clockwise
@@ -190,7 +190,7 @@ func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interf
 	output, err := cmd.Output()
 	if err != nil {
 		c.logger.Error("Failed to execute wlr-randr", zap.Error(err))
-		return nil, fmt.Errorf("failed to get display info: %s", err)
+		return nil, fmt.Errorf("failed to get display info: %w", err)
 	}
 
 	// Find the active output name
@@ -251,15 +251,16 @@ func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interf
 
 	// Apply with wlr-randr (force absolute orientation)
 	// This makes wlr-randr and config file stay in sync
+	//nolint:gosec
 	rotateCmd := exec.CommandContext(ctx, "wlr-randr", "--output", outputName, "--transform", newRotation)
 	err = rotateCmd.Run()
 	if err != nil {
 		c.logger.Error("Failed to rotate screen", zap.Error(err))
-		return nil, fmt.Errorf("failed to rotate screen: %s", err)
+		return nil, fmt.Errorf("failed to rotate screen: %w", err)
 	}
 
 	// Write rotation value to file
-	if err := os.WriteFile(configPath, []byte(newRotation), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(newRotation), 0600); err != nil {
 		c.logger.Warn("Failed to save screen orientation", zap.Error(err))
 	}
 
@@ -291,7 +292,7 @@ func (c *Handler) handleKeyboardEvent(args []byte) (interface{}, error) {
 
 	err := json.Unmarshal(args, &cmdArgs)
 	if err != nil {
-		return nil, fmt.Errorf("invalid arguments: %s", err)
+		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
 	keyName := ""
@@ -317,7 +318,7 @@ func (c *Handler) handleKeyboardEvent(args []byte) (interface{}, error) {
 	_, err = c.cdp.Send("Input.dispatchKeyEvent", keyEventParams)
 	if err != nil {
 		c.logger.Error("Failed to send key via CDP", zap.Error(err))
-		return nil, fmt.Errorf("failed to send keyboard event: %s", err)
+		return nil, fmt.Errorf("failed to send keyboard event: %w", err)
 	}
 
 	// For keys that need keyUp events as well (like letters)
@@ -396,7 +397,7 @@ func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 
 	err := json.Unmarshal(args, &cursorArgs)
 	if err != nil {
-		return nil, fmt.Errorf("invalid arguments: %s", err)
+		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
 	// Convert relative positions to absolute positions
@@ -459,7 +460,7 @@ func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal positions: %s", err)
+		return nil, fmt.Errorf("failed to marshal positions: %w", err)
 	}
 
 	// Call JavaScript function to process all positions
@@ -468,7 +469,7 @@ func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 	})
 	if err != nil {
 		c.logger.Error("Failed to execute JavaScript cursor positions", zap.Error(err))
-		return nil, fmt.Errorf("failed to process cursor positions: %s", err)
+		return nil, fmt.Errorf("failed to process cursor positions: %w", err)
 	}
 
 	// 2. Send the final mouse event to actually move the cursor
@@ -486,7 +487,7 @@ func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 		_, err = c.cdp.Send("Input.dispatchMouseEvent", moveParams)
 		if err != nil {
 			c.logger.Error("Failed to move mouse via CDP", zap.Error(err))
-			return nil, fmt.Errorf("failed to move mouse: %s", err)
+			return nil, fmt.Errorf("failed to move mouse: %w", err)
 		}
 
 		c.logger.Info("Mouse moved to final position",
@@ -520,7 +521,7 @@ func (c *Handler) handleMouseTapEvent() (interface{}, error) {
 	_, err := c.cdp.Send("Input.dispatchMouseEvent", downParams)
 	if err != nil {
 		c.logger.Error("Failed to press mouse button via CDP", zap.Error(err))
-		return nil, fmt.Errorf("failed to press mouse button: %s", err)
+		return nil, fmt.Errorf("failed to press mouse button: %w", err)
 	}
 
 	// 2. Release mouse button
@@ -536,7 +537,7 @@ func (c *Handler) handleMouseTapEvent() (interface{}, error) {
 	_, err = c.cdp.Send("Input.dispatchMouseEvent", upParams)
 	if err != nil {
 		c.logger.Error("Failed to release mouse button via CDP", zap.Error(err))
-		return nil, fmt.Errorf("failed to release mouse button: %s", err)
+		return nil, fmt.Errorf("failed to release mouse button: %w", err)
 	}
 
 	return CmdOK, nil
@@ -574,7 +575,7 @@ func (c *Handler) shutdown(ctx context.Context) (interface{}, error) {
 	cmd := exec.CommandContext(ctx, "sudo", "shutdown", "-h", "now")
 
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to execute shutdown command: %s", err)
+		return nil, fmt.Errorf("failed to execute shutdown command: %w", err)
 	}
 
 	return CmdOK, nil
@@ -588,7 +589,7 @@ func (c *Handler) getSysMetrics() (interface{}, error) {
 	if c.lastSysMetrics != nil {
 		err := json.Unmarshal(c.lastSysMetrics, &sysMetrics)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal last sys metrics: %s", err)
+			return nil, fmt.Errorf("failed to unmarshal last sys metrics: %w", err)
 		}
 	}
 
@@ -602,7 +603,7 @@ func (c *Handler) updateToLatest(ctx context.Context) (interface{}, error) {
 	cmd := exec.CommandContext(ctx, "systemctl", "start", "feral-updater@00:00.service")
 
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to execute update to latest command: %s", err)
+		return nil, fmt.Errorf("failed to execute update to latest command: %w", err)
 	}
 
 	return CmdOK, nil

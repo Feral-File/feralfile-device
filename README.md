@@ -1,17 +1,16 @@
 # Feral File Portal: Radxa X4 Digital Art Display System
 
-[![Build Status](https://github.com/feral-file/feralfile-device/workflows/Component%20Testing/badge.svg)](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml)
-[![Image Build](https://github.com/feral-file/feralfile-device/workflows/Build%20Arch%20Linux%20Image%20for%20Radxa%20X4/badge.svg)](https://github.com/feral-file/feralfile-device/actions/workflows/build-image-to-cf.yml)
-[![Code Coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg)](https://codecov.io/gh/feral-file/feralfile-device)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/feral-file/feralfile-device/testing.yaml?branch=develop&label=build%20status&logo=github)](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml)
+[![Linter](https://img.shields.io/github/actions/workflow/status/feral-file/feralfile-device/linting.yaml?branch=develop&label=linter&logo=github)](https://github.com/feral-file/feralfile-device/actions/workflows/linting.yaml)
+[![Image Build](https://img.shields.io/github/actions/workflow/status/feral-file/feralfile-device/build-image-to-cf.yml?branch=develop&label=image%20build&logo=github)](https://github.com/feral-file/feralfile-device/actions/workflows/build-image-to-cf.yml)
+[![Code Coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?label=code%20coverage&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device)
 
-## Component Build Status
+## Component Coverage
 
-| Component | Language | Build Status | Coverage |
-|-----------|----------|--------------|----------|
-| **feral-connectd** | Go | ![feral-connectd](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml/badge.svg) | [![feral-connectd coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg?flag=feral-connectd)](https://codecov.io/gh/feral-file/feralfile-device) |
-| **feral-setupd** | Rust | ![feral-setupd](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml/badge.svg) | [![feral-setupd coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg?flag=feral-setupd)](https://codecov.io/gh/feral-file/feralfile-device) |
-| **feral-sys-monitord** | Go | ![feral-sys-monitord](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml/badge.svg) | [![feral-sys-monitord coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg?flag=feral-sys-monitord)](https://codecov.io/gh/feral-file/feralfile-device) |
-| **feral-watchdog** | Go | ![feral-watchdog](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml/badge.svg) | [![feral-watchdog coverage](https://codecov.io/gh/feral-file/feralfile-device/branch/develop/graph/badge.svg?flag=feral-watchdog)](https://codecov.io/gh/feral-file/feralfile-device) |
+[![feral-connectd coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-connectd&label=feral-connectd&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device)
+[![feral-setupd coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-setupd&label=feral-setupd&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device)
+[![feral-sys-monitord coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-sys-monitord&label=feral-sys-monitord&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device)
+[![feral-watchdog coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-watchdog&label=feral-watchdog&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device)
 
 ---
 
