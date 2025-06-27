@@ -1,6 +1,6 @@
 # x86‑64 Arch Linux under QEMU (runs on Apple Silicon)
 # syntax=docker/dockerfile:1
-FROM archlinux:latest
+FROM --platform=linux/amd64 archlinux:latest
 
 ENV RUSTUP_HOME=/usr/local/rustup
 ENV CARGO_HOME=/usr/local/cargo

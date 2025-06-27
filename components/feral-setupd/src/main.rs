@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
         page: Mutex::new(Page::None),
         auto_proceed: AtomicBool::new(false),
     });
-    println!("MAIN: App state initialized: {:?}", app_state);
+    println!("MAIN: App state initialized: {app_state:?}");
 
     // Start bluetooth advertising with callbacks
     // let bt_connected_cb = create_bt_connected_cb(chrome.clone());
@@ -142,7 +142,7 @@ async fn main() -> Result<()> {
     println!("MAIN: Stopping BLE service...");
     match ble_service.stop().await {
         Ok(_) => println!("MAIN: BLE service stopped"),
-        Err(e) => println!("MAIN: Error stopping BLE service: {}", e),
+        Err(e) => println!("MAIN: Error stopping BLE service: {e}"),
     }
     println!("MAIN: Shutting down...");
     Ok(())
@@ -182,10 +182,8 @@ fn create_connect_wifi_cb(
             // Connect to wifi & return early if failed
             if let Err(e) = wifi_utils::connect(&ssid, &pwd) {
                 eprintln!(
-                    "MAIN: Failed to connect to wifi \"{}\" in {:?} ms: {}",
-                    ssid,
-                    start_time.elapsed().as_millis(),
-                    e
+                    "MAIN: Failed to connect to wifi \"{ssid}\" in {:?} ms: {e}",
+                    start_time.elapsed().as_millis()
                 );
                 // Tell user that the wifi connection failed
                 task::spawn(async move {
@@ -242,7 +240,7 @@ async fn internet_setup_successfully_cb(
         }
         Ok(false) => {} // No update required, proceed with the normal flow
         Err(e) => {
-            eprintln!("MAIN: Error checking for update: {}", e);
+            eprintln!("MAIN: Error checking for update: {e}");
             let _ = show_message(chromium, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
             return Err(constant::BLE_ERR_CODE_VERSION_CHECK_FAILED);
         }
@@ -252,7 +250,7 @@ async fn internet_setup_successfully_cb(
     let topic_id = match dbus_utils::get_relayer_info() {
         Ok(info) => info,
         Err(e) => {
-            eprintln!("BLE: can't get relayer data from connectd: {}", e);
+            eprintln!("BLE: can't get relayer data from connectd: {e}");
             return Err(constant::BLE_ERR_CODE_SERVER_UNREACHABLE);
         }
     };
@@ -261,7 +259,7 @@ async fn internet_setup_successfully_cb(
     match app_state.app_cache.save(constant::CACHE_FILEPATH) {
         Ok(_) => {}
         Err(e) => {
-            eprintln!("MAIN: Error saving cache: {}", e);
+            eprintln!("MAIN: Error saving cache: {e}");
         }
     }
 
@@ -297,7 +295,7 @@ fn create_qrcode_switch_cb(
         let mut qrcode_requested = false;
         match msg.read1::<bool>() {
             Ok(true) => qrcode_requested = true,
-            Err(e) => println!("MAIN: Error reading message: {}", e),
+            Err(e) => println!("MAIN: Error reading message: {e}"),
             _ => {}
         }
         task::spawn(async move {
@@ -320,8 +318,8 @@ async fn build_qrcode_url(app_state: &Arc<AppState>) -> String {
     } else {
         "false"
     };
-    qrcode_url = format!("{}|{}|{}", qrcode_url, topic_id, has_internet);
-    qrcode_url = format!("{}&version={}", qrcode_url, &app_state.current_version);
+    qrcode_url = format!("{qrcode_url}|{topic_id}|{has_internet}");
+    qrcode_url = format!("{qrcode_url}&version={}", &app_state.current_version);
     qrcode_url
 }
 
@@ -346,8 +344,8 @@ async fn show_qrcode(app_state: &Arc<AppState>, chrome: &Arc<Cdp>) -> Result<()>
     chrome
         .navigate(&qrcode_url)
         .await
-        .with_context(|| format!("navigating to {}", qrcode_url))?;
-    println!("MAIN: Navigated to {}", qrcode_url);
+        .with_context(|| format!("navigating to {qrcode_url}"))?;
+    println!("MAIN: Navigated to {qrcode_url}");
     *page = Page::QRCode;
     Ok(())
 }
@@ -363,7 +361,7 @@ async fn on_startup_with_internet(app_state: Arc<AppState>, chrome: Arc<Cdp>) {
             return;
         }
         Err(e) => {
-            eprintln!("MAIN: Error checking for update: {}", e);
+            eprintln!("MAIN: Error checking for update: {e}");
             let _ = show_message(&chrome, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
             return;
         }
@@ -383,19 +381,15 @@ async fn update(chrome: Arc<Cdp>) -> Result<()> {
     let latest_version = updater::latest_version().await.unwrap_or_default();
     let base_msg = format!("{} {}", &constant::UPDATING_MSG_PREFIX, latest_version);
     let default_subtext = constant::UPDATING_MSG_SUBTEXT;
-    let _ = show_message(
-        &chrome,
-        &format!("{}&subtext={}", base_msg, default_subtext),
-    )
-    .await;
+    let _ = show_message(&chrome, &format!("{base_msg}&subtext={default_subtext}")).await;
     let mut rx = updater::spawn_updater()?;
     while let Some(res) = rx.recv().await {
         match res {
             Ok(msg) => {
-                let _ = show_message(&chrome, &format!("{}&subtext={}", &base_msg, msg)).await;
+                let _ = show_message(&chrome, &format!("{base_msg}&subtext={msg}")).await;
             }
             Err(e) => {
-                eprintln!("MAIN: Update process failed: {:#}", e);
+                eprintln!("MAIN: Update process failed: {e:#}");
             }
         }
     }
@@ -426,7 +420,7 @@ async fn show_message(chrome: &Arc<Cdp>, message: &str) -> Result<()> {
     chrome
         .navigate(&message_url)
         .await
-        .with_context(|| format!("navigating to {}", message_url))?;
-    println!("MAIN: Navigated to {}", message_url);
+        .with_context(|| format!("navigating to {message_url}"))?;
+    println!("MAIN: Navigated to {message_url}");
     Ok(())
 }
