@@ -71,7 +71,7 @@ impl SSIDsCacher {
 
             println!("SSIDsCacher: refreshing...");
             let res = list_ssids(true).await;
-            println!("SSIDsCacher: refreshed: \n{:?}", res);
+            println!("SSIDsCacher: refreshed: \n{res:?}");
             {
                 let mut st = state.lock().await;
                 match res {
@@ -143,10 +143,10 @@ pub fn connect(ssid: &str, pass: &str) -> Result<()> {
     // https://bbs.archlinux.org/viewtopic.php?id=300321&p=2
 
     if let Err(err) = delete(ssid) {
-        eprintln!("Wifi: failed to delete existing connection: {}", err);
+        eprintln!("Wifi: failed to delete existing connection: {err}");
     }
 
-    println!("Wifi: connecting to {}", ssid);
+    println!("Wifi: connecting to {ssid}");
     let output = Command::new("nmcli")
         .args(["device", "wifi", "connect", ssid, "password", pass])
         .output()?;

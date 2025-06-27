@@ -57,7 +57,7 @@ impl Cache {
         let file = File::create(filepath)?;
         let mut writer = BufWriter::new(file);
         for (key, value) in self.data.lock().iter() {
-            writer.write_all(format!("{}={}\n", key, value).as_bytes())?;
+            writer.write_all(format!("{key}={value}\n").as_bytes())?;
         }
         Ok(())
     }

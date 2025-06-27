@@ -55,7 +55,7 @@ pub fn spawn_updater() -> Result<mpsc::Receiver<Result<String, anyhow::Error>>> 
     // Detach the async task; errors are logged.
     tokio::spawn(async move {
         if let Err(e) = run_update_and_send(tx).await {
-            eprintln!("updater error: {:#?}", e);
+            eprintln!("updater error: {e:#?}");
         }
     });
 
@@ -67,13 +67,13 @@ pub fn spawn_updater() -> Result<mpsc::Receiver<Result<String, anyhow::Error>>> 
 async fn run_update_and_send(tx: mpsc::Sender<Result<String, anyhow::Error>>) -> Result<()> {
     // Compile regex patterns once
     let id = format!("setupd-{}", rand::rng().random_range(1..=u64::MAX));
-    let id_regex = Regex::new(&format!("id={}", id)).context("compiling id regex")?;
+    let id_regex = Regex::new(&format!("id={id}")).context("compiling id regex")?;
     let progress_regex = Regex::new(r"progress=(\d+)").context("compiling progress regex")?;
     let message_regex = Regex::new(r#"message="([^"]*)""#).context("compiling message regex")?;
 
     // 1. Start the systemd transient service and wait for it to finish
     let status = Command::new("systemctl")
-        .args(["start", &format!("feral-updater-run@{}.service", id)])
+        .args(["start", &format!("feral-updater-run@{id}.service")])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -82,8 +82,7 @@ async fn run_update_and_send(tx: mpsc::Sender<Result<String, anyhow::Error>>) ->
 
     if !status.success() {
         return Err(anyhow::anyhow!(
-            "Failed to start updater service: exit code {:?}",
-            status.code()
+            "Failed to start updater service: exit code {status:?}"
         ));
     }
 
@@ -93,7 +92,7 @@ async fn run_update_and_send(tx: mpsc::Sender<Result<String, anyhow::Error>>) ->
         .read(true)
         .open(log_path)
         .await
-        .with_context(|| format!("opening {}", log_path))?;
+        .with_context(|| format!("opening {log_path}"))?;
 
     file.seek(SeekFrom::End(0))
         .await
@@ -121,7 +120,7 @@ async fn run_update_and_send(tx: mpsc::Sender<Result<String, anyhow::Error>>) ->
                             let mut progress_value = "0";
                             if progress_caps.is_some() {
                                 progress_value = &progress_caps.as_ref().unwrap()[1];
-                                payload.push_str(&format!("{}%", progress_value));
+                                payload.push_str(&format!("{progress_value}%"));
                             }
 
                             let message_caps = message_regex.captures(&line);
@@ -148,7 +147,7 @@ async fn run_update_and_send(tx: mpsc::Sender<Result<String, anyhow::Error>>) ->
                             };
 
                             // Send error as Err
-                            let _ = tx.send(Err(anyhow::anyhow!("{}", error_message))).await;
+                            let _ = tx.send(Err(anyhow::anyhow!(error_message))).await;
                             break; // End the process
                         }
                     }
@@ -231,7 +230,7 @@ async fn fetch_remote_version(current: &RunningBuild) -> Result<UpstreamVersion>
         .basic_auth(&current.acc, Some(&current.pwd))
         .send()
         .await
-        .with_context(|| format!("fetching {}", url))?;
+        .with_context(|| format!("fetching {url}"))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -240,10 +239,7 @@ async fn fetch_remote_version(current: &RunningBuild) -> Result<UpstreamVersion>
             .await
             .unwrap_or_else(|_| "Failed to read response body".to_string());
         return Err(anyhow::anyhow!(
-            "HTTP {} from distributor at {}: {}",
-            status,
-            url,
-            body
+            "HTTP {status} from distributor at {url}: {body}"
         ));
     }
 
