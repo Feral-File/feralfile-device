@@ -677,7 +677,8 @@ func TestClient_Send_Success(t *testing.T) {
 				{
 					Type:                 "page",
 					Title:                "Test Page",
-					WebSocketDebuggerURL: "ws://localhost:9222/devtools/page/123"},
+					WebSocketDebuggerURL: "ws://localhost:9222/devtools/page/123",
+				},
 			}
 			return nil
 		}).

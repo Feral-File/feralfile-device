@@ -2,6 +2,7 @@ package status
 
 import (
 	"context"
+	//nolint:gosec
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
@@ -56,6 +57,7 @@ func (s *Poller) computeStatusHash(data interface{}) (string, error) {
 		return "", err
 	}
 
+	//nolint:gosec
 	hash := md5.Sum(jsonData)
 	return fmt.Sprintf("%x", hash), nil
 }

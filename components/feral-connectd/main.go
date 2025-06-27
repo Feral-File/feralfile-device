@@ -45,7 +45,9 @@ func main() {
 	if err != nil {
 		panic("Failed to initialize logger: " + err.Error())
 	}
-	defer basicLogger.Sync()
+	defer func() {
+		_ = basicLogger.Sync()
+	}()
 
 	// Load configuration
 	config, err := config.Load(basicLogger)
@@ -77,7 +79,9 @@ func main() {
 		l = basicLogger
 		l.Info("Sentry not configured, using basic logger")
 	}
-	defer l.Sync()
+	defer func() {
+		_ = l.Sync()
+	}()
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -138,7 +142,9 @@ func main() {
 	if err != nil {
 		l.Fatal("DBus init failed", zap.Error(err))
 	}
-	defer dbusClient.Stop()
+	defer func() {
+		_ = dbusClient.Stop()
+	}()
 
 	err = dbusClient.Export(dbus.NewClient(ctx, relayerClient, l), dbus.PATH, dbus.INTERFACE)
 	if err != nil {

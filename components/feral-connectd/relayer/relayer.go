@@ -93,27 +93,27 @@ type Config struct {
 type Handler func(ctx context.Context, payload Payload) error
 
 // Custom websocket error types
-type PermanentErr struct {
+type PermanentError struct {
 	Err error
 }
 
-func (e PermanentErr) Error() string {
+func (e PermanentError) Error() string {
 	return e.Err.Error()
 }
 
-type TransientErr struct {
+type TransientError struct {
 	Err error
 }
 
-func (e TransientErr) Error() string {
+func (e TransientError) Error() string {
 	return e.Err.Error()
 }
 
-type BusyErr struct {
+type BusyError struct {
 	Err error
 }
 
-func (e BusyErr) Error() string {
+func (e BusyError) Error() string {
 	return e.Err.Error()
 }
 
@@ -214,9 +214,9 @@ func (r *Client) RetryableConnect(ctx context.Context) error {
 			return nil
 		}
 
-		var permanentErr PermanentErr
-		var transientErr TransientErr
-		var busyErr BusyErr
+		var permanentErr PermanentError
+		var transientErr TransientError
+		var busyErr BusyError
 		switch {
 		case errors.Is(err, ErrAlreadyConnected):
 			return nil
@@ -400,17 +400,17 @@ func (r *Client) background(ctx context.Context) {
 					h := handler
 
 					// Run the handler in a separate goroutine to avoid blocking the main thread
-					go func(ctx context.Context, payload Payload, handler Handler) error {
+					go func(ctx context.Context, payload Payload, handler Handler) {
 						select {
 						case <-ctx.Done():
-							return fmt.Errorf("context cancelled")
+							return
 						case <-r.done:
-							return fmt.Errorf("connection closed")
+							return
 						default:
 							if err := handler(ctx, payload); err != nil {
 								r.logger.Error("Failed to handle message", zap.Error(err))
 							}
-							return nil
+							return
 						}
 					}(ctx, p, h)
 				}
@@ -446,7 +446,10 @@ func (r *Client) ping() {
 		r.logger.Error("Failed to send ping", zap.Error(err))
 		return
 	} else {
-		r.conn.SetReadDeadline(r.clock.Now().Add(PONG_WAIT))
+		err = r.conn.SetReadDeadline(r.clock.Now().Add(PONG_WAIT))
+		if err != nil {
+			r.logger.Error("Failed to set read deadline", zap.Error(err))
+		}
 	}
 }
 
@@ -539,9 +542,9 @@ func (r *Client) categorizeWebsocketError(err error, resp *http.Response) error 
 	if errors.Is(err, websocket.ErrBadHandshake) {
 		statusCode := resp.StatusCode
 		if statusCode >= 500 || statusCode == http.StatusTooManyRequests {
-			return BusyErr{Err: err}
+			return BusyError{Err: err}
 		}
-		return PermanentErr{Err: err}
+		return PermanentError{Err: err}
 	}
 
 	// Network errors
@@ -552,9 +555,9 @@ func (r *Client) categorizeWebsocketError(err error, resp *http.Response) error 
 		errors.Is(err, syscall.ECONNREFUSED) ||
 		errors.Is(err, syscall.ECONNRESET) ||
 		errors.Is(err, syscall.EPIPE) {
-		return TransientErr{Err: err}
+		return TransientError{Err: err}
 	}
 
 	// Fallback to permanent error
-	return PermanentErr{Err: err}
+	return PermanentError{Err: err}
 }
