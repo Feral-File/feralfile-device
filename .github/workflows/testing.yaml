@@ -1,0 +1,178 @@
+name: Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+jobs:
+  # Test Go components
+  test-feral-connectd:
+    name: Test feral-connectd (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./components/feral-connectd
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: components/feral-connectd/go.sum
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run tests with coverage
+        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./components/feral-connectd/coverage.out
+          slug: feral-file/feralfile-device
+          flags: feral-connectd
+          name: feral-connectd-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+  test-feral-watchdog:
+    name: Test feral-watchdog (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./components/feral-watchdog
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: components/feral-watchdog/go.sum
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run tests with coverage
+        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./components/feral-watchdog/coverage.out
+          slug: feral-file/feralfile-device
+          flags: feral-watchdog
+          name: feral-watchdog-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+  test-feral-sys-monitord:
+    name: Test feral-sys-monitord (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./components/feral-sys-monitord
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: components/feral-sys-monitord/go.sum
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run tests with coverage
+        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./components/feral-sys-monitord/coverage.out
+          slug: feral-file/feralfile-device
+          flags: feral-sys-monitord
+          name: feral-sys-monitord-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+  # Test Rust component
+  test-feral-setupd:
+    name: Test feral-setupd (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./components/feral-setupd
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            components/feral-setupd/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('components/feral-setupd/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run cargo check
+        run: cargo check --verbose
+
+      - name: Run tests with coverage
+        run: |
+          # Install cargo-tarpaulin for coverage
+          cargo install cargo-tarpaulin
+          cargo tarpaulin --out Xml --output-dir coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./components/feral-setupd/coverage/cobertura.xml
+          flags: feral-setupd
+          name: feral-setupd-coverage
+          slug: feral-file/feralfile-device
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings

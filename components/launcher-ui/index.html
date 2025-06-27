@@ -62,6 +62,8 @@
     <div id="initScreen" class="hidden">Initializing...</div>
     <div id="qrScreen" class="hidden">
         <div id="qrcode"></div>
+        <div id="qrError" style="margin-top: 12px; padding-top: 32px; color: #ff4d4f; font-size: 16px; display: none;"></div>
+        <div id="qrMessage" style="margin-top: 8px; color: #fffbe0; font-size: 16px; display: none;"></div>
     </div>
     <div id="welcomeScreen" class="hidden">
         <p id="welcomeText"></p>
@@ -71,7 +73,10 @@
     </div>
     <div id="messageScreen" class="hidden">
         <p id="messageText"></p>
+        <div id="messageSubText" style="margin-top: 8px; color: #888; font-size: 0.7em; display: none;"></div>
     </div>
+    <!-- Version display -->
+    <div id="versionDisplay" style="position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); color: #ccc; border-radius: 16px; padding: 4px 18px; font-size: 16px; z-index: 1000; pointer-events: none; user-select: none; display: none; border: 1px solid #444;"></div>
 
     <script>
         const screens = {
@@ -105,6 +110,28 @@
                         colorLight: "#000000",
                         correctLevel: QRCode.CorrectLevel.L
                     });
+
+
+                    // Hiển thị error nếu có
+                    const errorMsg = params.get("error");
+                    const qrError = document.getElementById("qrError");
+                    if (errorMsg) {
+                        qrError.textContent = errorMsg;
+                        qrError.style.display = '';
+                    } else {
+                        qrError.textContent = '';
+                        qrError.style.display = 'none';
+                    }
+
+                    const message = params.get("message");
+                    const qrMessage = document.getElementById("qrMessage");
+                    if (message) {
+                        qrMessage.textContent = message;
+                        qrMessage.style.display = '';
+                    } else {
+                        qrMessage.textContent = '';
+                        qrMessage.style.display = 'none';
+                    }
                 }
             },
             welcome: {
@@ -128,6 +155,15 @@
                 requiredParams: ["message"],
                 render: (params) => {
                     document.getElementById("messageText").textContent = params.get("message");
+                    const subText = params.get("subtext");
+                    const subTextDiv = document.getElementById("messageSubText");
+                    if (subText) {
+                        subTextDiv.textContent = subText;
+                        subTextDiv.style.display = '';
+                    } else {
+                        subTextDiv.textContent = '';
+                        subTextDiv.style.display = 'none';
+                    }
                 },
             },
         };
@@ -161,6 +197,15 @@
         // Show body and initial screen after DOM is loaded
         document.addEventListener("DOMContentLoaded", () => {
             showScreen(step, params);
+            // Version display
+            const version = params.get("version");
+            const versionDisplay = document.getElementById("versionDisplay");
+            if (version) {
+                versionDisplay.textContent = version;
+                versionDisplay.style.display = '';
+            } else {
+                versionDisplay.style.display = 'none';
+            }
             document.body.style.display = "";
         });
 

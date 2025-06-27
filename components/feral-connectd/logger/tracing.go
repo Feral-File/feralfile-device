@@ -1,9 +1,10 @@
-package main
+package logger
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"github.com/getsentry/sentry-go"
 	"go.uber.org/zap"
 )
@@ -22,7 +23,7 @@ func NewRelayerMessageTracer(logger *zap.Logger) *RelayerMessageTracer {
 
 // StartTransaction creates a new Sentry transaction for a relayer message
 // Following the Sentry documentation pattern for custom instrumentation
-func (t *RelayerMessageTracer) StartTransaction(ctx context.Context, payload RelayerPayload) (*sentry.Span, context.Context) {
+func (t *RelayerMessageTracer) StartTransaction(ctx context.Context, payload relayer.Payload) (*sentry.Span, context.Context) {
 	// Skip if Sentry is not available
 	hub := sentry.GetHubFromContext(ctx)
 	if hub == nil {
@@ -32,7 +33,7 @@ func (t *RelayerMessageTracer) StartTransaction(ctx context.Context, payload Rel
 
 	// Use message ID as transaction name for better tracking
 	transactionName := fmt.Sprintf("relayer.message.%s", payload.MessageID)
-	if payload.MessageID == RELAYER_MESSAGE_ID_SYSTEM {
+	if payload.MessageID == relayer.MESSAGE_ID_SYSTEM {
 		transactionName = "relayer.message.system"
 	}
 
@@ -81,7 +82,7 @@ func (t *RelayerMessageTracer) StartParsingSpan(ctx context.Context) *sentry.Spa
 }
 
 // StartCommandExecutionSpan creates a span for command execution
-func (t *RelayerMessageTracer) StartCommandExecutionSpan(ctx context.Context, command RelayerCmd) *sentry.Span {
+func (t *RelayerMessageTracer) StartCommandExecutionSpan(ctx context.Context, command relayer.RelayerCmd) *sentry.Span {
 	span := t.StartSpan(ctx, "relayer.execute")
 	span.Description = fmt.Sprintf("execute_%s", string(command))
 	span.SetData("stage", "execution")

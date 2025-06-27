@@ -1,12 +1,53 @@
-package main
+package logger
 
 import (
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/getsentry/sentry-go"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+// SentryConfig contains Sentry-specific configuration
+type SentryConfig struct {
+	DSN         string `json:"dsn"`
+	Debug       string `json:"debug"`       // Will be converted to bool
+	SampleRate  string `json:"sample_rate"` // Will be converted to float64
+	Environment string `json:"environment"`
+	Release     string `json:"release"`
+	Repository  string `json:"repository"` // Git repository for commit linking
+}
+
+// GetDebug converts the string debug value to bool
+func (sc *SentryConfig) GetDebug() bool {
+	if sc.Debug == "" {
+		return false
+	}
+	debug, err := strconv.ParseBool(strings.ToLower(sc.Debug))
+	if err != nil {
+		return false
+	}
+	return debug
+}
+
+// GetSampleRate converts the string sample_rate value to float64
+func (sc *SentryConfig) GetSampleRate() float64 {
+	if sc.SampleRate == "" {
+		return 1.0 // Default sample rate
+	}
+	rate, err := strconv.ParseFloat(sc.SampleRate, 64)
+	if err != nil {
+		return 1.0 // Default sample rate
+	}
+	return rate
+}
+
+// IsEnabled checks if Sentry is enabled (DSN is not empty)
+func (sc *SentryConfig) IsEnabled() bool {
+	return sc != nil && strings.TrimSpace(sc.DSN) != ""
+}
 
 // SentryCore is a custom zapcore.Core that sends logs to Sentry
 type SentryCore struct {
@@ -42,14 +83,14 @@ func (s *SentryCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 			Message:   entry.Message,
 			Level:     sentry.LevelInfo,
 			Timestamp: entry.Time,
-			Data:      s.fieldsToMap(fields),
+			Data:      s.FieldsToMap(fields),
 		})
 
 	case zapcore.WarnLevel:
 		// Send warning event
 		sentry.WithScope(func(scope *sentry.Scope) {
 			scope.SetLevel(sentry.LevelWarning)
-			scope.SetContext("fields", s.fieldsToMap(fields))
+			scope.SetContext("fields", s.FieldsToMap(fields))
 			scope.SetTag("logger", entry.LoggerName)
 			sentry.CaptureMessage(entry.Message)
 		})
@@ -58,11 +99,11 @@ func (s *SentryCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 		// Send error event
 		sentry.WithScope(func(scope *sentry.Scope) {
 			scope.SetLevel(sentry.LevelError)
-			scope.SetContext("fields", s.fieldsToMap(fields))
+			scope.SetContext("fields", s.FieldsToMap(fields))
 			scope.SetTag("logger", entry.LoggerName)
 
 			// Check if there's an error field and capture it as an exception
-			errorField := s.findErrorField(fields)
+			errorField := s.FindErrorField(fields)
 			if errorField != nil {
 				sentry.CaptureException(errorField)
 			} else {
@@ -74,12 +115,12 @@ func (s *SentryCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 		// Send crash event for fatal/panic logs
 		sentry.WithScope(func(scope *sentry.Scope) {
 			scope.SetLevel(sentry.LevelFatal)
-			scope.SetContext("fields", s.fieldsToMap(fields))
+			scope.SetContext("fields", s.FieldsToMap(fields))
 			scope.SetTag("logger", entry.LoggerName)
 			scope.SetTag("crash", "true")
 
 			// Check if there's an error field and capture it as an exception
-			errorField := s.findErrorField(fields)
+			errorField := s.FindErrorField(fields)
 			if errorField != nil {
 				sentry.CaptureException(errorField)
 			} else {
@@ -95,7 +136,7 @@ func (s *SentryCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 }
 
 // fieldsToMap converts zap fields to a map for Sentry context
-func (s *SentryCore) fieldsToMap(fields []zapcore.Field) map[string]interface{} {
+func (s *SentryCore) FieldsToMap(fields []zapcore.Field) map[string]interface{} {
 	result := make(map[string]interface{})
 	for _, field := range fields {
 		switch field.Type {
@@ -125,7 +166,7 @@ func (s *SentryCore) fieldsToMap(fields []zapcore.Field) map[string]interface{} 
 }
 
 // findErrorField looks for an error field in the zap fields
-func (s *SentryCore) findErrorField(fields []zapcore.Field) error {
+func (s *SentryCore) FindErrorField(fields []zapcore.Field) error {
 	for _, field := range fields {
 		if field.Type == zapcore.ErrorType && field.Interface != nil {
 			if err, ok := field.Interface.(error); ok {

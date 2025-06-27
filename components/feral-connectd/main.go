@@ -9,16 +9,25 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/cdp"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/command"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/config"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/dbus"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/logger"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/mediator"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/state"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/status"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/watchdog"
 	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/feral-file/godbus"
 	"github.com/getsentry/sentry-go"
-	"github.com/godbus/dbus/v5"
+	dbus_v5 "github.com/godbus/dbus/v5"
 	"go.uber.org/zap"
 )
 
 const (
-	WATCHDOG_INTERVAL = 15 * time.Second
-	SHUTDOWN_TIMEOUT  = 2 * time.Second
+	SHUTDOWN_TIMEOUT = 2 * time.Second
 )
 
 var debug = false
@@ -32,43 +41,43 @@ func main() {
 	flag.Parse()
 
 	// Initialize basic logger first
-	basicLogger, err := New(debug)
+	basicLogger, err := logger.New(debug)
 	if err != nil {
 		panic("Failed to initialize logger: " + err.Error())
 	}
 	defer basicLogger.Sync()
 
 	// Load configuration
-	config, err := LoadConfig(basicLogger)
+	config, err := config.Load(basicLogger)
 	if err != nil {
 		basicLogger.Fatal("Failed to load configuration", zap.Error(err))
 	}
 
 	// Initialize Sentry
-	err = InitSentry(config.SentryConfig)
+	err = logger.InitSentry(config.SentryConfig)
 	if err != nil {
 		basicLogger.Error("Failed to initialize Sentry", zap.Error(err))
 		// Don't fail the application if Sentry initialization fails
 	}
 
-	// Create Sentry-integrated logger
-	var logger *zap.Logger
+	// Create Sentry-integrated l
+	var l *zap.Logger
 	if config.SentryConfig.IsEnabled() {
-		logger, err = NewWithSentry(debug, config.SentryConfig)
+		l, err = logger.NewWithSentry(debug, config.SentryConfig)
 		if err != nil {
 			basicLogger.Error("Failed to create Sentry-integrated logger, falling back to basic logger", zap.Error(err))
-			logger = basicLogger
+			l = basicLogger
 		} else {
-			logger.Info("Sentry initialized successfully",
+			l.Info("Sentry initialized successfully",
 				zap.String("environment", config.SentryConfig.Environment),
 				zap.String("release", config.SentryConfig.Release))
-			defer FlushSentry(2 * time.Second)
+			defer logger.FlushSentry(2 * time.Second)
 		}
 	} else {
-		logger = basicLogger
-		logger.Info("Sentry not configured, using basic logger")
+		l = basicLogger
+		l.Info("Sentry not configured, using basic logger")
 	}
-	defer logger.Sync()
+	defer l.Sync()
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -79,12 +88,12 @@ func main() {
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		sig := <-sigCh
-		logger.Info("Received signal, initiating shutdown...",
+		l.Info("Received signal, initiating shutdown...",
 			zap.String("signal", sig.String()))
 		cancel()
 
 		time.Sleep(SHUTDOWN_TIMEOUT)
-		logger.Error("Shutdown timed out, forcing exit...",
+		l.Error("Shutdown timed out, forcing exit...",
 			zap.Duration("timeout", SHUTDOWN_TIMEOUT))
 
 		if config.SentryConfig.IsEnabled() {
@@ -95,71 +104,71 @@ func main() {
 	}()
 
 	// Load state
-	state, err = LoadState(logger)
+	s, err := state.Load(l)
 	if err != nil {
-		logger.Fatal("Failed to load state", zap.Error(err))
+		l.Fatal("Failed to load state", zap.Error(err))
 	}
 
 	// Set global topic ID in Sentry if available
-	if config.SentryConfig.IsEnabled() && state.Relayer.TopicID != "" {
-		SetGlobalTopicID(state.Relayer.TopicID)
+	if config.SentryConfig.IsEnabled() && s.Relayer.TopicID != "" {
+		logger.SetGlobalTopicID(s.Relayer.TopicID)
 	}
 
 	// Initialize CDP client
-	cdpClient := NewCDPClient(config.CDPConfig, logger)
-	err = cdpClient.InitCDP(ctx)
+	cdpClient := cdp.NewDefault(config.CDPConfig, l)
+	err = cdpClient.Init(ctx)
 	if err != nil {
-		logger.Fatal("CDP init failed", zap.Error(err))
+		l.Fatal("CDP init failed", zap.Error(err))
 	}
 	defer cdpClient.Close()
 
 	// Start watchdog in a goroutine
-	watchdog := NewWatchdog(WATCHDOG_INTERVAL, logger)
+	watchdog := watchdog.New(l)
 	go watchdog.Start(ctx)
 	defer watchdog.Stop()
 
 	// Initialize Relayer client
-	relayerClient := NewRelayerClient(config.RelayerConfig, logger)
+	relayerClient := relayer.NewDefault(config.RelayerConfig, l)
 	defer relayerClient.Close()
 
 	// Initialize DBus client
-	mo := dbus.WithMatchPathNamespace(dbus.ObjectPath("/com/feralfile"))
-	dbusClient := godbus.NewDBusClient(ctx, logger, DBUS_NAME, mo)
+	mo := dbus_v5.WithMatchPathNamespace(dbus_v5.ObjectPath("/com/feralfile"))
+	dbusClient := godbus.NewDBusClient(ctx, l, dbus.NAME, mo)
 	err = dbusClient.Start()
 	if err != nil {
-		logger.Fatal("DBus init failed", zap.Error(err))
+		l.Fatal("DBus init failed", zap.Error(err))
 	}
 	defer dbusClient.Stop()
 
-	err = dbusClient.Export(NewConnectdDBus(ctx, relayerClient, logger), DBUS_PATH, DBUS_INTERFACE)
+	err = dbusClient.Export(dbus.NewClient(ctx, relayerClient, l), dbus.PATH, dbus.INTERFACE)
 	if err != nil {
-		logger.Fatal("Failed to export DBus interface", zap.Error(err))
+		l.Fatal("Failed to export DBus interface", zap.Error(err))
 	}
 
 	// Initialize command handler
-	cmd := NewCommandHandler(cdpClient, dbusClient, logger)
+	cmd := command.NewHandler(cdpClient, dbusClient, l)
 
 	// Initialize Mediator
-	mediator := NewMediator(relayerClient, dbusClient, cdpClient, cmd, logger)
+	mediator := mediator.New(relayerClient, dbusClient, cdpClient, cmd, l)
 	mediator.Start()
 	defer mediator.Stop()
 
 	// Get connectivity status and connect to relayer if ready
-	connected, err := getConnectivityStatus(ctx, dbusClient, logger)
+	connected, err := getConnectivityStatus(ctx, dbusClient, l)
 	if err != nil {
-		logger.Warn("Failed to get connectivity status", zap.Error(err))
+		l.Warn("Failed to get connectivity status", zap.Error(err))
 	} else {
-		logger.Info("Connectivity status", zap.Bool("connected", connected))
+		l.Info("Connectivity status", zap.Bool("connected", connected))
 	}
-	if connected && state.Relayer.IsReady() {
+	if connected && s.Relayer.IsReady() {
 		err = relayerClient.Connect(ctx)
 		if err != nil {
-			logger.Fatal("Failed to connect to relayer", zap.Error(err))
+			l.Fatal("Failed to connect to relayer", zap.Error(err))
 		}
 	}
 
 	// Initialize StatusPoller
-	statusPoller := NewStatusPoller(cdpClient, relayerClient, logger)
+	statusPoller := status.NewPoller(cdpClient, relayerClient, l)
 
 	// Set the StatusPoller reference in mediator for force refresh
 	mediator.SetStatusPoller(statusPoller)
@@ -174,31 +183,31 @@ func main() {
 	// send ready notification to systemd
 	sent, err := daemon.SdNotify(false, daemon.SdNotifyReady)
 	if err != nil {
-		logger.Error("Failed to notify systemd", zap.Error(err))
+		l.Error("Failed to notify systemd", zap.Error(err))
 	}
 	if !sent {
-		logger.Warn("Failed to notify systemd, notification not supported. It could because NOTIFY_SOCKET is unset")
+		l.Warn("Failed to notify systemd, notification not supported. It could because NOTIFY_SOCKET is unset")
 	}
 
-	logger.Info("feral-connectd started successfully")
+	l.Info("feral-connectd started successfully")
 
 	<-ctx.Done()
 
-	logger.Info("feral-connectd shutdown completed")
+	l.Info("feral-connectd shutdown completed")
 }
 
-func getConnectivityStatus(ctx context.Context, dbus *godbus.DBusClient, logger *zap.Logger) (bool, error) {
+func getConnectivityStatus(ctx context.Context, dc *godbus.DBusClient, logger *zap.Logger) (bool, error) {
 	logger.Info("Getting connectivity status")
 
 	deadlineCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	resp, err := dbus.Call(
+	resp, err := dc.Call(
 		deadlineCtx,
-		MONITORD_DBUS_NAME,
-		MONITORD_DBUS_PATH,
-		MONITORD_DBUS_INTERFACE,
-		MONITORD_DBUS_METHOD_GET_CONNECTIVITY_STATUS,
+		dbus.MONITORD_NAME,
+		dbus.MONITORD_PATH,
+		dbus.MONITORD_INTERFACE,
+		dbus.MONITORD_METHOD_GET_CONNECTIVITY_STATUS,
 		true,
 	)
 	logger.Debug("Connectivity status", zap.Any("resp", resp), zap.Error(err))

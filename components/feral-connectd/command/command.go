@@ -1,4 +1,4 @@
-package main
+package command
 
 import (
 	"context"
@@ -10,6 +10,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/cdp"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/dbus"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/state"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/status"
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
 )
@@ -21,7 +26,7 @@ var CmdOK = struct {
 }
 
 type Command struct {
-	Command   RelayerCmd
+	Command   relayer.RelayerCmd
 	Arguments map[string]interface{}
 }
 
@@ -31,16 +36,23 @@ type Device struct {
 	Platform int    `json:"platform"`
 }
 
-type CommandHandler struct {
+//go:generate mockgen -source=command.go -destination=../mocks/mock_command.go -package=mocks -mock_names=HandlerInterface=MockCommandHandler
+type HandlerInterface interface {
+	SaveLastSysMetrics(metrics []byte)
+	Execute(ctx context.Context, cmd Command) (interface{}, error)
+	SetStatusPoller(statusPoller status.PollerInterface)
+}
+
+type Handler struct {
 	sync.Mutex
-	cdp    *CDPClient
-	dbus   *godbus.DBusClient
+	cdp    cdp.ClientInterface
+	dbus   dbus.ClientInterface
 	logger *zap.Logger
 
 	lastSysMetrics []byte
 
 	// Add reference to StatusPoller to get metrics
-	statusPoller *StatusPoller
+	statusPoller status.PollerInterface
 
 	// Mouse position tracking
 	cursorPositionX   float64
@@ -51,26 +63,26 @@ type CommandHandler struct {
 	movingScaleFactor float64
 }
 
-func NewCommandHandler(cdp *CDPClient, dbus *godbus.DBusClient, logger *zap.Logger) *CommandHandler {
-	return &CommandHandler{
+func NewHandler(cdp cdp.ClientInterface, dbus dbus.ClientInterface, logger *zap.Logger) *Handler {
+	return &Handler{
 		cdp:    cdp,
 		dbus:   dbus,
 		logger: logger,
 	}
 }
 
-func (c *CommandHandler) saveLastSysMetrics(metrics []byte) {
+func (c *Handler) SaveLastSysMetrics(metrics []byte) {
 	c.Lock()
 	defer c.Unlock()
 	c.lastSysMetrics = metrics
 }
 
 // SetStatusPoller sets the StatusPoller reference after initialization
-func (c *CommandHandler) SetStatusPoller(statusPoller *StatusPoller) {
+func (c *Handler) SetStatusPoller(statusPoller status.PollerInterface) {
 	c.statusPoller = statusPoller
 }
 
-func (c *CommandHandler) Execute(ctx context.Context, cmd Command) (interface{}, error) {
+func (c *Handler) Execute(ctx context.Context, cmd Command) (interface{}, error) {
 	c.logger.Info("Executing command", zap.String("command", string(cmd.Command)))
 
 	var err error
@@ -83,26 +95,26 @@ func (c *CommandHandler) Execute(ctx context.Context, cmd Command) (interface{},
 
 	var result interface{}
 	switch cmd.Command {
-	case RELAYER_CMD_CONNECT:
+	case relayer.CMD_CONNECT:
 		result, err = c.connect(bytes)
-	case RELAYER_CMD_SHOW_PAIRING_QR_CODE:
+	case relayer.CMD_SHOW_PAIRING_QR_CODE:
 		result, err = c.showPairingQRCode(ctx, bytes)
-	case RELAYER_CMD_KEYBOARD_EVENT:
-		result, err = c.handleKeyboardEvent(ctx, bytes)
-	case RELAYER_CMD_MOUSE_DRAG_EVENT:
-		result, err = c.handleMouseMoveEvent(ctx, bytes)
-	case RELAYER_CMD_MOUSE_TAP_EVENT:
-		result, err = c.handleMouseTapEvent(ctx, bytes)
-	case RELAYER_CMD_SYS_METRICS:
+	case relayer.CMD_KEYBOARD_EVENT:
+		result, err = c.handleKeyboardEvent(bytes)
+	case relayer.CMD_MOUSE_DRAG_EVENT:
+		result, err = c.handleMouseMoveEvent(bytes)
+	case relayer.CMD_MOUSE_TAP_EVENT:
+		result, err = c.handleMouseTapEvent()
+	case relayer.RELAYER_CMD_SYS_METRICS:
 		result, err = c.getSysMetrics()
-	case RELAYER_CMD_SCREEN_ROTATION:
+	case relayer.CMD_SCREEN_ROTATION:
 		result, err = c.handleScreenRotation(ctx, bytes)
-	case RELAYER_CMD_SHUTDOWN:
+	case relayer.CMD_SHUTDOWN:
 		result, err = c.shutdown(ctx)
-	case RELAYER_CMD_DEVICE_STATUS:
-		result, err = c.deviceStatus(ctx, bytes)
-	case RELAYER_CMD_UPDATE_TO_LATEST:
-		result, err = c.updateToLatest(ctx, bytes)
+	case relayer.CMD_DEVICE_STATUS:
+		result, err = c.deviceStatus(ctx)
+	case relayer.CMD_UPDATE_TO_LATEST:
+		result, err = c.updateToLatest(ctx)
 	default:
 		return nil, fmt.Errorf("invalid command: %s", cmd)
 	}
@@ -110,7 +122,7 @@ func (c *CommandHandler) Execute(ctx context.Context, cmd Command) (interface{},
 	return result, err
 }
 
-func (c *CommandHandler) connect(args []byte) (interface{}, error) {
+func (c *Handler) connect(args []byte) (interface{}, error) {
 	var cmdArgs struct {
 		Device         Device `json:"clientDevice"`
 		PrimaryAddress string `json:"primaryAddress"`
@@ -120,9 +132,13 @@ func (c *CommandHandler) connect(args []byte) (interface{}, error) {
 		return nil, fmt.Errorf("invalid arguments: %s", err)
 	}
 
-	state := GetState()
-	state.ConnectedDevice = &cmdArgs.Device
-	err = state.Save()
+	s := state.GetState()
+	s.ConnectedDevice = &state.Device{
+		ID:       cmdArgs.Device.ID,
+		Name:     cmdArgs.Device.Name,
+		Platform: cmdArgs.Device.Platform,
+	}
+	err = s.Save()
 	if err != nil {
 		return nil, fmt.Errorf("failed to save state: %s", err)
 	}
@@ -130,7 +146,7 @@ func (c *CommandHandler) connect(args []byte) (interface{}, error) {
 	return CmdOK, nil
 }
 
-func (c *CommandHandler) showPairingQRCode(ctx context.Context, args []byte) (interface{}, error) {
+func (c *Handler) showPairingQRCode(ctx context.Context, args []byte) (interface{}, error) {
 	var cmdArgs struct {
 		Show bool `json:"show"`
 	}
@@ -141,19 +157,19 @@ func (c *CommandHandler) showPairingQRCode(ctx context.Context, args []byte) (in
 
 	err = c.dbus.RetryableSend(ctx,
 		godbus.DBusPayload{
-			Interface: DBUS_INTERFACE,
-			Path:      DBUS_PATH,
-			Member:    DBUS_SETUPD_EVENT_SHOW_PAIRING_QR_CODE,
+			Interface: dbus.INTERFACE,
+			Path:      dbus.PATH,
+			Member:    dbus.SETUPD_EVENT_SHOW_PAIRING_QR_CODE,
 			Body:      []interface{}{cmdArgs.Show},
 		})
 	return CmdOK, nil
 }
 
-func (c *CommandHandler) deviceStatus(ctx context.Context, args []byte) (interface{}, error) {
-	return GetDeviceStatus(ctx)
+func (c *Handler) deviceStatus(ctx context.Context) (interface{}, error) {
+	return status.GetDeviceStatus(ctx)
 }
 
-func (c *CommandHandler) handleScreenRotation(ctx context.Context, args []byte) (interface{}, error) {
+func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interface{}, error) {
 	var cmdArgs struct {
 		Clockwise bool `json:"clockwise"`
 	}
@@ -268,7 +284,7 @@ func (c *CommandHandler) handleScreenRotation(ctx context.Context, args []byte) 
 	return map[string]string{"orientation": orientationReplyMsg}, nil
 }
 
-func (c *CommandHandler) handleKeyboardEvent(ctx context.Context, args []byte) (interface{}, error) {
+func (c *Handler) handleKeyboardEvent(args []byte) (interface{}, error) {
 	var cmdArgs struct {
 		Code int `json:"code"`
 	}
@@ -298,7 +314,7 @@ func (c *CommandHandler) handleKeyboardEvent(ctx context.Context, args []byte) (
 	}
 
 	// Send key directly via CDP
-	_, err = c.cdp.SendCDPRequest("Input.dispatchKeyEvent", keyEventParams)
+	_, err = c.cdp.Send("Input.dispatchKeyEvent", keyEventParams)
 	if err != nil {
 		c.logger.Error("Failed to send key via CDP", zap.Error(err))
 		return nil, fmt.Errorf("failed to send keyboard event: %s", err)
@@ -307,7 +323,7 @@ func (c *CommandHandler) handleKeyboardEvent(ctx context.Context, args []byte) (
 	// For keys that need keyUp events as well (like letters)
 	if cmdArgs.Code >= 32 {
 		keyEventParams["type"] = "keyUp"
-		_, err := c.cdp.SendCDPRequest("Input.dispatchKeyEvent", keyEventParams)
+		_, err := c.cdp.Send("Input.dispatchKeyEvent", keyEventParams)
 		if err != nil {
 			c.logger.Error("Failed to send keyUp via CDP", zap.Error(err))
 		}
@@ -316,7 +332,7 @@ func (c *CommandHandler) handleKeyboardEvent(ctx context.Context, args []byte) (
 	return CmdOK, nil
 }
 
-func (c *CommandHandler) initializeScreenDimensions(ctx context.Context) error {
+func (c *Handler) initializeScreenDimensions() error {
 	if c.screenInitialized {
 		return nil
 	}
@@ -327,7 +343,7 @@ func (c *CommandHandler) initializeScreenDimensions(ctx context.Context) error {
 		"returnByValue": true,
 	}
 
-	result, err := c.cdp.SendCDPRequest("Runtime.evaluate", evalParams)
+	result, err := c.cdp.Send("Runtime.evaluate", evalParams)
 	if err != nil {
 		c.logger.Error("Failed to get screen dimensions", zap.Error(err))
 		// Use default values
@@ -363,9 +379,9 @@ func (c *CommandHandler) initializeScreenDimensions(ctx context.Context) error {
 	return nil
 }
 
-func (c *CommandHandler) handleMouseMoveEvent(ctx context.Context, args []byte) (interface{}, error) {
+func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 	// Initialize screen dimensions if not done already
-	if err := c.initializeScreenDimensions(ctx); err != nil {
+	if err := c.initializeScreenDimensions(); err != nil {
 		return nil, err
 	}
 
@@ -447,7 +463,7 @@ func (c *CommandHandler) handleMouseMoveEvent(ctx context.Context, args []byte) 
 	}
 
 	// Call JavaScript function to process all positions
-	_, err = c.cdp.SendCDPRequest(CDP_METHOD_EVALUATE, map[string]interface{}{
+	_, err = c.cdp.Send(cdp.METHOD_EVALUATE, map[string]interface{}{
 		"expression": fmt.Sprintf("window.handleCDPRequest(%s)", string(positionsJSON)),
 	})
 	if err != nil {
@@ -467,7 +483,7 @@ func (c *CommandHandler) handleMouseMoveEvent(ctx context.Context, args []byte) 
 			"clickCount": 0,
 		}
 
-		_, err = c.cdp.SendCDPRequest("Input.dispatchMouseEvent", moveParams)
+		_, err = c.cdp.Send("Input.dispatchMouseEvent", moveParams)
 		if err != nil {
 			c.logger.Error("Failed to move mouse via CDP", zap.Error(err))
 			return nil, fmt.Errorf("failed to move mouse: %s", err)
@@ -481,9 +497,9 @@ func (c *CommandHandler) handleMouseMoveEvent(ctx context.Context, args []byte) 
 	return CmdOK, nil
 }
 
-func (c *CommandHandler) handleMouseTapEvent(ctx context.Context, args []byte) (interface{}, error) {
+func (c *Handler) handleMouseTapEvent() (interface{}, error) {
 	// Initialize screen dimensions if not done already
-	if err := c.initializeScreenDimensions(ctx); err != nil {
+	if err := c.initializeScreenDimensions(); err != nil {
 		return nil, err
 	}
 
@@ -501,7 +517,7 @@ func (c *CommandHandler) handleMouseTapEvent(ctx context.Context, args []byte) (
 		"clickCount": 1,
 	}
 
-	_, err := c.cdp.SendCDPRequest("Input.dispatchMouseEvent", downParams)
+	_, err := c.cdp.Send("Input.dispatchMouseEvent", downParams)
 	if err != nil {
 		c.logger.Error("Failed to press mouse button via CDP", zap.Error(err))
 		return nil, fmt.Errorf("failed to press mouse button: %s", err)
@@ -517,7 +533,7 @@ func (c *CommandHandler) handleMouseTapEvent(ctx context.Context, args []byte) (
 		"clickCount": 1,
 	}
 
-	_, err = c.cdp.SendCDPRequest("Input.dispatchMouseEvent", upParams)
+	_, err = c.cdp.Send("Input.dispatchMouseEvent", upParams)
 	if err != nil {
 		c.logger.Error("Failed to release mouse button via CDP", zap.Error(err))
 		return nil, fmt.Errorf("failed to release mouse button: %s", err)
@@ -526,7 +542,7 @@ func (c *CommandHandler) handleMouseTapEvent(ctx context.Context, args []byte) (
 	return CmdOK, nil
 }
 
-func (c *CommandHandler) mapToYdoKey(keyCode int) string {
+func (c *Handler) mapToYdoKey(keyCode int) string {
 	switch keyCode {
 	case 32:
 		return "space"
@@ -552,7 +568,7 @@ func (c *CommandHandler) mapToYdoKey(keyCode int) string {
 	}
 }
 
-func (c *CommandHandler) shutdown(ctx context.Context) (interface{}, error) {
+func (c *Handler) shutdown(ctx context.Context) (interface{}, error) {
 	c.logger.Info("Executing shutdown command")
 
 	cmd := exec.CommandContext(ctx, "sudo", "shutdown", "-h", "now")
@@ -564,7 +580,7 @@ func (c *CommandHandler) shutdown(ctx context.Context) (interface{}, error) {
 	return CmdOK, nil
 }
 
-func (c *CommandHandler) getSysMetrics() (interface{}, error) {
+func (c *Handler) getSysMetrics() (interface{}, error) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -579,7 +595,7 @@ func (c *CommandHandler) getSysMetrics() (interface{}, error) {
 	return sysMetrics, nil
 }
 
-func (c *CommandHandler) updateToLatest(ctx context.Context, args []byte) (interface{}, error) {
+func (c *Handler) updateToLatest(ctx context.Context) (interface{}, error) {
 	c.logger.Info("Executing update to latest version command")
 
 	// execute command systemctl start feral-updater@00:00.service

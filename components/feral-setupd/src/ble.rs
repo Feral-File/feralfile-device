@@ -20,7 +20,6 @@ use bluer::{
     },
 };
 use futures_util::future::FutureExt;
-use std::error::Error;
 use std::pin::Pin;
 use std::process::Command;
 use std::sync::Arc;
@@ -28,11 +27,15 @@ use std::time::Instant;
 use tokio::sync::Mutex;
 use tokio::task;
 
+use anyhow::{Result, anyhow};
+
 pub type BTConnectedCallback =
     Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>;
 pub type ConnectWifiCallback = Box<
     dyn Fn(&str, &str) -> Pin<Box<dyn Future<Output = Result<String, u8>> + Send>> + Send + Sync,
 >;
+pub type KeepWifiCallback =
+    Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<String, u8>> + Send>> + Send + Sync>;
 pub type GetInfoCallback = Option<Box<dyn Fn() -> Vec<String> + Send + Sync>>;
 
 #[derive(Default)]
@@ -63,9 +66,10 @@ impl BLE {
         &self,
         bt_connected_cb: BTConnectedCallback,
         connect_wifi_cb: ConnectWifiCallback,
+        keep_wifi_cb: KeepWifiCallback,
         get_info_cb: GetInfoCallback,
         ssids_cacher: Arc<SSIDsCacher>,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<()> {
         let mut inner = self.inner.lock().await;
         if inner.advertised {
             return Ok(());
@@ -96,8 +100,14 @@ impl BLE {
             uuid: constant::SERVICE_UUID,
             primary: true,
             characteristics: vec![
-                self.create_cmd_char(bt_connected_cb, connect_wifi_cb, get_info_cb, ssids_cacher)
-                    .await,
+                self.create_cmd_char(
+                    bt_connected_cb,
+                    connect_wifi_cb,
+                    keep_wifi_cb,
+                    get_info_cb,
+                    ssids_cacher,
+                )
+                .await,
             ],
             ..Default::default()
         };
@@ -115,7 +125,7 @@ impl BLE {
         Ok(())
     }
 
-    pub async fn stop(&self) -> Result<(), Box<dyn Error>> {
+    pub async fn stop(&self) -> Result<()> {
         let (adv, app, adapter) = {
             let mut inner = self.inner.lock().await;
             if !inner.advertised {
@@ -161,6 +171,7 @@ impl BLE {
         &self,
         bt_connected_cb: BTConnectedCallback,
         connect_wifi_cb: ConnectWifiCallback,
+        keep_wifi_cb: KeepWifiCallback,
         get_info_cb: GetInfoCallback,
         ssids_cacher: Arc<SSIDsCacher>,
     ) -> Characteristic {
@@ -171,6 +182,7 @@ impl BLE {
 
         let bt_connected_callback = Arc::new(bt_connected_cb);
         let connect_wifi_callback = Arc::new(connect_wifi_cb);
+        let keep_wifi_callback = Arc::new(keep_wifi_cb);
         let get_info_callback = Arc::new(get_info_cb);
         Characteristic {
             uuid: constant::CMD_CHAR_UUID,
@@ -199,6 +211,7 @@ impl BLE {
                     println!("BLE: Received bluetooth data {:?}", data);
                     let notifier = notifier_for_write.clone();
                     let connect_wifi_callback = connect_wifi_callback.clone();
+                    let keep_wifi_callback = keep_wifi_callback.clone();
                     let get_info_callback = get_info_callback.clone();
                     let ssids_cacher = ssids_cacher.clone();
                     async move {
@@ -232,6 +245,9 @@ impl BLE {
                                 )
                                 .await
                             }
+                            constant::CMD_KEEP_WIFI => {
+                                handle_keep_wifi(notifier, reply_id, keep_wifi_callback).await
+                            }
                             constant::CMD_GET_INFO => {
                                 handle_get_info(notifier, reply_id, get_info_callback).await
                             }
@@ -259,41 +275,30 @@ async fn handle_scan_wifi(
     ssids_cacher: Arc<SSIDsCacher>,
 ) -> Result<(), ReqError> {
     // Scan available SSIDs using the helper
+    let mut payload = Vec::with_capacity(2);
+    payload.push(reply_id.as_bytes());
+
     let start_time = Instant::now();
-    let ssids = match ssids_cacher.get().await {
-        Ok(v) => v,
+    let ssids: Vec<String>; // To own the returned value
+    let error_code: [u8; 1]; // To own the returned value
+    match ssids_cacher.get().await {
+        Ok(v) => {
+            println!(
+                "BLE: Found SSIDs \n{:?} in {:?} ms",
+                v,
+                start_time.elapsed().as_millis()
+            );
+            ssids = v;
+            payload.push(&[constant::BLE_SUCCESS_CODE]);
+            payload.extend(ssids.iter().map(|s| s.as_bytes()));
+        }
         Err(e) => {
             eprintln!("BLE: Failed to scan wifi: {}", e);
-            return Ok(());
+            error_code = [constant::BLE_ERR_CODE_UNKNOWN_ERROR];
+            payload.push(&error_code);
         }
     };
-    println!(
-        "BLE: Found SSIDs \n{:?} in {:?} ms",
-        ssids,
-        start_time.elapsed().as_millis()
-    );
-
-    // Build BLE reply payload
-    let mut reply = Vec::with_capacity(ssids.len() + 2);
-    reply.push(reply_id.as_bytes());
-    reply.push(&[constant::BLE_SUCCESS_CODE]);
-    reply.extend(ssids.iter().map(|s| s.as_bytes()));
-    println!("BLE: Reply: {:?}", reply);
-    let payload = encoding::encode_payload(&reply);
-
-    // Notify the central (if notifier is already registered)
-    let mut guard = notifier.lock().await;
-    if let Some(notifier) = guard.as_mut() {
-        match notifier.notify(payload).await {
-            Ok(_) => (),
-            Err(e) => {
-                eprintln!("BLE: Failed to notify central after scanning wifi: {}", e);
-            }
-        }
-    } else {
-        eprintln!("BLE: Notifier not yet available; skipping reply");
-    }
-    Ok(())
+    notify_central(notifier, payload).await
 }
 
 async fn handle_connect_wifi(
@@ -314,7 +319,7 @@ async fn handle_connect_wifi(
     let ssid = &params[0];
     let pass = &params[1];
 
-    let mut payload = Vec::with_capacity(3); // to reply to central
+    let mut payload = Vec::with_capacity(3);
     payload.push(reply_id.as_bytes());
 
     // Pre-declare variables to own the returned values
@@ -331,22 +336,32 @@ async fn handle_connect_wifi(
             payload.push(&error_code);
         }
     };
+    notify_central(notifier, payload).await
+}
 
-    let mut guard = notifier.lock().await;
-    if let Some(notifier) = guard.as_mut() {
-        println!("BLE: Reply: {:?}", payload);
-        let payload = encoding::encode_payload(&payload);
-        match notifier.notify(payload).await {
-            Ok(_) => (),
-            Err(e) => {
-                eprintln!("BLE: Failed to send relayer info: {}", e);
-            }
+async fn handle_keep_wifi(
+    notifier: Arc<Mutex<Option<CharacteristicNotifier>>>,
+    reply_id: String,
+    cb: Arc<KeepWifiCallback>,
+) -> Result<(), ReqError> {
+    let mut payload = Vec::with_capacity(3);
+    payload.push(reply_id.as_bytes());
+
+    // Pre-declare variables to own the returned values
+    let topic_id: String;
+    let error_code: [u8; 1];
+    match cb().await {
+        Ok(tid) => {
+            topic_id = tid;
+            payload.push(&[constant::BLE_SUCCESS_CODE]);
+            payload.push(topic_id.as_bytes());
         }
-    } else {
-        eprintln!("BLE: Notifier not yet available; skipping reply");
-    }
-
-    Ok(())
+        Err(e) => {
+            error_code = [e];
+            payload.push(&error_code);
+        }
+    };
+    notify_central(notifier, payload).await
 }
 
 async fn handle_get_info(
@@ -363,20 +378,7 @@ async fn handle_get_info(
     reply.push(reply_id.as_bytes());
     reply.push(&[constant::BLE_SUCCESS_CODE]);
     reply.extend(payload.iter().map(|s| s.as_bytes()));
-
-    let mut guard = notifier.lock().await;
-    if let Some(notifier) = guard.as_mut() {
-        let payload = encoding::encode_payload(&reply);
-        match notifier.notify(payload).await {
-            Ok(_) => (),
-            Err(e) => {
-                eprintln!("BLE: Failed to notify central after getting info: {}", e);
-            }
-        }
-    } else {
-        eprintln!("BLE: Notifier not yet available; skipping reply");
-    }
-    Ok(())
+    notify_central(notifier, reply).await
 }
 
 async fn handle_set_time(
@@ -396,15 +398,15 @@ async fn handle_set_time(
         let timezone = &params[0];
         let time = &params[1];
         let result = Command::new(constant::TIMEZONE_CMD)
-            .args(&[constant::TIMEZONE_INSTRUCTION, timezone, time])
+            .args([constant::TIMEZONE_INSTRUCTION, timezone, time])
             .output();
         println!("BLE: Result: {:?}", result);
         if result.is_ok() {
             println!("BLE: Time set successfully");
-            Ok::<(), Box<dyn Error + Send + Sync>>(())
+            Ok::<(), anyhow::Error>(())
         } else {
             println!("BLE: Failed to set time");
-            Err("Failed to set time".into())
+            Err(anyhow!("failed to set time"))
         }
     })
     .await
@@ -414,5 +416,24 @@ async fn handle_set_time(
         }
         _ => (),
     };
+    Ok(())
+}
+
+async fn notify_central(
+    notifier: Arc<Mutex<Option<CharacteristicNotifier>>>,
+    payload: Vec<&[u8]>,
+) -> Result<(), ReqError> {
+    let mut guard = notifier.lock().await;
+    if let Some(notifier) = guard.as_mut() {
+        let payload = encoding::encode_payload(&payload);
+        match notifier.notify(payload).await {
+            Ok(_) => (),
+            Err(e) => {
+                eprintln!("BLE: Failed to notify central: {}", e);
+            }
+        }
+    } else {
+        eprintln!("BLE: Notifier not yet available; skipping reply");
+    }
     Ok(())
 }

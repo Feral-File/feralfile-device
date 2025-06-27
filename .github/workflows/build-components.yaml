@@ -23,7 +23,7 @@ on:
         default: 'GitHub Actions'
       environment:
         description: 'Environment for Sentry release'
-        required: false
+        required: true
         type: string
         default: 'Development'
     secrets:
@@ -53,9 +53,28 @@ on:
         description: 'Package version'
         required: true
         type: string
+      environment:
+        description: "Environment to build"
+        required: true
+        default: "Development"
+        type: choice
+        options:
+          - Development
+          - Production
+      maintainer:
+        description: 'Package maintainer'
+        required: false
+        type: string
+        default: 'GitHub Actions'
+      description:
+        description: 'Package description'
+        required: false
+        type: string
+        default: 'Go application packaged for Arch Linux'
 
 jobs:
   build-component:
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
@@ -179,19 +198,6 @@ jobs:
           useradd -m builder
           chown -R builder:builder .
           su builder -c "makepkg -f --skipinteg"
-
-      - name: Create Sentry Release
-        if: ${{ inputs.component == 'feral-connectd' && github.ref == 'refs/heads/develop' }}
-        uses: getsentry/action-release@v3
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: feral-connectd
-        with:
-          environment: ${{ inputs.environment }}
-          release: ${{ inputs.version }}
-          finalize: true
-          set_commits: auto
 
       - name: Rclone to r2
         working-directory: components/${{ inputs.component }}
