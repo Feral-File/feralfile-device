@@ -16,10 +16,10 @@ jobs:
         working-directory: ./components/feral-connectd
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: '1.21'
           cache: true
@@ -53,10 +53,10 @@ jobs:
         working-directory: ./components/feral-watchdog
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: '1.21'
           cache: true
@@ -90,10 +90,10 @@ jobs:
         working-directory: ./components/feral-sys-monitord
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: '1.21'
           cache: true
@@ -128,7 +128,7 @@ jobs:
         working-directory: ./components/feral-setupd
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install system dependencies
         run: |
@@ -138,7 +138,8 @@ jobs:
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.88.0
+          components: rustfmt, clippy
           override: true
 
       - name: Cache Rust dependencies
@@ -156,7 +157,7 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Run clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Run cargo check
-        run: cargo check --verbose
+        run: cargo check --all-targets --all-features --verbose
