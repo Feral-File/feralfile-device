@@ -22,11 +22,9 @@ pub fn send_signal(object_path: &str, interface: &str, member: &str, payload: &s
     let conn = Connection::new_session()?;
 
     // Listen for the expected ack
-    let ack_member = format!("{}_ack", member);
-    let rule = format!(
-        "type='signal',interface='{}',member='{}',path='{}'",
-        interface, ack_member, object_path
-    );
+    let ack_member = format!("{member}_ack");
+    let rule =
+        format!("type='signal',interface='{interface}',member='{ack_member}',path='{object_path}'");
     conn.add_match_no_cb(&rule)?;
 
     // Send the signal up to `MAX_RETRIES` times
@@ -87,11 +85,9 @@ pub fn receive_signal(
     timeout_ms: u64,
 ) -> Result<Message> {
     let conn = Connection::new_session()?;
-    let rule = format!(
-        "type='signal',interface='{}',member='{}',path='{}'",
-        interface, member, object_path
-    );
-    println!("Rule: {}", rule);
+    let rule =
+        format!("type='signal',interface='{interface}',member='{member}',path='{object_path}'");
+    println!("DBUS: Rule: {rule}");
     conn.add_match_no_cb(&rule)?;
 
     let end_time = Instant::now() + Duration::from_millis(timeout_ms);
@@ -103,9 +99,7 @@ pub fn receive_signal(
     }
 
     Err(anyhow!(
-        "Timed out after {} ms waiting for '{}'",
-        timeout_ms,
-        member
+        "Timed out after {timeout_ms} ms waiting for '{member}'"
     ))
 }
 
@@ -126,37 +120,30 @@ fn receive_internal(
     let r_object_path = msg
         .path()
         .map(|p| p.to_string())
-        .ok_or_else(|| anyhow!("DBUS: Received signal with no path: {:?}", msg))?;
+        .ok_or_else(|| anyhow!("DBUS: Received signal with no path: {msg:?}"))?;
     let r_member = msg
         .member()
         .map(|m| m.to_string())
-        .ok_or_else(|| anyhow!("DBUS: Received signal with no member: {:?}", msg))?;
+        .ok_or_else(|| anyhow!("DBUS: Received signal with no member: {msg:?}"))?;
     if r_object_path != object_path {
         return Err(anyhow!(
-            "DBUS: Received signal from wrong object: {} (expected {})",
-            r_object_path,
-            object_path
+            "DBUS: Received signal from wrong object: {r_object_path} (expected {object_path})"
         ));
     }
     if r_member != member {
         return Err(anyhow!(
-            "DBUS: Received signal with wrong member: {} (expected {})",
-            r_member,
-            member
+            "DBUS: Received signal with wrong member: {r_member} (expected {member})"
         ));
     }
 
     // Send acknowledgement
-    println!(
-        "DBUS: Sending ack signal '{}_ack' to {}, {}",
-        member, object_path, interface
-    );
-    let mut ack_msg = Message::new_signal(object_path, interface, &format!("{}_ack", member))
+    println!("DBUS: Sending ack signal '{member}_ack' to {object_path}, {interface}");
+    let mut ack_msg = Message::new_signal(object_path, interface, format!("{member}_ack"))
         .map_err(anyhow::Error::msg)?;
     ack_msg = ack_msg.append1("");
     if conn.send(ack_msg).is_err() {
         // Failed to send ack signal doesn't matter, just log an error
-        eprintln!("DBUS: Failed to send ack signal '{}_ack'", member);
+        eprintln!("DBUS: Failed to send ack signal '{member}_ack'");
     }
 
     Ok(msg)
@@ -174,17 +161,12 @@ pub fn listen_for_signal(
     let member = member.to_string();
     task::spawn_blocking(move || {
         let conn = Connection::new_session().expect("DBUS: failed to create connection");
-        let rule = format!(
-            "type='signal',interface='{}',member='{}',path='{}'",
-            interface, member, object_path
-        );
+        let rule =
+            format!("type='signal',interface='{interface}',member='{member}',path='{object_path}'");
         conn.add_match_no_cb(&rule)
             .expect("DBUS: failed to add match");
 
-        println!(
-            "DBUS: Listening for '{}' signal in a background thread",
-            member
-        );
+        println!("DBUS: Listening for '{member}' signal in a background thread");
         while !stop.load(Ordering::Relaxed) {
             if let Ok(msg) = receive_internal(
                 &conn,
@@ -283,7 +265,7 @@ pub fn get_relayer_info() -> Result<String> {
             Ok(topic_id)
         }
         Err(e) => {
-            eprintln!("DBUS: Error getting relayer info: {}", e);
+            eprintln!("DBUS: Error getting relayer info: {e}");
             Err(e)
         }
     }

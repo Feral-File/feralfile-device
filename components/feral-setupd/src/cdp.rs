@@ -49,14 +49,14 @@ struct Target {
     web_socket_debugger_url: Option<String>,
 }
 
-pub struct CDP {
+pub struct Cdp {
     #[allow(dead_code)]
     ws_url: String,
     socket: Arc<Mutex<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
     current_id: AtomicU64,
 }
 
-impl CDP {
+impl Cdp {
     /// Asynchronously create a new CDP client by fetching the WebSocket URL and connecting.
     pub async fn connect(cdp_url: &str) -> Result<Self> {
         let ws_url = Self::get_ws_url(cdp_url).await?;
@@ -75,7 +75,7 @@ impl CDP {
 
     /// Asynchronously navigate the page to the given URL via CDP.
     pub async fn navigate(&self, url: &str) -> Result<()> {
-        println!("CDP: Navigating to {}", url);
+        println!("CDP: Navigating to {url}");
         self.send_cmd("Page.navigate", json!({ "url": url }))
             .await?;
         Ok(())
@@ -94,7 +94,7 @@ impl CDP {
         // Because we lock the socket, there can be only one command at a time.
         let mut sock = self.socket.lock().await;
         sock.send(Message::Text(body.to_string().into())).await?;
-        println!("CDP: Sent command: {}", body);
+        println!("CDP: Sent command: {body}");
 
         let timeout_duration = Duration::from_secs(3);
 
@@ -112,15 +112,15 @@ impl CDP {
                 let msg = match msg {
                     Ok(msg) => msg,
                     Err(e) => {
-                        return Err(Error::Command(format!("Can't get message: {}", e)));
+                        return Err(Error::Command(format!("Can't get message: {e}")));
                     }
                 };
                 // Get the text of the message and parse it as JSON.
                 if let Message::Text(text) = msg {
                     if let Ok(resp) = serde_json::from_str::<Value>(&text) {
                         // If the response is for the command we sent, return the result.
-                        if resp.get("id").and_then(|v| v.as_u64()) == Some(id as u64) {
-                            println!("CDP: Response for {}: {}", method, resp);
+                        if resp.get("id").and_then(|v| v.as_u64()) == Some(id) {
+                            println!("CDP: Response for {method}: {resp}");
                             if let Some(err) = resp.get("error") {
                                 return Err(Error::Command(err.to_string()));
                             }

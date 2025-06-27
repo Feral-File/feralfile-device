@@ -47,11 +47,11 @@ struct Inner {
     app_handle: Option<ApplicationHandle>,
 }
 
-pub struct BLE {
+pub struct Ble {
     inner: Mutex<Inner>,
 }
 
-impl BLE {
+impl Ble {
     pub fn new() -> Self {
         let device_id = encoding::get_device_id();
         Self {
@@ -141,11 +141,10 @@ impl BLE {
         // Disconnect all devices (to make sure BlueZ doesn't block adv unregistration)
         if let Some(adapter) = adapter {
             for addr in adapter.device_addresses().await? {
-                println!("BLE: Disconnecting device {:?}", addr);
+                println!("BLE: Disconnecting device {addr:?}");
                 let dev = adapter.device(addr)?;
                 println!(
-                    "BLE: Device {:?} is connected: {:?}",
-                    addr,
+                    "BLE: Device {addr:?} is connected: {:?}",
                     dev.is_connected().await?
                 );
                 if dev.is_connected().await? {
@@ -208,7 +207,7 @@ impl BLE {
                 write: true,
                 write_without_response: false,
                 method: CharacteristicWriteMethod::Fun(Box::new(move |data, _req| {
-                    println!("BLE: Received bluetooth data {:?}", data);
+                    println!("BLE: Received bluetooth data {data:?}");
                     let notifier = notifier_for_write.clone();
                     let connect_wifi_callback = connect_wifi_callback.clone();
                     let keep_wifi_callback = keep_wifi_callback.clone();
@@ -228,7 +227,7 @@ impl BLE {
                             return Ok::<(), ReqError>(());
                         }
                         // Enough values, parse command
-                        println!("BLE: Payload: {:?}", vals);
+                        println!("BLE: Payload: {vals:?}");
                         let cmd = vals[0].clone();
                         let reply_id = vals[1].clone();
                         let params = vals[2..].to_vec();
@@ -255,7 +254,7 @@ impl BLE {
                                 handle_set_time(notifier, reply_id, params).await
                             }
                             _ => {
-                                eprintln!("BLE: Unknown command: {}", cmd);
+                                eprintln!("BLE: Unknown command: {cmd}");
                                 Ok::<(), ReqError>(())
                             }
                         }
@@ -284,8 +283,7 @@ async fn handle_scan_wifi(
     match ssids_cacher.get().await {
         Ok(v) => {
             println!(
-                "BLE: Found SSIDs \n{:?} in {:?} ms",
-                v,
+                "BLE: Found SSIDs \n{v:?} in {:?} ms",
                 start_time.elapsed().as_millis()
             );
             ssids = v;
@@ -293,7 +291,7 @@ async fn handle_scan_wifi(
             payload.extend(ssids.iter().map(|s| s.as_bytes()));
         }
         Err(e) => {
-            eprintln!("BLE: Failed to scan wifi: {}", e);
+            eprintln!("BLE: Failed to scan wifi: {e}");
             error_code = [constant::BLE_ERR_CODE_UNKNOWN_ERROR];
             payload.push(&error_code);
         }
@@ -394,13 +392,13 @@ async fn handle_set_time(
         );
         return Ok(());
     }
-    match task::spawn_blocking(move || {
+    if let Err(e) = task::spawn_blocking(move || {
         let timezone = &params[0];
         let time = &params[1];
         let result = Command::new(constant::TIMEZONE_CMD)
             .args([constant::TIMEZONE_INSTRUCTION, timezone, time])
             .output();
-        println!("BLE: Result: {:?}", result);
+        println!("BLE: Result: {result:?}");
         if result.is_ok() {
             println!("BLE: Time set successfully");
             Ok::<(), anyhow::Error>(())
@@ -411,10 +409,7 @@ async fn handle_set_time(
     })
     .await
     {
-        Err(e) => {
-            eprintln!("BLE: Failed to start time setting thread: {}", e);
-        }
-        _ => (),
+        eprintln!("BLE: Failed to start time setting thread: {e}");
     };
     Ok(())
 }
@@ -429,7 +424,7 @@ async fn notify_central(
         match notifier.notify(payload).await {
             Ok(_) => (),
             Err(e) => {
-                eprintln!("BLE: Failed to notify central: {}", e);
+                eprintln!("BLE: Failed to notify central: {e}");
             }
         }
     } else {

@@ -71,7 +71,7 @@ impl SSIDsCacher {
 
             println!("SSIDsCacher: refreshing...");
             let res = list_ssids(true).await;
-            println!("SSIDsCacher: refreshed: \n{:?}", res);
+            println!("SSIDsCacher: refreshed: \n{res:?}");
             {
                 let mut st = state.lock().await;
                 match res {
@@ -104,7 +104,7 @@ impl SSIDsCacher {
 
                 if !st.refreshing {
                     // Fast path: fresh cache
-                    if st.expired_at.map_or(false, |exp| exp > Instant::now()) {
+                    if st.expired_at.is_some_and(|exp| exp > Instant::now()) {
                         println!("SSIDsCacher: returning cached SSIDs");
                         let clone = st.cached_ssids.clone();
                         // If the cache is empty, we reset it
@@ -143,12 +143,12 @@ pub fn connect(ssid: &str, pass: &str) -> Result<()> {
     // https://bbs.archlinux.org/viewtopic.php?id=300321&p=2
 
     if let Err(err) = delete(ssid) {
-        eprintln!("Wifi: failed to delete existing connection: {}", err);
+        eprintln!("Wifi: failed to delete existing connection: {err}");
     }
 
-    println!("Wifi: connecting to {}", ssid);
+    println!("Wifi: connecting to {ssid}");
     let output = Command::new("nmcli")
-        .args(&["device", "wifi", "connect", ssid, "password", pass])
+        .args(["device", "wifi", "connect", ssid, "password", pass])
         .output()?;
 
     if output.status.success() {
@@ -163,7 +163,7 @@ pub fn connect(ssid: &str, pass: &str) -> Result<()> {
 
 fn delete(ssid: &str) -> Result<()> {
     let output = Command::new("nmcli")
-        .args(&["connection", "delete", ssid])
+        .args(["connection", "delete", ssid])
         .output()?;
 
     if output.status.success() {
