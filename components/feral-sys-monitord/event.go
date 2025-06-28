@@ -122,7 +122,9 @@ func (p *SysEventWatcher) monitorHangingGPU(ctx context.Context, resultChan chan
 		errChan <- err
 		return
 	}
-	defer cmd.Wait()
+	defer func() {
+		_ = cmd.Wait()
+	}()
 
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()

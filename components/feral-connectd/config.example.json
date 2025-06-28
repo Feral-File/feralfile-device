@@ -1,13 +1,10 @@
 {
   "cdp": {
-    "host": "localhost",
-    "port": 9222,
-    "timeout": 30
+    "endpoint": "localhost"
   },
   "relayer": {
-    "url": "wss://example.com/ws",
-    "timeout": 30,
-    "retry_interval": 5
+    "endpoint": "wss://example.com/ws",
+    "apiKey": 5
   },
   "sentry": {
     "dsn": "https://YOUR_SENTRY_DSN@o0.ingest.sentry.io/0",

@@ -1,16 +1,20 @@
 mod ble;
 mod cache;
 mod cdp;
+mod connectivity;
 mod constant;
 mod dbus_utils;
 mod encoding;
+mod updater;
 mod wifi_utils;
 
-use crate::wifi_utils::SSIDsCacher;
-use ble::BLE;
+use crate::wifi_utils::{Error as WifiError, SSIDsCacher};
+use anyhow::Context;
+use anyhow::Result;
+use ble::Ble;
 use cache::Cache;
-use cdp::CDP;
-use std::error::Error;
+use cdp::Cdp;
+use connectivity::Connectivity;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -31,68 +35,92 @@ enum Page {
 #[derive(Debug)]
 struct AppState {
     device_id: String,
+    current_version: String,
     app_cache: Cache,
-    internet: AtomicBool,
+    internet: Connectivity,
     page: Mutex<Page>,
+
+    // This is the flag to indicate whether we should automatically redirect to webapp
+    // when internet is available.
+    // On a second boot, if the internet is unavailable, users have 2 choices
+    // 1. Fix the internet connection, it will automatically check for update & play artwork
+    // 2. Scan the QRCode and start everything over again
+    // We need this flag to turn off the first flow if the user has chosen to provide a different wifi
+    // true = auto proceed, false = user has chosen to provide a different wifi
+    auto_proceed: AtomicBool,
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn main() -> Result<()> {
     // Initialize dependencies
-    let chrome = match CDP::connect(constant::CDP_URL).await {
-        Ok(chrome) => chrome,
-        Err(e) => {
-            eprintln!("MAIN: Error connecting to CDP: {}", e);
-            return Err(format!("Error connecting to CDP: {}", e).into());
-        }
-    };
+    let chrome = Cdp::connect(constant::CDP_URL)
+        .await
+        .context("connecting to CDP")?;
     let chrome = Arc::new(chrome);
-    let ble_service = Arc::new(BLE::new());
+    let ble_service = Arc::new(Ble::new());
     let app_state = Arc::new(AppState {
         device_id: ble_service.get_device_id().await,
-        app_cache: Cache::new(constant::CACHE_FILEPATH),
-        internet: AtomicBool::new(dbus_utils::internet_availability()),
+        current_version: updater::current_version().await.unwrap_or_default(),
+        app_cache: Cache::new(constant::CACHE_FILEPATH)?,
+        internet: Connectivity::spawn().await,
         page: Mutex::new(Page::None),
+        auto_proceed: AtomicBool::new(false),
     });
-    println!("MAIN: App state initialized: {:?}", app_state);
+    println!("MAIN: App state initialized: {app_state:?}");
 
     // Start bluetooth advertising with callbacks
-    let bt_connected_cb = create_bt_connected_cb(chrome.clone());
-    let connect_wifi_cb = create_connect_wifi_cb(app_state.clone(), chrome.clone());
-    let get_info_cb = create_get_info_cb(app_state.clone());
+    // let bt_connected_cb = create_bt_connected_cb(chrome.clone());
+    // let connect_wifi_cb = create_connect_wifi_cb(app_state.clone(), chrome.clone());
+    // let keep_wifi_cb = create_keep_wifi_cb(app_state.clone(), chrome.clone());
+    // let get_info_cb = create_get_info_cb(app_state.clone());
     let ssids_cacher = Arc::new(SSIDsCacher::new());
-    match ble_service
+    ble_service
         .start(
-            bt_connected_cb,
-            connect_wifi_cb,
-            get_info_cb,
+            create_bt_connected_cb(chrome.clone()),
+            create_connect_wifi_cb(app_state.clone(), chrome.clone()),
+            create_keep_wifi_cb(app_state.clone(), chrome.clone()),
+            create_get_info_cb(app_state.clone()),
             ssids_cacher.clone(),
         )
         .await
-    {
-        Ok(_) => println!("MAIN: Bluetooth advertising started successfully"),
-        Err(e) => {
-            eprintln!("MAIN: Error starting Bluetooth advertising: {}", e);
-            return Err(format!("Error starting Bluetooth advertising: {}", e).into());
-        }
-    }
+        .context("starting Bluetooth advertising")?;
+    println!("MAIN: Bluetooth advertising started successfully");
 
-    let has_internet = app_state.internet.load(Ordering::Relaxed);
-    let has_cache = app_state.app_cache.get(cache::TOPIC_ID).is_some();
-    if !has_cache {
-        // First time using the app, just show the QRCode
+    let has_internet = app_state.internet.is_online(true).await;
+    let used_to_connect = app_state.app_cache.get(cache::CONNECTED);
+    if !has_internet {
+        // Show the QRCode so the user can do something with the internet
         ssids_cacher.trigger_refresh();
-        let _ = show_qrcode(&app_state, &chrome, false).await;
+        let _ = show_qrcode(&app_state, &chrome).await;
+        app_state.auto_proceed.store(true, Ordering::Release);
+        let app_state = app_state.clone();
+        let chrome = chrome.clone();
+        tokio::spawn(async move {
+            // If the device used to be able to connect to the internet
+            // We should be more aggressive with the polling (we want to take action as soon as users fix the internet)
+            // Otherwise, we should be more conservative as users might plug in the LAN cable, but this is rare
+            let urgency = if used_to_connect.is_some() {
+                Duration::from_secs(2)
+            } else {
+                Duration::from_secs(10)
+            };
+            app_state.internet.wait_until_online(urgency).await;
+            if used_to_connect.is_none() {
+                app_state.app_cache.set(cache::CONNECTED, "true");
+                app_state.app_cache.save(constant::CACHE_FILEPATH).unwrap();
+            }
+            // If the user has chosen to provide a different wifi
+            // This will be false and we should not proceed
+            if app_state.auto_proceed.load(Ordering::Acquire) {
+                on_startup_with_internet(app_state, chrome).await;
+            }
+        });
     } else {
-        // Second time using the app
-        if has_internet {
-            // All good, show webapp
-            let _ = show_webapp(&app_state, &chrome).await;
-        } else {
-            // No internet, show QRCode and wait for user to fix it
-            ssids_cacher.trigger_refresh();
-            let _ = show_qrcode(&app_state, &chrome, true).await;
+        if used_to_connect.is_none() {
+            app_state.app_cache.set(cache::CONNECTED, "true");
+            app_state.app_cache.save(constant::CACHE_FILEPATH).unwrap();
         }
+        on_startup_with_internet(app_state.clone(), chrome.clone()).await;
     }
 
     // Listen for QRCode switch signal
@@ -114,13 +142,13 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     println!("MAIN: Stopping BLE service...");
     match ble_service.stop().await {
         Ok(_) => println!("MAIN: BLE service stopped"),
-        Err(e) => println!("MAIN: Error stopping BLE service: {}", e),
+        Err(e) => println!("MAIN: Error stopping BLE service: {e}"),
     }
     println!("MAIN: Shutting down...");
     Ok(())
 }
 
-fn create_bt_connected_cb(chromium: Arc<CDP>) -> ble::BTConnectedCallback {
+fn create_bt_connected_cb(chromium: Arc<Cdp>) -> ble::BTConnectedCallback {
     Some(Box::new(move || {
         let chromium = chromium.clone();
         Box::pin(async move {
@@ -131,7 +159,7 @@ fn create_bt_connected_cb(chromium: Arc<CDP>) -> ble::BTConnectedCallback {
 
 fn create_connect_wifi_cb(
     app_state: Arc<AppState>,
-    chromium: Arc<CDP>,
+    chromium: Arc<Cdp>,
 ) -> ble::ConnectWifiCallback {
     Box::new(move |ssid, pwd| {
         let app_state = app_state.clone();
@@ -147,57 +175,104 @@ fn create_connect_wifi_cb(
             )
             .await;
 
+            // Disable auto proceed since users want to setup another wifi
+            // Instead of fixing the current internet (if there is any)
+            app_state.auto_proceed.store(false, Ordering::Release);
+
             // Connect to wifi & return early if failed
             if let Err(e) = wifi_utils::connect(&ssid, &pwd) {
                 eprintln!(
-                    "MAIN: Failed to connect to wifi \"{}\" in {:?} ms: {}",
-                    ssid,
-                    start_time.elapsed().as_millis(),
-                    e
+                    "MAIN: Failed to connect to wifi \"{ssid}\" in {:?} ms: {e}",
+                    start_time.elapsed().as_millis()
                 );
+                // Tell user that the wifi connection failed
                 task::spawn(async move {
                     let _ = show_message(&chromium, constant::WIFI_FAILED_TO_CONNECT_MSG).await;
                 });
                 // This is a bit of a hack to detect wrong password
                 // But the command doesn't provide a reliable way to detect this
-                return if e.to_string().contains("password") {
-                    Err(constant::BLE_ERR_CODE_WRONG_WIFI_PWD)
-                } else {
-                    Err(constant::BLE_ERR_CODE_UNKNOWN_ERROR)
+                let err_code = match &e {
+                    WifiError::NmcliFailure { stderr, .. } if stderr.contains("password") => {
+                        constant::BLE_ERR_CODE_WRONG_WIFI_PWD
+                    }
+                    _ => constant::BLE_ERR_CODE_UNKNOWN_ERROR,
                 };
+                return Err(err_code);
             }
 
             // Return early if there is no internet
-            let internet = dbus_utils::internet_availability();
-            if !internet {
+            if !app_state.internet.is_online(true).await {
                 task::spawn(async move {
                     let _ = show_message(&chromium, constant::INTERNET_FAILED_TO_CONNECT_MSG).await;
                 });
                 return Err(constant::BLE_ERR_CODE_NO_INTERNET);
             }
-
-            // Get topic id from connectd
-            let topic_id = match dbus_utils::get_relayer_info() {
-                Ok(info) => info,
-                Err(e) => {
-                    eprintln!("BLE: can't get relayer data from connectd: {}", e);
-                    return Err(constant::BLE_ERR_CODE_UNKNOWN_ERROR);
-                }
-            };
-
-            app_state.app_cache.set(cache::TOPIC_ID, &topic_id);
-            app_state.app_cache.save(constant::CACHE_FILEPATH);
-            app_state.internet.store(true, Ordering::Relaxed);
-            task::spawn(async move {
-                // This is a workaround to avoid Err Network Changed from Chrome
-                // This potentially also avoids the white screen issue
-                let _ = show_message(&chromium, constant::SETUP_SUCCESSFULLY_MSG).await;
-                time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
-                let _ = show_webapp(&app_state, &chromium).await;
-            });
-            Ok(topic_id)
+            internet_setup_successfully_cb(&app_state, &chromium).await
         })
     })
+}
+
+fn create_keep_wifi_cb(app_state: Arc<AppState>, chromium: Arc<Cdp>) -> ble::KeepWifiCallback {
+    Box::new(move || {
+        let app_state = app_state.clone();
+        let chromium = chromium.clone();
+        Box::pin(async move {
+            if !app_state.internet.is_online(true).await {
+                return Err(constant::BLE_ERR_CODE_WIFI_REQUIRED);
+            }
+            internet_setup_successfully_cb(&app_state, &chromium).await
+        })
+    })
+}
+
+async fn internet_setup_successfully_cb(
+    app_state: &Arc<AppState>,
+    chromium: &Arc<Cdp>,
+) -> Result<String, u8> {
+    // Update the firmware / software if required
+    match updater::is_update_required().await {
+        Ok(true) => {
+            // Spawn the update process in the background
+            // This is to avoid blocking Error code to mobile app
+            // The update process will take over chromium and show the update progress
+            task::spawn(update(chromium.clone()));
+            return Err(constant::BLE_ERR_CODE_DEVICE_UPDATING);
+        }
+        Ok(false) => {} // No update required, proceed with the normal flow
+        Err(e) => {
+            eprintln!("MAIN: Error checking for update: {e}");
+            let _ = show_message(chromium, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
+            return Err(constant::BLE_ERR_CODE_VERSION_CHECK_FAILED);
+        }
+    }
+
+    // Get topic id from connectd
+    let topic_id = match dbus_utils::get_relayer_info() {
+        Ok(info) => info,
+        Err(e) => {
+            eprintln!("BLE: can't get relayer data from connectd: {e}");
+            return Err(constant::BLE_ERR_CODE_SERVER_UNREACHABLE);
+        }
+    };
+
+    app_state.app_cache.set(cache::TOPIC_ID, &topic_id);
+    match app_state.app_cache.save(constant::CACHE_FILEPATH) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("MAIN: Error saving cache: {e}");
+        }
+    }
+
+    let app_state = app_state.clone();
+    let chromium = chromium.clone();
+    task::spawn(async move {
+        // This is a workaround to avoid Err Network Changed from Chrome
+        // This potentially also avoids the white screen issue
+        let _ = show_message(&chromium, constant::SETUP_SUCCESSFULLY_MSG).await;
+        time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
+        let _ = show_webapp(&app_state, &chromium).await;
+    });
+    Ok(topic_id)
 }
 
 fn create_get_info_cb(app_state: Arc<AppState>) -> ble::GetInfoCallback {
@@ -212,7 +287,7 @@ fn create_get_info_cb(app_state: Arc<AppState>) -> ble::GetInfoCallback {
 
 fn create_qrcode_switch_cb(
     app_state: Arc<AppState>,
-    chromium: Arc<CDP>,
+    chromium: Arc<Cdp>,
 ) -> dbus_utils::ListenCallback {
     Box::new(move |msg| {
         let chromium = chromium.clone();
@@ -220,12 +295,12 @@ fn create_qrcode_switch_cb(
         let mut qrcode_requested = false;
         match msg.read1::<bool>() {
             Ok(true) => qrcode_requested = true,
-            Err(e) => println!("MAIN: Error reading message: {}", e),
+            Err(e) => println!("MAIN: Error reading message: {e}"),
             _ => {}
         }
         task::spawn(async move {
             if qrcode_requested {
-                let _ = show_qrcode(&app_state, &chromium, false).await;
+                let _ = show_qrcode(&app_state, &chromium).await;
             } else {
                 let _ = show_webapp(&app_state, &chromium).await;
             }
@@ -235,19 +310,16 @@ fn create_qrcode_switch_cb(
 
 // The url format is like this
 // url?step=qr&device_id=<device_id>|<topic_id>|<internet>
-fn build_qrcode_url(app_state: &Arc<AppState>) -> String {
+async fn build_qrcode_url(app_state: &Arc<AppState>) -> String {
     let mut qrcode_url = format!("{}{}", constant::QRCODE_URL_PREFIX, app_state.device_id);
-    if app_state.app_cache.get(cache::TOPIC_ID).is_some() {
-        qrcode_url = format!(
-            "{}|{}",
-            qrcode_url,
-            app_state.app_cache.get(cache::TOPIC_ID).unwrap()
-        );
-        let has_internet = app_state.internet.load(Ordering::Relaxed);
-        qrcode_url = format!("{}|{}", qrcode_url, {
-            if has_internet { "true" } else { "false" }
-        });
-    }
+    let topic_id = app_state.app_cache.get(cache::TOPIC_ID).unwrap_or_default();
+    let has_internet = if app_state.internet.is_online(false).await {
+        "true"
+    } else {
+        "false"
+    };
+    qrcode_url = format!("{qrcode_url}|{topic_id}|{has_internet}");
+    qrcode_url = format!("{qrcode_url}&version={}", &app_state.current_version);
     qrcode_url
 }
 
@@ -264,48 +336,67 @@ async fn wait_for_shutdown() {
     }
 }
 
-async fn show_qrcode(
-    app_state: &Arc<AppState>,
-    chrome: &Arc<CDP>,
-    redirect_when_online: bool,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let qrcode_url = build_qrcode_url(&app_state);
+async fn show_qrcode(app_state: &Arc<AppState>, chrome: &Arc<Cdp>) -> Result<()> {
+    let qrcode_url = build_qrcode_url(app_state).await;
     // QRCode url is dynamically built
     // So we always navigate to make sure the url is correct
     let mut page = app_state.page.lock().await;
-    match chrome.navigate(&qrcode_url).await {
-        Ok(_) => {
-            println!("MAIN: Navigated to {}", qrcode_url);
-            *page = Page::QRCode;
+    chrome
+        .navigate(&qrcode_url)
+        .await
+        .with_context(|| format!("navigating to {qrcode_url}"))?;
+    println!("MAIN: Navigated to {qrcode_url}");
+    *page = Page::QRCode;
+    Ok(())
+}
+
+async fn on_startup_with_internet(app_state: Arc<AppState>, chrome: Arc<Cdp>) {
+    // If the update process is triggered and it takes over the chromium
+    // We should not proceed with the normal flow any more
+    // The device needs to automatically restart to apply the update
+    // So we just return
+    match updater::is_update_required().await {
+        Ok(true) => {
+            let _ = update(chrome.clone()).await;
+            return;
         }
         Err(e) => {
-            println!("MAIN: Error navigating to qrcode: {}", e);
-            return Err(e);
+            eprintln!("MAIN: Error checking for update: {e}");
+            let _ = show_message(&chrome, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
+            return;
         }
-    };
-    if redirect_when_online {
-        let stop_listening = Arc::new(AtomicBool::new(false));
-        let app_state = app_state.clone();
-        let chrome = chrome.clone();
-        dbus_utils::on_internet_available(
-            move || {
-                app_state.internet.store(true, Ordering::Relaxed);
-                let app_state = app_state.clone();
-                let chrome = chrome.clone();
-                task::spawn(async move {
-                    let _ = show_webapp(&app_state, &chrome).await;
-                });
-            },
-            stop_listening,
-        );
+        Ok(false) => {}
+    }
+
+    // Otherwise, proceed with the normal flow
+    let has_cache = app_state.app_cache.get(cache::TOPIC_ID).is_some();
+    if has_cache {
+        let _ = show_webapp(&app_state, &chrome).await;
+    } else {
+        let _ = show_qrcode(&app_state, &chrome).await;
+    }
+}
+
+async fn update(chrome: Arc<Cdp>) -> Result<()> {
+    let latest_version = updater::latest_version().await.unwrap_or_default();
+    let base_msg = format!("{} {}", &constant::UPDATING_MSG_PREFIX, latest_version);
+    let default_subtext = constant::UPDATING_MSG_SUBTEXT;
+    let _ = show_message(&chrome, &format!("{base_msg}&subtext={default_subtext}")).await;
+    let mut rx = updater::spawn_updater()?;
+    while let Some(res) = rx.recv().await {
+        match res {
+            Ok(msg) => {
+                let _ = show_message(&chrome, &format!("{base_msg}&subtext={msg}")).await;
+            }
+            Err(e) => {
+                eprintln!("MAIN: Update process failed: {e:#}");
+            }
+        }
     }
     Ok(())
 }
 
-async fn show_webapp(
-    app_state: &Arc<AppState>,
-    chrome: &Arc<CDP>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<Cdp>) -> Result<()> {
     let mut page = app_state.page.lock().await;
     // For webapp, we only navigate if the page is not it already
     if *page == Page::WebApp {
@@ -315,32 +406,21 @@ async fn show_webapp(
     // This is to avoid Err Network Changed from Chrome
     time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
 
-    match chrome.navigate(constant::WEBAPP_URL).await {
-        Ok(_) => {
-            println!("MAIN: Navigated to {}", constant::WEBAPP_URL);
-            *page = Page::WebApp;
-        }
-        Err(e) => {
-            println!("MAIN: Error navigating to webapp: {}", e);
-            return Err(e);
-        }
-    };
+    chrome
+        .navigate(constant::WEBAPP_URL)
+        .await
+        .with_context(|| format!("navigating to {}", constant::WEBAPP_URL))?;
+    println!("MAIN: Navigated to {}", constant::WEBAPP_URL);
+    *page = Page::WebApp;
     Ok(())
 }
 
-async fn show_message(
-    chrome: &Arc<CDP>,
-    message: &str,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn show_message(chrome: &Arc<Cdp>, message: &str) -> Result<()> {
     let message_url = format!("{}{}", constant::MSG_URL_PREFIX, message);
-    match chrome.navigate(&message_url).await {
-        Ok(_) => {
-            println!("MAIN: Navigated to {}", message_url);
-            Ok(())
-        }
-        Err(e) => {
-            println!("MAIN: Error showing message: {}", e);
-            Err(e)
-        }
-    }
+    chrome
+        .navigate(&message_url)
+        .await
+        .with_context(|| format!("navigating to {message_url}"))?;
+    println!("MAIN: Navigated to {message_url}");
+    Ok(())
 }

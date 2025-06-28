@@ -41,7 +41,7 @@ type MemoryMetrics struct {
 
 func (p MemoryMetrics) CapacityPercent() (float64, error) {
 	if p.MaxCapacity == 0 {
-		return 0, errors.New("Max capacity is 0")
+		return 0, errors.New("max capacity is 0")
 	}
 	return p.UsedCapacity / p.MaxCapacity * 100, nil
 }
@@ -60,7 +60,7 @@ type DiskMetrics struct {
 
 func (p DiskMetrics) UsagePercent() (float64, error) {
 	if p.TotalCapacity == 0 {
-		return 0, errors.New("Total capacity is 0")
+		return 0, errors.New("total capacity is 0")
 	}
 	return p.UsedCapacity / p.TotalCapacity * 100, nil
 }

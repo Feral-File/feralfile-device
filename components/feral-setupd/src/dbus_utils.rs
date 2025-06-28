@@ -2,11 +2,12 @@ use dbus::arg::Append;
 use dbus::blocking::{BlockingSender, Connection};
 use dbus::channel::Sender;
 use dbus::message::Message;
-use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::task;
+
+use anyhow::{Result, anyhow};
 
 use crate::constant;
 
@@ -17,20 +18,13 @@ pub type ListenCallback = Box<dyn Fn(Message) + Send + Sync>;
 /// If the ack is not received within `ACK_TIMEOUT`, the signal is resent.
 /// The operation is attempted up to `MAX_RETRIES` times.
 #[allow(dead_code)]
-pub fn send_signal(
-    object_path: &str,
-    interface: &str,
-    member: &str,
-    payload: &str,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub fn send_signal(object_path: &str, interface: &str, member: &str, payload: &str) -> Result<()> {
     let conn = Connection::new_session()?;
 
     // Listen for the expected ack
-    let ack_member = format!("{}_ack", member);
-    let rule = format!(
-        "type='signal',interface='{}',member='{}',path='{}'",
-        interface, ack_member, object_path
-    );
+    let ack_member = format!("{member}_ack");
+    let rule =
+        format!("type='signal',interface='{interface}',member='{ack_member}',path='{object_path}'");
     conn.add_match_no_cb(&rule)?;
 
     // Send the signal up to `MAX_RETRIES` times
@@ -38,7 +32,9 @@ pub fn send_signal(
     let ack_timeout = Duration::from_millis(constant::DBUS_ACK_TIMEOUT);
     for attempt in 0..max_retries {
         // Send the signal
-        let msg = Message::new_signal(object_path, interface, member)?.append1(payload);
+        let msg = Message::new_signal(object_path, interface, member)
+            .map_err(anyhow::Error::msg)?
+            .append1(payload);
         if conn.send(msg).is_err() {
             eprintln!(
                 "DBUS: Failed to send signal (attempt {}/{})",
@@ -71,11 +67,11 @@ pub fn send_signal(
         );
     }
 
-    Err(format!(
+    Err(anyhow!(
         "DBUS: Ack '{}' not received after {} attempts",
-        ack_member, max_retries
-    )
-    .into())
+        ack_member,
+        max_retries
+    ))
 }
 
 /// Waits up to `timeout_ms` milliseconds for a signal, immediately emits
@@ -87,13 +83,11 @@ pub fn receive_signal(
     interface: &str,
     member: &str,
     timeout_ms: u64,
-) -> Result<Message, Box<dyn Error + Send + Sync>> {
+) -> Result<Message> {
     let conn = Connection::new_session()?;
-    let rule = format!(
-        "type='signal',interface='{}',member='{}',path='{}'",
-        interface, member, object_path
-    );
-    println!("Rule: {}", rule);
+    let rule =
+        format!("type='signal',interface='{interface}',member='{member}',path='{object_path}'");
+    println!("DBUS: Rule: {rule}");
     conn.add_match_no_cb(&rule)?;
 
     let end_time = Instant::now() + Duration::from_millis(timeout_ms);
@@ -104,7 +98,9 @@ pub fn receive_signal(
         }
     }
 
-    Err(format!("Timed out after {} ms waiting for '{}'", timeout_ms, member).into())
+    Err(anyhow!(
+        "Timed out after {timeout_ms} ms waiting for '{member}'"
+    ))
 }
 
 /// Waits up to `duration` milliseconds for a signal, immediately emits
@@ -117,43 +113,37 @@ fn receive_internal(
     interface: &str,
     member: &str,
     duration: Duration,
-) -> Result<Message, Box<dyn Error + Send + Sync>> {
+) -> Result<Message> {
     let msg_opt = conn.channel().blocking_pop_message(duration)?;
 
-    let msg = msg_opt.ok_or(format!("DBUS: Do not receive any signal"))?;
+    let msg = msg_opt.ok_or_else(|| anyhow!("DBUS: Did not receive any signal"))?;
     let r_object_path = msg
         .path()
         .map(|p| p.to_string())
-        .ok_or(format!("DBUS: Received signal with no path: {:?}", msg))?;
+        .ok_or_else(|| anyhow!("DBUS: Received signal with no path: {msg:?}"))?;
     let r_member = msg
         .member()
         .map(|m| m.to_string())
-        .ok_or(format!("DBUS: Received signal with no member: {:?}", msg))?;
+        .ok_or_else(|| anyhow!("DBUS: Received signal with no member: {msg:?}"))?;
     if r_object_path != object_path {
-        return Err(format!(
-            "DBUS: Received signal from wrong object: {} (expected {})",
-            r_object_path, object_path
-        )
-        .into());
+        return Err(anyhow!(
+            "DBUS: Received signal from wrong object: {r_object_path} (expected {object_path})"
+        ));
     }
     if r_member != member {
-        return Err(format!(
-            "DBUS: Received signal with wrong member: {} (expected {})",
-            r_member, member
-        )
-        .into());
+        return Err(anyhow!(
+            "DBUS: Received signal with wrong member: {r_member} (expected {member})"
+        ));
     }
 
     // Send acknowledgement
-    println!(
-        "DBUS: Sending ack signal '{}_ack' to {}, {}",
-        member, object_path, interface
-    );
-    let mut ack_msg = Message::new_signal(object_path, interface, &format!("{}_ack", member))?;
+    println!("DBUS: Sending ack signal '{member}_ack' to {object_path}, {interface}");
+    let mut ack_msg = Message::new_signal(object_path, interface, format!("{member}_ack"))
+        .map_err(anyhow::Error::msg)?;
     ack_msg = ack_msg.append1("");
     if conn.send(ack_msg).is_err() {
         // Failed to send ack signal doesn't matter, just log an error
-        eprintln!("DBUS: Failed to send ack signal '{}_ack'", member);
+        eprintln!("DBUS: Failed to send ack signal '{member}_ack'");
     }
 
     Ok(msg)
@@ -171,17 +161,12 @@ pub fn listen_for_signal(
     let member = member.to_string();
     task::spawn_blocking(move || {
         let conn = Connection::new_session().expect("DBUS: failed to create connection");
-        let rule = format!(
-            "type='signal',interface='{}',member='{}',path='{}'",
-            interface, member, object_path
-        );
+        let rule =
+            format!("type='signal',interface='{interface}',member='{member}',path='{object_path}'");
         conn.add_match_no_cb(&rule)
             .expect("DBUS: failed to add match");
 
-        println!(
-            "DBUS: Listening for '{}' signal in a background thread",
-            member
-        );
+        println!("DBUS: Listening for '{member}' signal in a background thread");
         while !stop.load(Ordering::Relaxed) {
             if let Ok(msg) = receive_internal(
                 &conn,
@@ -214,12 +199,13 @@ pub fn call_method<T: Send + Sync + Append>(
     member: &str,
     payload: Option<T>,
     timeout_ms: u64,
-) -> Result<Message, Box<dyn Error + Send + Sync>> {
+) -> Result<Message> {
     // Establish a connection on the session bus
     let conn = Connection::new_session()?;
 
     // Build the method‑call message and attach the payload
-    let mut msg = Message::new_method_call(destination, object_path, interface, member)?;
+    let mut msg = Message::new_method_call(destination, object_path, interface, member)
+        .map_err(anyhow::Error::msg)?;
     if let Some(payload) = payload {
         msg = msg.append1(payload);
     }
@@ -238,17 +224,11 @@ pub fn internet_availability() -> bool {
         constant::DBUS_SYSMONITORD_OBJECT,
         constant::DBUS_SYSMONITORD_INTERFACE,
         constant::DBUS_CONNECTIVITY_METHOD,
-        Some(true), // payload
+        Some(true), // payload: true means forcing the check instead of using cached value from monitord
         constant::DBUS_INTERNET_CHECK_TIMEOUT,
     ) {
-        Ok(response) => {
-            let status = response.read1::<bool>().unwrap();
-            status
-        }
-        Err(_) => {
-            // println!("DBUS: Error checking internet availability: {}", e);
-            false
-        }
+        Ok(response) => response.read1::<bool>().unwrap_or(false),
+        Err(_) => false,
     }
 }
 
@@ -265,7 +245,7 @@ pub fn on_internet_available<F: FnOnce() + Send + Sync + 'static>(cb: F, stop: A
     });
 }
 
-pub fn get_relayer_info() -> Result<String, Box<dyn Error + Send + Sync>> {
+pub fn get_relayer_info() -> Result<String> {
     let start_time = Instant::now();
 
     match call_method(
@@ -285,7 +265,7 @@ pub fn get_relayer_info() -> Result<String, Box<dyn Error + Send + Sync>> {
             Ok(topic_id)
         }
         Err(e) => {
-            eprintln!("DBUS: Error getting relayer info: {}", e);
+            eprintln!("DBUS: Error getting relayer info: {e}");
             Err(e)
         }
     }

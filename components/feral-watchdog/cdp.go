@@ -64,8 +64,6 @@ func (m *CDPMonitor) Start(ctx context.Context) {
 		case <-ticker.C:
 			if err := m.check(ctx); err != nil {
 				m.logger.Warn("CDP: Health check failed", zap.Error(err))
-			} else {
-				// CDP: Health check passed, do nothing
 			}
 		}
 	}
@@ -97,7 +95,9 @@ func (m *CDPMonitor) check(ctx context.Context) error {
 		m.checkHangState(ctx)
 		return fmt.Errorf("CDP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// Check status code
 	if resp.StatusCode != http.StatusOK {

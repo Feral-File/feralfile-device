@@ -17,8 +17,8 @@ on:
         default: false
       environment:
         description: "Environment to build"
-        required: false
-        default: "Production"
+        required: true
+        default: "Development"
         type: choice
         options:
           - Development
@@ -71,6 +71,7 @@ jobs:
       version: ${{ inputs.version || github.event.inputs.version }}
       description: 'Feral File Setup Service'
       maintainer: 'Feral File'
+      environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
 
   build-feral-sys-monitord:
     name: Build Feral System Monitord
@@ -84,6 +85,7 @@ jobs:
       version: ${{ inputs.version || github.event.inputs.version }}
       description: 'Feral File System Monitord'
       maintainer: 'Feral File'
+      environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
 
   build-feral-watchdog:
     name: Build Feral Watchdog
@@ -97,6 +99,7 @@ jobs:
       version: ${{ inputs.version || github.event.inputs.version }}
       description: 'Feral File Watchdog'
       maintainer: 'Feral File'
+      environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
 
   build-feralfile-pacman-repo:
     name: Build Feralfile pacman repo
@@ -106,6 +109,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
       CLOUDFLARE_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
+    with:
+      environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
 
   build-image:
     name: Generate Arch Linux Image for Radxa X4
@@ -199,10 +204,16 @@ jobs:
           ENCODED_USER=$(printf '%s' "$AUTH_USER" | jq -sRr @uri)
           ENCODED_PASS=$(printf '%s' "$AUTH_PASS" | jq -sRr @uri)
 
+          if [ "${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}" = "Production" ]; then
+            DOMAIN="x1.feral-file.workers.dev"
+          else
+            DOMAIN="feralfile-device-distribution.bitmark-development.workers.dev"
+          fi
+
           cat >> /build/archiso-radxa-x4/pacman.conf << EOF
           [feralfile]
           SigLevel = Optional TrustAll
-          Server = https://${ENCODED_USER}:${ENCODED_PASS}@feralfile-device-distribution.bitmark-development.workers.dev/archlinux/${{ github.ref_name }}/os/\$arch
+          Server = https://${ENCODED_USER}:${ENCODED_PASS}@${DOMAIN}/archlinux/${{ github.ref_name }}/os/\$arch
           EOF
 
           cp /build/archiso-radxa-x4/pacman.conf /build/archiso-radxa-x4/airootfs/etc/pacman.conf
@@ -217,6 +228,12 @@ jobs:
 
       - name: Add Configs and Services
         run: |
+          if [ "${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}" = "Production" ]; then
+            ENDPOINT="https://x1.feral-file.workers.dev"
+          else
+            ENDPOINT="https://feralfile-device-distribution.bitmark-development.workers.dev"
+          fi
+
           # Add connectd config
           mkdir -p /build/archiso-radxa-x4/airootfs/home/feralfile/.config
           cat > /build/archiso-radxa-x4/airootfs/home/feralfile/.config/connectd.json << EOF
@@ -252,7 +269,8 @@ jobs:
             "branch": "${{ github.ref_name }}",
             "version": "${{ inputs.version || github.event.inputs.version }}",
             "distribution_acc": "${{ secrets.DISTRIBUTION_AUTH_USER }}",
-            "distribution_pass": "${{ secrets.DISTRIBUTION_AUTH_PASSWORD }}"
+            "distribution_pass": "${{ secrets.DISTRIBUTION_AUTH_PASSWORD }}",
+            "endpoint": "${ENDPOINT}"
           }
           EOF
           chmod 755 /build/archiso-radxa-x4/airootfs/home/feralfile/x1-config.json
