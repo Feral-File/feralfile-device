@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-STATUS_FILE="/var/lib/feral/firstboot-check.status"
+STATUS_FILE="/home/feralfile/.config/firstboot-check.status"
 
 log() {
   echo "$1"

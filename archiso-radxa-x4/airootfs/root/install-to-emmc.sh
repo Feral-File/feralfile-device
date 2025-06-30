@@ -182,7 +182,7 @@ mount --bind /dev /mnt/dev
 mount --bind /proc /mnt/proc
 mount --bind /sys /mnt/sys
 
-arch-chroot /mnt /bin/bash <<'EOF'
+arch-chroot /mnt /bin/bash <<EOF
 echo "Removing soaktest account..."
 id soaktest &>/dev/null && userdel soaktest || true
 
@@ -198,6 +198,7 @@ chmod 600 /boot/loader/random-seed 2>/dev/null || true
 
 echo "Installing systemd-boot to disk..."
 bootctl install
+EOF
 
 echo "Fetching current boot entries..."
 mapfile -t entry_lines < <(efibootmgr | grep -E '^Boot[0-9A-Fa-f]{4}\*')
@@ -238,7 +239,6 @@ echo "Applying new BootOrder: $bootorder_str"
 efibootmgr -o "$bootorder_str"
 
 echo "Boot order updated successfully."
-EOF
 
 # ─── Create Factory Reset Snapshot ─────────────────────────────────────
 echo
