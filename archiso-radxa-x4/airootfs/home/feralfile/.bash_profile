@@ -1,4 +1,5 @@
 ENV_MODE="$(cat /home/feralfile/.config/environment 2>/dev/null | xargs)"
+CHECK_STATUS_FILE="/home/feralfile/.config/firstboot-check.status"
 
 sudo chown feralfile:feralfile /home/feralfile
 
@@ -19,4 +20,10 @@ fi
 
 if ! sudo systemctl is-enabled "feral-log-rotation.timer" >/dev/null 2>&1; then
     sudo systemctl enable --now "feral-log-rotation.timer"
+fi
+
+if [[ ! -f "$CHECK_STATUS_FILE" || "$(cat "$CHECK_STATUS_FILE")" == "FAILED" ]]; then
+    echo "🚧 Running first-boot test..."
+
+    /home/feralfile/scripts/firstboot-check.sh
 fi
