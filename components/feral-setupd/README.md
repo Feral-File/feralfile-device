@@ -1,39 +1,41 @@
-# Flow
+# Setupd
+
+## App startup flow
 
 ```mermaid
----
-config:
-  theme: mc
-  layout: dagre
-  look: neo
-title: Program state
----
-stateDiagram
-  direction TB
-  [*] --> Startup
-  Startup --> QRCode:no cache, no internet
-  Startup --> QRCode:has cache, no internet
-  Startup --> Artwork:has cache, has internet
-  QRCode --> Artwork:connect wifi
-  QRCode --> Artwork:internet is available
-  QRCode --> Artwork:request to hide QRCode
-  Artwork --> QRCode:request to show QRCode
+flowchart TD
+    AppStart[App Start] --> HasInternet(Has Internet)
 
+    HasInternet --> |No| QRCode1(Display QRCode)
+    HasInternet --> |Yes| UpToDate1{Up to date}
+
+    UpToDate1 --> |No| Update(Update to latest version)
+    UpToDate1 --> |Yes| Paired{Has paired<br/>with mobile app}
+    Update --> |Restart| AppStart
+    Paired --> |No| QRCode2(Display QRCode)
+    Paired --> |Yes| Artwork(Display Artwork)
+    QRCode2 --> |Connect bluetooth<br/>Command: keep_wifi| Relayer1(Get relayer credential<br/>Return keep_wifi)
+    Relayer1 --> Artwork
+
+    QRCode1 --> |Internet<br/>Detected| HasInternet
+    QRCode1 --> |Connect bluetooth<br/>Command: connect_wifi| UpToDate2{Up to date}
+    UpToDate2 --> |No| Update
+    UpToDate2 --> |Yes| Relayer2(Get relayer credential<br/>Return connect_wifi)
+    Relayer2 --> Artwork
 ```
 
+## App update flow
+
 ```mermaid
-flowchart
-  AppStart[App Start] --> UserScanned{User scanned}
+flowchart TD
+    Latest[Latest Version] --> Trouble{Having<br/>trouble}
 
-  UserScanned --> |Yes| HasInternet{Has Internet}
-  UserScanned --> |No| QRCode
+    Trouble --> |Yes| Rollback{Choose version<br/>to rollback}
+    Trouble --> |No| Update[Update at 3am]
 
-  HasInternet --> |Yes| WebApp(Web App)
-  HasInternet --> |No| QRCode
+    Rollback --> |Fresh| FactoryVersion(Factory Version)
+    Rollback --> LastVersion(Last Version)
 
-  QRCode --> ConnectWifi[Connect Wifi]
-  ConnectWifi --> HasInternet2{Has Internet}
-  HasInternet2 --> |No| QRCode
-  HasInternet2 --> |Yes| RelayerID(Get Relayer ID<br/>user_scanned=true)
-  RelayerID --> WebApp
+    FactoryVersion --> |Force Update| Latest
+    LastVersion --> |Force Update| Latest
 ```
