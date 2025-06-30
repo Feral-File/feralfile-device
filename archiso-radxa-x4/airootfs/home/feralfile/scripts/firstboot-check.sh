@@ -10,8 +10,8 @@ log() {
 log "🚀 First boot system check starting..."
 
 fail() {
-  log "❌ $1"
   echo "FAILED" > "$STATUS_FILE"
+  log "❌ $1"
 }
 
 # 1. Check bluetooth.service
@@ -20,12 +20,15 @@ if ! systemctl is-active --quiet bluetooth.service; then
 fi
 log "✅ bluetooth.service"
 
-# 2. Check network is working
-if ! systemctl is-active --quiet NetworkManager.service; then
-  fail "NetworkManager.service inactivated"
-fi
+# 2. Check system services are working
+for svc in NetworkManager.service bluetooth.service; do
+  if ! systemctl is-active --quiet "$svc"; then
+    fail "$svc inactivated"
+  fi
+  log "✅ $svc"
+done
 
-# 3. Check core services
+# 3. Check feral core services
 for svc in feral-sys-monitord.service feral-watchdog.service chromium-kiosk.service; do
   if ! systemctl is-active --quiet "$svc"; then
     fail "$svc inactivated"
