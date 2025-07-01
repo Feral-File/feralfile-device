@@ -17,7 +17,7 @@ done
 
 # Generate timestamp: e.g., 20250701T140522
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
-LOG_FILE="/home/soaktest/cpu_temp_log_${TIMESTAMP}.csv"
+LOG_FILE="/home/soaktest/run_results/cpu_temp_log_${TIMESTAMP}.csv"
 
 # Launch soak test (duration + timestamp)
 cage -s /home/soaktest/test.sh -- "$DURATION_SECONDS" "$TIMESTAMP"
@@ -89,8 +89,9 @@ while true; do
             if sudo mount | grep -q "$USB_MOUNT"; then sudo umount "$USB_MOUNT"; fi
             if sudo mount "$PART" "$USB_MOUNT"; then
                 echo "✅ Mounted successfully."
-                sudo cp "$LOG_FILE" "$USB_MOUNT/"
-                echo "📁 Log file copied to $USB_MOUNT/$(basename "$LOG_FILE")"
+                DEST_DIR="$USB_MOUNT/run_results_$TIMESTAMP"
+                sudo cp -r /home/soaktest/run_results "$DEST_DIR"
+                echo "📁 All log files copied to $DEST_DIR"
                 sudo umount "$USB_MOUNT"
                 echo "💾 USB safely unmounted."
                 echo "Please press any key to shut down the system safely."

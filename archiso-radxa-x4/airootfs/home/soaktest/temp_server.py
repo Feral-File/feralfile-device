@@ -135,7 +135,7 @@ def run():
         sys.exit(1)
 
     timestamp = sys.argv[1]
-    CSV_FILE = f"/home/soaktest/cpu_temp_log_{timestamp}.csv"
+    CSV_FILE = f"/home/soaktest/run_results/cpu_temp_log_{timestamp}.csv"
 
     threading.Thread(target=background_logger, args=(CSV_FILE,), daemon=True).start()
     HTTPServer(('', 8000), TempHandler).serve_forever()
