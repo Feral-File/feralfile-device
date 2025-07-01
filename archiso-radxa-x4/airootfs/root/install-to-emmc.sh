@@ -156,7 +156,7 @@ editor no
 EOF
 
 cat > /mnt/boot/loader/entries/arch-forever.conf <<EOF
-title   Feral File X1
+title   FF X1 Soak Test Runs Forever
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
@@ -164,7 +164,7 @@ options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID  script=/home/soaktest/s
 EOF
 
 cat > /mnt/boot/loader/entries/arch.conf <<EOF
-title   Feral File X1
+title   FF X1 Soak Test
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
