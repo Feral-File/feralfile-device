@@ -150,9 +150,17 @@ umount /live-efi
 PARTUUID=$(blkid -s PARTUUID -o value "$ROOT_PART")
 
 cat > /mnt/boot/loader/loader.conf <<EOF
-default arch.conf
-timeout 0
+default arch-forever.conf
+timeout 20
 editor no
+EOF
+
+cat > /mnt/boot/loader/entries/arch-forever.conf <<EOF
+title   Feral File X1
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+initrd  /intel-ucode.img
+options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID  script=/home/soaktest/soak-test-forever.sh ipv6.disable=1 rw
 EOF
 
 cat > /mnt/boot/loader/entries/arch.conf <<EOF

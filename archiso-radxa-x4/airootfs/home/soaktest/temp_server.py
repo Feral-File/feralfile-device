@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import json, datetime, os, threading, time, subprocess
+import json, datetime, os, threading, time, subprocess, sys
 
-CSV_FILE = "/home/soaktest/cpu_temp_log.csv"
-HTML_FILE = "/home/soaktest/temp_viewer.html"
 SAMPLE_INTERVAL_SECONDS = 5
+FLUSH_INTERVAL_SECONDS = 15
+CSV_FILE = None
+HTML_FILE = "/home/soaktest/temp_viewer.html"
 
 def get_cpu_temp():
     try:
@@ -23,16 +24,58 @@ def get_cpu_temp():
         return 0.0
     return 0.0
 
-def background_logger():
-    print("[INFO] Logger started")
-    with open(CSV_FILE, "a") as f:
-        f.write("timestamp,cpu_temp_celsius\n")
-    while True:
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        temp = get_cpu_temp()
-        with open(CSV_FILE, "a") as f:
-            f.write(f"{timestamp},{temp:.1f}\n")
-        time.sleep(SAMPLE_INTERVAL_SECONDS)
+def get_screen_info():
+    try:
+        output = subprocess.check_output(["wlr-randr"], encoding="utf-8")
+        for line in output.splitlines():
+            if "current" in line:
+                fields = line.strip().split()
+                if len(fields) >= 3:
+                    dimensions = fields[0].split("x")
+                    if len(dimensions) == 2:
+                        width = int(dimensions[0])
+                        height = int(dimensions[1])
+                        refresh_rate = float(fields[2])
+                        return {
+                            "width": width,
+                            "height": height,
+                            "refresh_rate": refresh_rate
+                        }
+    except Exception as e:
+        print(f"[WARN] Failed to get screen info: {e}")
+    return {
+        "width": None,
+        "height": None,
+        "refresh_rate": None
+    }
+
+def background_logger(csv_path):
+    print(f"[INFO] Logger started → writing to: {csv_path}")
+    last_flush_time = time.time()
+
+    first_time = not os.path.exists(csv_path)
+    with open(csv_path, "a", buffering=1) as f:
+        if first_time:
+            f.write("timestamp,cpu_temp_celsius,width,height,refresh_rate\n")
+
+        while True:
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            temp = get_cpu_temp()
+            screen = get_screen_info()
+
+            width = screen["width"] if screen["width"] is not None else ""
+            height = screen["height"] if screen["height"] is not None else ""
+            refresh = screen["refresh_rate"] if screen["refresh_rate"] is not None else ""
+
+            f.write(f"{timestamp},{temp:.1f},{width},{height},{refresh}\n")
+
+            now = time.time()
+            if now - last_flush_time >= FLUSH_INTERVAL_SECONDS:
+                f.flush()
+                os.fsync(f.fileno())
+                last_flush_time = now
+
+            time.sleep(SAMPLE_INTERVAL_SECONDS)
 
 class TempHandler(BaseHTTPRequestHandler):
     def _send_json(self, payload):
@@ -56,14 +99,27 @@ class TempHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_GET(self):
-        if self.path == '/temp':
+        if self.path == '/info':
             try:
                 with open(CSV_FILE, 'r') as f:
                     last = f.readlines()[-1]
-                    timestamp, temp = last.strip().split(',')
-                    self._send_json({'timestamp': timestamp, 'temp': temp})
+                    parts = last.strip().split(',')
+                    timestamp, temp, width, height, refresh = parts
+                    screen_info = {
+                        "width": int(width) if width else None,
+                        "height": int(height) if height else None,
+                        "refresh_rate": float(refresh) if refresh else None
+                    }
             except:
-                self._send_json({'timestamp': '', 'temp': 'N/A'})
+                timestamp, temp = '', 'N/A'
+                screen_info = get_screen_info()
+
+            payload = {
+                'timestamp': timestamp,
+                'temp': temp,
+                'screen': screen_info
+            }
+            self._send_json(payload)
         elif self.path in ['/', '/index.html']:
             self._send_html(HTML_FILE)
         else:
@@ -71,7 +127,17 @@ class TempHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 def run():
-    threading.Thread(target=background_logger, daemon=True).start()
+    global CSV_FILE
+
+    if len(sys.argv) < 2:
+        print("Usage: ./temp_server.py <timestamp>")
+        print("Example: ./temp_server.py 20250701T130000")
+        sys.exit(1)
+
+    timestamp = sys.argv[1]
+    CSV_FILE = f"/home/soaktest/cpu_temp_log_{timestamp}.csv"
+
+    threading.Thread(target=background_logger, args=(CSV_FILE,), daemon=True).start()
     HTTPServer(('', 8000), TempHandler).serve_forever()
 
 if __name__ == '__main__':

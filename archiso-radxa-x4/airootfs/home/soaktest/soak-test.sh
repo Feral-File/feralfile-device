@@ -1,8 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-LOG_FILE="/home/soaktest/cpu_temp_log.csv"
-
 clear
 
 echo "🔧 Choose the testing duration:"
@@ -17,7 +15,12 @@ select choice in "1 min" "1 hr" "3 hrs" "24 hrs" "forever"; do
   esac
 done
 
-cage -s /home/soaktest/test.sh -- $DURATION_SECONDS
+# Generate timestamp: e.g., 20250701T140522
+TIMESTAMP=$(date +%Y%m%dT%H%M%S)
+LOG_FILE="/home/soaktest/cpu_temp_log_${TIMESTAMP}.csv"
+
+# Launch soak test (duration + timestamp)
+cage -s /home/soaktest/test.sh -- "$DURATION_SECONDS" "$TIMESTAMP"
 
 clear
 
@@ -26,14 +29,12 @@ echo "Soak test completed. Logs saved to: $LOG_FILE"
 # --- Select USB device to mount and copy CSV ---
 echo -e "\n🔌 Please insert a USB drive to save the log."
 
-# Mount point
 USB_MOUNT="/mnt/usb"
 sudo mkdir -p "$USB_MOUNT"
 
 while true; do
     echo "🔍 Scanning available removable disks..."
 
-    # Build options: only removable, not mounted
     options=()
     while IFS= read -r dev; do
         size=$(lsblk -dn -o SIZE "/dev/$dev")
@@ -41,7 +42,6 @@ while true; do
         options+=("/dev/$dev ($size) $model")
     done < <(lsblk -dn -o NAME,RM,TYPE | awk '$2 == "1" && $3 == "disk" { print $1 }')
 
-    # Check if there are any options
     if [[ ${#options[@]} -eq 0 ]]; then
         echo "⚠️  No USB devices found. Press r to refresh, or q to quit and manually copy the file."
         read -n1 -rp "> " input
@@ -53,16 +53,15 @@ while true; do
     PS3=$'\nSelect a USB disk: '
     select opt in "${options[@]}" "🔄 Refresh list"; do
         if [[ "$REPLY" == "$(( ${#options[@]} + 1 ))" ]]; then
-            break # Refresh
+            break
         elif [[ -n "$opt" ]]; then
             TARGET_DISK=$(awk '{print $1}' <<< "$opt")
             echo -e "\n✅ You selected: $TARGET_DISK"
 
-            # List partitions under selected disk
             PARTITIONS=()
             while IFS= read -r line; do
                 part_name=$(awk '{print $1}' <<< "$line")
-                [[ "/dev/$part_name" == "$TARGET_DISK" ]] && continue # skip whole disk
+                [[ "/dev/$part_name" == "$TARGET_DISK" ]] && continue
                 size=$(awk '{print $2}' <<< "$line")
                 fstype=$(awk '{print $3}' <<< "$line")
                 PARTITIONS+=("/dev/$part_name ($size, $fstype)")
@@ -85,20 +84,19 @@ while true; do
                 done
             fi
 
-            # Try to mount
             echo -e "📦 Mounting $PART to $USB_MOUNT..."
 
             if sudo mount | grep -q "$USB_MOUNT"; then sudo umount "$USB_MOUNT"; fi
             if sudo mount "$PART" "$USB_MOUNT"; then
                 echo "✅ Mounted successfully."
                 sudo cp "$LOG_FILE" "$USB_MOUNT/"
-                echo "📁 Log file copied to $USB_MOUNT/cpu_temp_log.csv"
+                echo "📁 Log file copied to $USB_MOUNT/$(basename "$LOG_FILE")"
                 sudo umount "$USB_MOUNT"
                 echo "💾 USB safely unmounted."
                 echo "Please press any key to shut down the system safely."
                 read -n 1 -s -r -p ""
                 shutdown -h now
-                break 2 # Done, break outer loop
+                break 2
             else
                 echo "❌ Failed to mount $PART."
                 echo "Please manually copy the file."
