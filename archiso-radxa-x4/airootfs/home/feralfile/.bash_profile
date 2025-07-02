@@ -1,6 +1,6 @@
 ENV_MODE="$(cat /home/feralfile/.config/environment 2>/dev/null | xargs)"
 
-sudo chown feralfile:feralfile /home/feralfile
+sudo chown -R feralfile:feralfile /home/feralfile
 
 sudo systemctl start "chromium-kiosk.service"
 
