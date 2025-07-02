@@ -19,7 +19,7 @@ HTML_PATH="/home/soaktest/temp_viewer.html"
 
 stop() {
   echo "[INFO] Cleaning up..."
-  kill "$SERVER_PID" 2>/dev/null || true
+  kill "$SERVER_PID" "$ARTWORK_PID" 2>/dev/null || true
   echo "[INFO] Log file saved at: $LOG_FILE"
 }
 trap stop EXIT INT TERM
