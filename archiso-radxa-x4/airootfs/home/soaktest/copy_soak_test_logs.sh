@@ -6,8 +6,20 @@ clear
 # --- Select USB device to mount and copy CSV ---
 echo -e "\n🔌 Please insert a USB drive to save the logs."
 
+TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 USB_MOUNT="/mnt/usb"
 sudo mkdir -p "$USB_MOUNT"
+
+cleanup() {
+  echo "Flushing disk caches..."
+  sync
+
+  echo "Unmounting $USB_MOUNT..."
+  if mountpoint -q USB_MOUNT; then
+    umount USB_MOUNT 2>/dev/null || umount -l USB_MOUNT
+  fi
+}
+trap cleanup EXIT
 
 while true; do
     echo "🔍 Scanning available removable disks..."
@@ -70,8 +82,6 @@ while true; do
                 sudo cp -r /home/soaktest/run_results "$DEST_DIR"
                 sudo sync
                 echo "📁 All log files copied to $DEST_DIR"
-                sudo umount "$USB_MOUNT"
-                echo "💾 USB safely unmounted."
                 echo "Please press any key to shut down the system safely."
                 read -n 1 -s -r -p ""
                 shutdown -h now
