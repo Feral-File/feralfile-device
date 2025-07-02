@@ -10,6 +10,4 @@ LOG_FILE="/home/soaktest/run_results/cpu_temp_log_${TIMESTAMP}.csv"
 # Launch soak test (duration + timestamp)
 cage -s /home/soaktest/test.sh -- "0" "$TIMESTAMP"
 
-clear
-
-echo "Soak test completed. Logs saved to: $LOG_FILE. Please manually copy the file."
+copy_soak_test_logs.sh $TIMESTAMP

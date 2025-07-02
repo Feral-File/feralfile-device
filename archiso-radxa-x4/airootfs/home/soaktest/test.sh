@@ -24,6 +24,8 @@ stop() {
 }
 trap stop EXIT INT TERM
 
+touch $LOG_FILE
+
 # Launch chromium
 chromium --kiosk "$ARTWORK_URL" &
 ARTWORK_PID=$!
