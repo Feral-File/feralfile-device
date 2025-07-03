@@ -10,8 +10,15 @@ log() {
 log "🚀 First boot system check starting..."
 
 fail() {
+  sudo systemctl stop "feral-watchdog.service"
+  sudo systemctl stop "feral-sys-monitord.service"
+  sudo systemctl stop "chromium-kiosk.service"
+  sudo systemctl stop "feral-connectd.service"
+  sudo systemctl stop "feral-setupd.service"
+  sudo systemctl stop "chromium-kiosk.service"
   echo "FAILED" > "$STATUS_FILE"
   log "❌ $1"
+  exit 1
 }
 
 # 1. Check bluetooth.service
