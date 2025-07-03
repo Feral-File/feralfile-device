@@ -14,7 +14,7 @@ flowchart TD
     UpToDate1 --> |Yes| Paired{Has paired<br/>with mobile app}
     Update --> |Restart| FF1Start
     Paired --> |No| QRCode2(Display QRCode)
-    Paired --> |Yes| Artwork(Display Artwork)
+    Paired --> |Yes| Artwork(Artwork Playback)
     QRCode2 --> |Connect bluetooth<br/>Command: keep_wifi| Relayer1(Get relayer credential<br/>Return keep_wifi)
     Relayer1 --> Artwork
 
