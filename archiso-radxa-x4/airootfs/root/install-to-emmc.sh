@@ -200,46 +200,6 @@ echo "Installing systemd-boot to disk..."
 bootctl install
 EOF
 
-echo "Fetching current boot entries..."
-mapfile -t entry_lines < <(efibootmgr | grep -E '^Boot[0-9A-Fa-f]{4}\*')
-
-echo "Classifying boot entries into high / other / low priority..."
-
-high_priority_a=()
-high_priority_b=()
-low_priority=()
-other=()
-
-for line in "${entry_lines[@]}"; do
-  bootnum=$(echo "$line" | awk '{print $1}' | sed 's/Boot//;s/\*//')
-  title=$(echo "$line" | sed -n 's/^Boot[0-9A-Fa-f]\{4\}\*\s*\(.*\)\s\+\(HD\|VenHw\|File\|Pci\).*/\1/p')
-  title=${title:-$(echo "$line" | cut -d'*' -f2-)}
-
-  if [[ "$title" == "Linux Boot Manager" && "$line" == *"HD("* && "$line" != *"USB("* ]]; then
-    high_priority_a+=("$bootnum")
-  elif [[ "$title" == "UEFI OS" && "$line" == *"HD("* && "$line" != *"USB("* ]]; then
-    high_priority_b+=("$bootnum")
-  elif [[ "$line" == *"VenHw("* ]]; then
-    low_priority+=("$bootnum")
-  else
-    other+=("$bootnum")
-  fi
-done
-
-new_bootorder=("${high_priority_a[@]}" "${high_priority_b[@]}" "${other[@]}" "${low_priority[@]}")
-bootorder_str=$(IFS=,; echo "${new_bootorder[*]}")
-
-echo "Final prioritized BootOrder:"
-for i in "${!new_bootorder[@]}"; do
-  label=$(printf '%s\n' "${entry_lines[@]}" | grep "Boot${new_bootorder[$i]}\*" | cut -d'*' -f2-)
-  printf "  [%02d] Boot%s → %s\n" "$i" "${new_bootorder[$i]}" "$label"
-done
-
-echo "Applying new BootOrder: $bootorder_str"
-efibootmgr -o "$bootorder_str"
-
-echo "Boot order updated successfully."
-
 # ─── Create Factory Reset Snapshot ─────────────────────────────────────
 echo
 echo "Creating factory reset snapshot..."
