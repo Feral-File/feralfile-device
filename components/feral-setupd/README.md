@@ -1,6 +1,8 @@
-# Setupd
+# FFX1
 
-## App startup flow
+## Device life cycle
+
+### App startup flow
 
 ```mermaid
 flowchart TD
@@ -25,7 +27,7 @@ flowchart TD
     Relayer2 --> Artwork
 ```
 
-## App update flow
+### App update flow
 
 ```mermaid
 flowchart TD
@@ -42,3 +44,17 @@ flowchart TD
     FactoryVersion --> |Force Update| Latest
     LastVersion --> |Force Update| Latest
 ```
+
+## Telemetry
+
+(TBD)
+
+## Version control
+
+We deploy the firmware versions through 2 main channels:
+- Dev channel: https://feralfile-device-distribution.bitmark-development.workers.dev/
+- Prod channel: https://x1.feral-file.workers.dev/
+
+Our versioning follow Semantic Versioning format.
+
+Each channel has API to specific min_version and latest_version. If the current version on the device is older than min_version, it's forced to update. Otherwise, it will update to the latest version silently at 3am.
