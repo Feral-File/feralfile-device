@@ -73,14 +73,20 @@ func main() {
 	// Initialize system command executor
 	commandHandler := NewCommandHandler(logger)
 
+	// Initialize CDP monitor
+	cdpMonitor := NewCDPMonitor(config.CDPEndpoint, logger, commandHandler)
+	defer cdpMonitor.Stop()
+
 	// Initialize resource monitors
 	ramHandler := NewMemoryHandler(logger, commandHandler)
 	diskHandler := NewDiskHandler(logger, commandHandler)
 	gpuHandler := NewGPUHandler(logger, commandHandler)
+	cpuHandler := NewCPUHandler(logger, commandHandler, cdpMonitor)
 	defer gpuHandler.GracefulShutdown(ctx)
+	defer cpuHandler.GracefulShutdown(ctx)
 
 	// Initialize mediator
-	mediator := NewMediator(dbusClient, diskHandler, ramHandler, gpuHandler, logger)
+	mediator := NewMediator(dbusClient, diskHandler, ramHandler, gpuHandler, cpuHandler, logger)
 	mediator.Start()
 	defer mediator.Stop()
 
@@ -95,9 +101,6 @@ func main() {
 		systemdWatchdog.Start(ctx)
 	}()
 
-	// Start CDP monitor
-	cdpMonitor := NewCDPMonitor(config.CDPEndpoint, logger, commandHandler)
-	defer cdpMonitor.Stop()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

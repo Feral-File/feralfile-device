@@ -174,3 +174,8 @@ func (m *CDPMonitor) shouldTriggerReboot() bool {
 	// If the oldest of the recent restarts is within the window, we need to reboot
 	return time.Since(m.restartHistory[0]) <= CDP_MAX_RESTARTS_WINDOW
 }
+
+// SendCriticalCPUTemperatureNotification sends a critical CPU temperature notification
+func (m *CDPMonitor) SendCriticalCPUTemperatureNotification(ctx context.Context) error {
+
+}
