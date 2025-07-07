@@ -11,20 +11,20 @@ import (
 const (
 	// CPU temperature monitoring thresholds and constants
 	CPU_CRITICAL_TEMPERATURE       = 80.0             // 80°C critical temperature
-	CPU_MONITOR_DURATION_THRESHOLD = 10 * time.Second  // Check if temp is above threshold for 10 seconds
+	CPU_MONITOR_DURATION_THRESHOLD = 10 * time.Second // Check if temp is above threshold for 10 seconds
 	CPU_SHUTDOWN_DELAY             = 10 * time.Second // Shutdown after 10 seconds
 )
 
 type CPUHandler struct {
-	mu                      sync.Mutex
-	logger                  *zap.Logger
-	commandHandler          *CommandHandler
-	cdpMonitor              *CDPMonitor
-	highTempMonitoring      bool
-	highTempStartTime       time.Time
-	shutdownScheduled       bool
-	shutdownTimer           *time.Timer
-	criticalTemperature     float64
+	mu                  sync.Mutex
+	logger              *zap.Logger
+	commandHandler      *CommandHandler
+	cdpMonitor          *CDPMonitor
+	highTempMonitoring  bool
+	highTempStartTime   time.Time
+	shutdownScheduled   bool
+	shutdownTimer       *time.Timer
+	criticalTemperature float64
 }
 
 func NewCPUHandler(logger *zap.Logger, commandHandler *CommandHandler, cdpMonitor *CDPMonitor) *CPUHandler {
@@ -46,6 +46,8 @@ func (c *CPUHandler) GracefulShutdown(ctx context.Context) {
 func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	c.logger.Info("CPU: Checking CPU temperature", zap.Float64("current_temp", currentTemp))
 
 	// If temperature is below threshold, reset monitoring if active
 	if currentTemp < c.criticalTemperature {
