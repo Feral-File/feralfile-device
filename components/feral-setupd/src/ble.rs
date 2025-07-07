@@ -404,6 +404,7 @@ async fn handle_factory_reset(
     notifier: Arc<Mutex<Option<CharacteristicNotifier>>>,
     reply_id: String,
 ) -> Result<(), ReqError> {
+    println!("BLE: Factory resetting");
     let status_code = if let Err(e) = system::factory_reset().await {
         eprintln!("BLE: Failed to factory reset: {e:#?}");
         [constant::BLE_ERR_CODE_UNKNOWN_ERROR]
@@ -420,6 +421,7 @@ async fn notify_central(
     notifier: Arc<Mutex<Option<CharacteristicNotifier>>>,
     payload: Vec<&[u8]>,
 ) -> Result<(), ReqError> {
+    println!("BLE: Notifying central with payload: {payload:?}");
     let mut guard = notifier.lock().await;
     if let Some(notifier) = guard.as_mut() {
         let payload = encoding::encode_payload(&payload);

@@ -6,11 +6,14 @@ use tokio::task;
 use crate::constant;
 
 pub async fn factory_reset() -> Result<(), anyhow::Error> {
+    println!("System: Factory resetting");
     if let Err(e) = task::spawn_blocking(move || {
+        println!("System: Starting factory reset service");
         let output = Command::new("systemctl")
             .args(["start", "set-factory-boot.service"])
             .output()?;
 
+        println!("System: Factory reset service output: {output:?}");
         if !output.status.success() {
             let err_msg = String::from_utf8_lossy(&output.stderr);
             return Err(anyhow::anyhow!(
