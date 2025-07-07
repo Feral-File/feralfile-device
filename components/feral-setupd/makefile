@@ -101,7 +101,7 @@ docker-build:
 .PHONY: docker-run
 docker-run:
 	@docker run --rm -it \
-		-v "$(CURDIR)/..":/workspace \
+		-v "$(CURDIR)":/workspace \
 		arch-dev
 
 # ───────────────────────────────────────────────────────────────────────────────

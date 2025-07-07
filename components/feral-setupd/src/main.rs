@@ -5,6 +5,7 @@ mod connectivity;
 mod constant;
 mod dbus_utils;
 mod encoding;
+mod system;
 mod updater;
 mod wifi_utils;
 
