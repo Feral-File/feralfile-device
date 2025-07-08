@@ -241,7 +241,7 @@ func (m *CDPMonitor) SendCriticalCPUTemperatureNotification(ctx context.Context)
 
 	// Send the CDP command
 	params := map[string]interface{}{
-		"expression": fmt.Sprintf("window.handleWatchdogEvent(%s)", CDP_CRITICAL_CPU_TEMPERATURE_EVENT),
+		"expression": fmt.Sprintf("window.handleWatchdogEvent(%q)", CDP_CRITICAL_CPU_TEMPERATURE_EVENT),
 	}
 
 	_, err := m.Send(METHOD_EVALUATE, params)
