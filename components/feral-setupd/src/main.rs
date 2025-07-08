@@ -5,6 +5,7 @@ mod connectivity;
 mod constant;
 mod dbus_utils;
 mod encoding;
+mod system;
 mod updater;
 mod wifi_utils;
 
@@ -76,7 +77,7 @@ async fn main() -> Result<()> {
     let ssids_cacher = Arc::new(SSIDsCacher::new());
     ble_service
         .start(
-            create_bt_connected_cb(chrome.clone()),
+            create_bt_connected_cb(app_state.clone(), chrome.clone()),
             create_connect_wifi_cb(app_state.clone(), chrome.clone()),
             create_keep_wifi_cb(app_state.clone(), chrome.clone()),
             create_get_info_cb(app_state.clone()),
@@ -148,11 +149,15 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn create_bt_connected_cb(chromium: Arc<Cdp>) -> ble::BTConnectedCallback {
+fn create_bt_connected_cb(
+    app_state: Arc<AppState>,
+    chromium: Arc<Cdp>,
+) -> ble::BTConnectedCallback {
     Some(Box::new(move || {
         let chromium = chromium.clone();
+        let app_state = app_state.clone();
         Box::pin(async move {
-            let _ = show_message(&chromium, constant::WELCOME_MSG).await;
+            let _ = show_message(&chromium, &app_state, constant::WELCOME_MSG).await;
         })
     }))
 }
@@ -171,6 +176,7 @@ fn create_connect_wifi_cb(
             // Show message
             let _ = show_message(
                 &chromium,
+                &app_state,
                 &format!("{}{}", constant::WIFI_CONNECTING_MSG_PREFIX, ssid),
             )
             .await;
@@ -187,7 +193,9 @@ fn create_connect_wifi_cb(
                 );
                 // Tell user that the wifi connection failed
                 task::spawn(async move {
-                    let _ = show_message(&chromium, constant::WIFI_FAILED_TO_CONNECT_MSG).await;
+                    let _ =
+                        show_message(&chromium, &app_state, constant::WIFI_FAILED_TO_CONNECT_MSG)
+                            .await;
                 });
                 // This is a bit of a hack to detect wrong password
                 // But the command doesn't provide a reliable way to detect this
@@ -203,7 +211,12 @@ fn create_connect_wifi_cb(
             // Return early if there is no internet
             if !app_state.internet.is_online(true).await {
                 task::spawn(async move {
-                    let _ = show_message(&chromium, constant::INTERNET_FAILED_TO_CONNECT_MSG).await;
+                    let _ = show_message(
+                        &chromium,
+                        &app_state,
+                        constant::INTERNET_FAILED_TO_CONNECT_MSG,
+                    )
+                    .await;
                 });
                 return Err(constant::BLE_ERR_CODE_NO_INTERNET);
             }
@@ -235,13 +248,18 @@ async fn internet_setup_successfully_cb(
             // Spawn the update process in the background
             // This is to avoid blocking Error code to mobile app
             // The update process will take over chromium and show the update progress
-            task::spawn(update(chromium.clone()));
+            task::spawn(update(app_state.clone(), chromium.clone()));
             return Err(constant::BLE_ERR_CODE_DEVICE_UPDATING);
         }
         Ok(false) => {} // No update required, proceed with the normal flow
         Err(e) => {
             eprintln!("MAIN: Error checking for update: {e}");
-            let _ = show_message(chromium, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
+            let _ = show_message(
+                chromium,
+                &app_state,
+                constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG,
+            )
+            .await;
             return Err(constant::BLE_ERR_CODE_VERSION_CHECK_FAILED);
         }
     }
@@ -268,7 +286,7 @@ async fn internet_setup_successfully_cb(
     task::spawn(async move {
         // This is a workaround to avoid Err Network Changed from Chrome
         // This potentially also avoids the white screen issue
-        let _ = show_message(&chromium, constant::SETUP_SUCCESSFULLY_MSG).await;
+        let _ = show_message(&chromium, &app_state, constant::SETUP_SUCCESSFULLY_MSG).await;
         time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
         let _ = show_webapp(&app_state, &chromium).await;
     });
@@ -357,12 +375,17 @@ async fn on_startup_with_internet(app_state: Arc<AppState>, chrome: Arc<Cdp>) {
     // So we just return
     match updater::is_update_required().await {
         Ok(true) => {
-            let _ = update(chrome.clone()).await;
+            let _ = update(app_state.clone(), chrome.clone()).await;
             return;
         }
         Err(e) => {
             eprintln!("MAIN: Error checking for update: {e}");
-            let _ = show_message(&chrome, constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG).await;
+            let _ = show_message(
+                &chrome,
+                &app_state,
+                constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG,
+            )
+            .await;
             return;
         }
         Ok(false) => {}
@@ -377,16 +400,22 @@ async fn on_startup_with_internet(app_state: Arc<AppState>, chrome: Arc<Cdp>) {
     }
 }
 
-async fn update(chrome: Arc<Cdp>) -> Result<()> {
+async fn update(app_state: Arc<AppState>, chrome: Arc<Cdp>) -> Result<()> {
     let latest_version = updater::latest_version().await.unwrap_or_default();
     let base_msg = format!("{} {}", &constant::UPDATING_MSG_PREFIX, latest_version);
     let default_subtext = constant::UPDATING_MSG_SUBTEXT;
-    let _ = show_message(&chrome, &format!("{base_msg}&subtext={default_subtext}")).await;
+    let _ = show_message(
+        &chrome,
+        &app_state,
+        &format!("{base_msg}&subtext={default_subtext}"),
+    )
+    .await;
     let mut rx = updater::spawn_updater()?;
     while let Some(res) = rx.recv().await {
         match res {
             Ok(msg) => {
-                let _ = show_message(&chrome, &format!("{base_msg}&subtext={msg}")).await;
+                let _ =
+                    show_message(&chrome, &app_state, &format!("{base_msg}&subtext={msg}")).await;
             }
             Err(e) => {
                 eprintln!("MAIN: Update process failed: {e:#}");
@@ -415,12 +444,14 @@ async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<Cdp>) -> Result<()>
     Ok(())
 }
 
-async fn show_message(chrome: &Arc<Cdp>, message: &str) -> Result<()> {
+async fn show_message(chrome: &Arc<Cdp>, app_state: &Arc<AppState>, message: &str) -> Result<()> {
     let message_url = format!("{}{}", constant::MSG_URL_PREFIX, message);
     chrome
         .navigate(&message_url)
         .await
         .with_context(|| format!("navigating to {message_url}"))?;
     println!("MAIN: Navigated to {message_url}");
+    let mut page = app_state.page.lock().await;
+    *page = Page::None;
     Ok(())
 }

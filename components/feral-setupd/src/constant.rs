@@ -23,6 +23,7 @@ pub const CMD_SCAN_WIFI: &str = "scan_wifi";
 pub const CMD_GET_INFO: &str = "get_info";
 pub const CMD_SET_TIME: &str = "set_time";
 pub const CMD_KEEP_WIFI: &str = "keep_wifi";
+pub const CMD_FACTORY_RESET: &str = "factory_reset";
 pub const MAX_SSIDS: usize = 9;
 pub const MD5_LENGTH: usize = 8; // Used for conversion to device ID
 pub const DEVICE_ID_PREFIX: &str = "FF-X1-";

@@ -1,5 +1,6 @@
 use crate::constant;
 use crate::encoding;
+use crate::system;
 use crate::wifi_utils::SSIDsCacher;
 use bluer::{
     Adapter, Session,
@@ -21,13 +22,11 @@ use bluer::{
 };
 use futures_util::future::FutureExt;
 use std::pin::Pin;
-use std::process::Command;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
-use tokio::task;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 pub type BTConnectedCallback =
     Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>;
@@ -253,6 +252,9 @@ impl Ble {
                             constant::CMD_SET_TIME => {
                                 handle_set_time(notifier, reply_id, params).await
                             }
+                            constant::CMD_FACTORY_RESET => {
+                                handle_factory_reset(notifier, reply_id).await
+                            }
                             _ => {
                                 eprintln!("BLE: Unknown command: {cmd}");
                                 Ok::<(), ReqError>(())
@@ -392,32 +394,34 @@ async fn handle_set_time(
         );
         return Ok(());
     }
-    if let Err(e) = task::spawn_blocking(move || {
-        let timezone = &params[0];
-        let time = &params[1];
-        let result = Command::new(constant::TIMEZONE_CMD)
-            .args([constant::TIMEZONE_INSTRUCTION, timezone, time])
-            .output();
-        println!("BLE: Result: {result:?}");
-        if result.is_ok() {
-            println!("BLE: Time set successfully");
-            Ok::<(), anyhow::Error>(())
-        } else {
-            println!("BLE: Failed to set time");
-            Err(anyhow!("failed to set time"))
-        }
-    })
-    .await
-    {
-        eprintln!("BLE: Failed to start time setting thread: {e}");
-    };
+    if let Err(e) = system::set_time(&params[0], &params[1]).await {
+        eprintln!("BLE: Failed to set time: {e:#?}");
+    }
     Ok(())
+}
+
+async fn handle_factory_reset(
+    notifier: Arc<Mutex<Option<CharacteristicNotifier>>>,
+    reply_id: String,
+) -> Result<(), ReqError> {
+    println!("BLE: Factory resetting");
+    let status_code = if let Err(e) = system::factory_reset().await {
+        eprintln!("BLE: Failed to factory reset: {e:#?}");
+        [constant::BLE_ERR_CODE_UNKNOWN_ERROR]
+    } else {
+        [constant::BLE_SUCCESS_CODE]
+    };
+    let mut payload = Vec::with_capacity(3);
+    payload.push(reply_id.as_bytes());
+    payload.push(&status_code);
+    notify_central(notifier, payload).await
 }
 
 async fn notify_central(
     notifier: Arc<Mutex<Option<CharacteristicNotifier>>>,
     payload: Vec<&[u8]>,
 ) -> Result<(), ReqError> {
+    println!("BLE: Notifying central with payload: {payload:?}");
     let mut guard = notifier.lock().await;
     if let Some(notifier) = guard.as_mut() {
         let payload = encoding::encode_payload(&payload);
