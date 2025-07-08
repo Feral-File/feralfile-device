@@ -151,9 +151,6 @@ rm -f /usr/local/bin/websocat
 
 id soaktest &>/dev/null && sudo userdel soaktest || true
 
-echo -n > /etc/machine-id
-rm -f /var/lib/systemd/random-seed
-
 log_progress "95" "Preparing the system for restart..."
 
 ISO_FILE=$(find "$TMP_DIR" -name '*.iso' | head -n1)
