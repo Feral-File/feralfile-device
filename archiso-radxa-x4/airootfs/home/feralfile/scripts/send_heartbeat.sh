@@ -13,6 +13,11 @@ get_cpu_temp() {
     in_pkg && /temp1_input:/ {printf "%.1f",$2; exit}' || echo "0.0"
 }
 
+if ! ping -q -c 1 -W 2 8.8.8.8 >/dev/null; then
+  echo "Network not connected"
+  exit 0
+fi
+
 if [ ! -f "$PRIVATE_KEY_FILE" ]; then
   mkdir -p "$CONFIG_DIR"
   openssl genpkey -algorithm ED25519 -out "$PRIVATE_KEY_FILE"
@@ -21,13 +26,14 @@ fi
 
 MAC=$(ip link show | awk '/ether/ {print $2; exit}')
 TIMESTAMP=$(date +%s%3N)
+BUILD_BRANCH=$(jq -r '.branch' "$CONFIG_FILE")
 BUILD_VERSION=$(jq -r '.version' "$CONFIG_FILE")
 WEBHOOK_URL=$(jq -r '.heartbeat_endpoint' "$CONFIG_FILE")
 CPU_TEMP=$(get_cpu_temp)
 PUBKEY_B64=$(openssl base64 -A < "$PUBLIC_KEY_FILE")
 
 MESSAGE_JSON=$(jq -nc --arg mac "$MAC" --argjson ts "$TIMESTAMP" \
-  --arg build "$BUILD_VERSION" --argjson cpu_temp "$CPU_TEMP" \
+  --arg build "$BUILD_BRANCH-$BUILD_VERSION" --argjson cpu_temp "$CPU_TEMP" \
   '{mac: $mac, ts: $ts, build: $build, cpu_temp: $cpu_temp}')
 
 TMP_MSG=$(mktemp)
