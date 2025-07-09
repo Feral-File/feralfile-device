@@ -20,3 +20,7 @@ fi
 if ! sudo systemctl is-enabled "feral-log-rotation.timer" >/dev/null 2>&1; then
     sudo systemctl enable --now "feral-log-rotation.timer"
 fi
+
+if ! sudo systemctl is-enabled "send-heartbeat.timer" >/dev/null 2>&1; then
+    sudo systemctl enable --now "send-heartbeat.timer"
+fi

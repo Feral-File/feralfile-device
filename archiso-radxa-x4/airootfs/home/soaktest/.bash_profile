@@ -8,6 +8,7 @@ sudo systemctl disable --now "feral-sys-monitord.service"
 sudo systemctl disable --now "feral-connectd.service"
 sudo systemctl disable --now "feral-setupd.service"
 sudo systemctl disable --now "chromium-kiosk.service"
+sudo systemctl disable --now "send-heartbeat.timer"
 
 sudo chown soaktest:soaktest /home/soaktest
 

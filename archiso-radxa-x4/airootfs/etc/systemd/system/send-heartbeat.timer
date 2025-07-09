@@ -1,0 +1,4 @@
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=60
+Unit=send-heartbeat.service
