@@ -2,6 +2,5 @@
 Description=Set systemd-boot to factory_reset.conf on next boot
 
 [Service]
-Type=oneshot
-ExecStart=bootctl set-oneshot factory_reset.conf
-ExecStartPost=systemctl reboot
+Type=simple
+ExecStart=bash -c 'bootctl set-oneshot factory_reset.conf && sync && sleep 5 && systemctl reboot'
