@@ -87,6 +87,20 @@ jobs:
       maintainer: 'Feral File'
       environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
 
+  build-feral-app-monitord:
+    name: Build Feral System Monitord
+    uses: ./.github/workflows/build-components.yaml
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
+      CLOUDFLARE_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
+    with:
+      component: feral-app-monitord
+      version: ${{ inputs.version || github.event.inputs.version }}
+      description: 'Feral File App Monitord'
+      maintainer: 'Feral File'
+      environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
+
   build-feral-watchdog:
     name: Build Feral Watchdog
     uses: ./.github/workflows/build-components.yaml

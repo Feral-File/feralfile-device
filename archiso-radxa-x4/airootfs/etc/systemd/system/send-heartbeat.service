@@ -1,5 +1,0 @@
-[Unit]
-Description=Send heartbeat
-
-[Service]
-ExecStart=/home/feralfile/scripts/send_heartbeat.sh
