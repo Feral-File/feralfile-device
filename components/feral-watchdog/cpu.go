@@ -12,7 +12,6 @@ const (
 	// CPU temperature monitoring thresholds and constants
 	CPU_CRITICAL_TEMPERATURE       = 80.0             // 80°C critical temperature
 	CPU_MONITOR_DURATION_THRESHOLD = 10 * time.Second // Check if temp is above threshold for 10 seconds
-	CPU_SHUTDOWN_DELAY             = 10 * time.Second // Shutdown after 10 seconds
 )
 
 type CPUHandler struct {
@@ -22,8 +21,7 @@ type CPUHandler struct {
 	cdpMonitor          *CDPMonitor
 	highTempMonitoring  bool
 	highTempStartTime   time.Time
-	shutdownScheduled   bool
-	shutdownTimer       *time.Timer
+	notificationSent    bool
 	criticalTemperature float64
 }
 
@@ -34,13 +32,9 @@ func NewCPUHandler(logger *zap.Logger, commandHandler *CommandHandler, cdpMonito
 		cdpMonitor:          cdpMonitor,
 		highTempMonitoring:  false,
 		highTempStartTime:   time.Time{},
-		shutdownScheduled:   false,
+		notificationSent:    false,
 		criticalTemperature: CPU_CRITICAL_TEMPERATURE,
 	}
-}
-
-func (c *CPUHandler) GracefulShutdown(ctx context.Context) {
-	c.cancelShutdown()
 }
 
 func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float64) {
@@ -64,6 +58,7 @@ func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float6
 			zap.Float64("threshold", c.criticalTemperature))
 		c.highTempMonitoring = true
 		c.highTempStartTime = time.Now()
+		c.notificationSent = false
 		return
 	}
 
@@ -75,64 +70,19 @@ func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float6
 		return
 	}
 
-	// Temperature has been critical for too long, schedule shutdown
-	if !c.shutdownScheduled {
-		c.logger.Error("CPU: Temperature exceeded critical threshold for too long, scheduling shutdown",
+	// Temperature has been critical for too long, send notification if not already sent
+	if !c.notificationSent {
+		c.logger.Error("CPU: Temperature exceeded critical threshold for too long, sending notification",
 			zap.Float64("current_temp", currentTemp),
-			zap.Duration("duration", durHigh),
-			zap.Duration("shutdown_delay", CPU_SHUTDOWN_DELAY))
+			zap.Duration("duration", durHigh))
 
-		// Send critical temperature notification to website before shutdown
+		// Send critical temperature notification to website
 		if c.cdpMonitor != nil {
 			c.sendCriticalCPUTemperatureNotificationToWebsite(ctx)
 		}
 
-		c.scheduleShutdown(ctx)
+		c.notificationSent = true
 	}
-}
-
-func (c *CPUHandler) scheduleShutdown(ctx context.Context) {
-	if c.shutdownScheduled {
-		return
-	}
-
-	c.shutdownScheduled = true
-	c.logger.Info("CPU: Scheduling system shutdown in 10 seconds due to critical temperature")
-
-	c.shutdownTimer = time.AfterFunc(CPU_SHUTDOWN_DELAY, func() {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("CPU: Context canceled, skipping shutdown")
-		default:
-			c.mu.Lock()
-			c.shutdownScheduled = false
-			c.shutdownTimer = nil
-			c.mu.Unlock()
-			c.logger.Error("CPU: Executing emergency shutdown due to critical temperature")
-			c.commandHandler.shutdownSystem(ctx)
-		}
-	})
-}
-
-func (c *CPUHandler) cancelShutdown() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if !c.shutdownScheduled {
-		return
-	}
-
-	c.logger.Info("CPU: Canceling scheduled shutdown")
-	if c.shutdownTimer != nil {
-		stopped := c.shutdownTimer.Stop()
-		if !stopped {
-			c.logger.Warn("CPU: Timer already fired, cannot cancel")
-			return
-		}
-	}
-
-	c.shutdownScheduled = false
-	c.shutdownTimer = nil
 }
 
 func (c *CPUHandler) sendCriticalCPUTemperatureNotificationToWebsite(ctx context.Context) {
@@ -150,4 +100,5 @@ func (c *CPUHandler) resetMonitoring() {
 	c.logger.Debug("CPU: Resetting temperature monitoring")
 	c.highTempMonitoring = false
 	c.highTempStartTime = time.Time{}
+	c.notificationSent = false
 }

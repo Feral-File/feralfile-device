@@ -83,7 +83,6 @@ func main() {
 	gpuHandler := NewGPUHandler(logger, commandHandler)
 	cpuHandler := NewCPUHandler(logger, commandHandler, cdpMonitor)
 	defer gpuHandler.GracefulShutdown(ctx)
-	defer cpuHandler.GracefulShutdown(ctx)
 
 	// Initialize mediator
 	mediator := NewMediator(dbusClient, diskHandler, ramHandler, gpuHandler, cpuHandler, logger)
