@@ -18,18 +18,18 @@ type CPUHandler struct {
 	mu                  sync.Mutex
 	logger              *zap.Logger
 	commandHandler      *CommandHandler
-	cdpMonitor          *CDPMonitor
+	cdpClient           *CDPClient
 	highTempMonitoring  bool
 	highTempStartTime   time.Time
 	notificationSent    bool
 	criticalTemperature float64
 }
 
-func NewCPUHandler(logger *zap.Logger, commandHandler *CommandHandler, cdpMonitor *CDPMonitor) *CPUHandler {
+func NewCPUHandler(logger *zap.Logger, commandHandler *CommandHandler, cdpClient *CDPClient) *CPUHandler {
 	return &CPUHandler{
 		logger:              logger,
 		commandHandler:      commandHandler,
-		cdpMonitor:          cdpMonitor,
+		cdpClient:           cdpClient,
 		highTempMonitoring:  false,
 		highTempStartTime:   time.Time{},
 		notificationSent:    false,
@@ -77,7 +77,7 @@ func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float6
 			zap.Duration("duration", durHigh))
 
 		// Send critical temperature notification to website
-		if c.cdpMonitor != nil {
+		if c.cdpClient != nil {
 			c.sendCriticalCPUTemperatureNotificationToWebsite(ctx)
 		}
 
@@ -87,7 +87,7 @@ func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float6
 
 func (c *CPUHandler) sendCriticalCPUTemperatureNotificationToWebsite(ctx context.Context) {
 	// Send temperature data to website via CDP
-	if err := c.cdpMonitor.SendCriticalCPUTemperatureNotification(ctx); err != nil {
+	if err := c.cdpClient.SendCriticalCPUTemperatureNotification(ctx); err != nil {
 		c.logger.Error("Failed to send critical CPU temperature notification to website",
 			zap.Error(err))
 	} else {

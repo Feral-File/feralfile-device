@@ -73,15 +73,15 @@ func main() {
 	// Initialize system command executor
 	commandHandler := NewCommandHandler(logger)
 
-	// Initialize CDP monitor
-	cdpMonitor := NewCDPMonitor(config.CDPEndpoint, logger, commandHandler)
-	defer cdpMonitor.Stop()
+	// Initialize CDP client
+	cdpClient := NewCDPClient(config.CDPEndpoint, logger)
+	defer cdpClient.Stop()
 
 	// Initialize resource monitors
 	ramHandler := NewMemoryHandler(logger, commandHandler)
 	diskHandler := NewDiskHandler(logger, commandHandler)
 	gpuHandler := NewGPUHandler(logger, commandHandler)
-	cpuHandler := NewCPUHandler(logger, commandHandler, cdpMonitor)
+	cpuHandler := NewCPUHandler(logger, commandHandler, cdpClient)
 	defer gpuHandler.GracefulShutdown(ctx)
 
 	// Initialize mediator
@@ -100,10 +100,13 @@ func main() {
 		systemdWatchdog.Start(ctx)
 	}()
 
+	// Start Chromium monitor
+	chromiumMonitor := NewChromiumMonitor(config.CDPEndpoint, logger, commandHandler)
+	defer chromiumMonitor.Stop()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		cdpMonitor.Start(ctx)
+		chromiumMonitor.Start(ctx)
 	}()
 
 	// Notify systemd that we're ready
