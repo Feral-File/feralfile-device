@@ -62,19 +62,6 @@ func (c *CommandHandler) rebootSystem(ctx context.Context) {
 	}
 }
 
-// shutdownSystem initiates a system shutdown
-func (c *CommandHandler) shutdownSystem(ctx context.Context) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	cmd := exec.CommandContext(ctx, "sudo", "systemctl", "poweroff")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		c.logger.Error("Failed to shutdown system",
-			zap.Error(err),
-			zap.ByteString("output", output))
-	}
-}
-
 func (c *CommandHandler) cleanupPacmanCache(ctx context.Context) {
 	c.mu.Lock()
 	if c.isCleaningDisk {
