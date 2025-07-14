@@ -87,6 +87,20 @@ jobs:
       maintainer: 'Feral File'
       environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
 
+  build-feral-app-monitord:
+    name: Build Feral App Monitord
+    uses: ./.github/workflows/build-components.yaml
+    secrets:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
+      CLOUDFLARE_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
+    with:
+      component: feral-app-monitord
+      version: ${{ inputs.version || github.event.inputs.version }}
+      description: 'Feral File App Monitord'
+      maintainer: 'Feral File'
+      environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
+
   build-feral-watchdog:
     name: Build Feral Watchdog
     uses: ./.github/workflows/build-components.yaml
@@ -103,7 +117,7 @@ jobs:
 
   build-feralfile-pacman-repo:
     name: Build Feralfile pacman repo
-    needs: [build-feral-connectd, build-feral-setupd, build-feral-sys-monitord, build-feral-watchdog]
+    needs: [build-feral-connectd, build-feral-setupd, build-feral-sys-monitord, build-feral-app-monitord, build-feral-watchdog]
     uses: ./.github/workflows/pacman-repo.yaml
     secrets:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -270,7 +284,8 @@ jobs:
             "version": "${{ inputs.version || github.event.inputs.version }}",
             "distribution_acc": "${{ secrets.DISTRIBUTION_AUTH_USER }}",
             "distribution_pass": "${{ secrets.DISTRIBUTION_AUTH_PASSWORD }}",
-            "endpoint": "${ENDPOINT}"
+            "endpoint": "${ENDPOINT}",
+            "heartbeat_endpoint": "${{ secrets.HEARTBEAT_ENDPOINT }}"
           }
           EOF
           chmod 755 /build/archiso-radxa-x4/airootfs/home/feralfile/x1-config.json

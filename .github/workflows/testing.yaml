@@ -119,6 +119,42 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
 
+  test-feral-app-monitord:
+    name: Test feral-app-monitord (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./components/feral-app-monitord
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: components/feral-app-monitord/go.sum
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run tests with coverage
+        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./components/feral-app-monitord/coverage.out
+          slug: feral-file/feralfile-device
+          flags: feral-app-monitord
+          name: feral-app-monitord-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
   # Test Rust component
   test-feral-setupd:
     name: Test feral-setupd (Rust)

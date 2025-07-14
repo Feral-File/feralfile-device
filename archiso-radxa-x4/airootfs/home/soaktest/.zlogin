@@ -5,6 +5,7 @@ fi
 
 sudo systemctl disable --now "feral-watchdog.service"
 sudo systemctl disable --now "feral-sys-monitord.service"
+sudo systemctl disable --now "feral-app-monitord.service"
 sudo systemctl disable --now "feral-connectd.service"
 sudo systemctl disable --now "feral-setupd.service"
 sudo systemctl disable --now "chromium-kiosk.service"

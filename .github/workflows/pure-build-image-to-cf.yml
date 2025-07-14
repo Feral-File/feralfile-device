@@ -200,7 +200,8 @@ jobs:
             "version": "${{ inputs.version || github.event.inputs.version }}",
             "distribution_acc": "${{ secrets.DISTRIBUTION_AUTH_USER }}",
             "distribution_pass": "${{ secrets.DISTRIBUTION_AUTH_PASSWORD }}",
-            "endpoint": "${ENDPOINT}"
+            "endpoint": "${ENDPOINT}",
+            "heartbeat_endpoint": "${{ secrets.HEARTBEAT_ENDPOINT }}"
           }
           EOF
           chmod 755 /build/archiso-radxa-x4/airootfs/home/feralfile/x1-config.json
