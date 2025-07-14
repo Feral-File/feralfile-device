@@ -15,25 +15,26 @@ var (
 
 func main() {
 	// Initialize logger with debug enabled for development
-	logger, err := NewLogger(debug)
+	l, err := NewLogger(debug)
 	if err != nil {
 		panic("Failed to initialize logger: " + err.Error())
 	}
+	logger = l
 	defer func() {
 		_ = logger.Sync()
 	}()
-
-	if err := LoadConfig(); err != nil {
-		logger.Error("Failed to load config.", zap.Error(err))
-		return
-	}
-	logger.Info("Configuration loaded successfully.")
 
 	if err := EnsureKeyPair(); err != nil {
 		logger.Error("Failed to ensure key pair exists.", zap.Error(err))
 		return
 	}
 	logger.Info("Key pair check passed.")
+
+	if err := LoadConfig(); err != nil {
+		logger.Error("Failed to load config.", zap.Error(err))
+		return
+	}
+	logger.Info("Configuration loaded successfully.")
 
 	// send ready notification to systemd
 	sent, err := daemon.SdNotify(false, daemon.SdNotifyReady)
