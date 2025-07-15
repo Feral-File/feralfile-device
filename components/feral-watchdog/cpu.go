@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/cdp"
 	"go.uber.org/zap"
 )
 
@@ -17,18 +18,16 @@ const (
 type CPUHandler struct {
 	mu                  sync.Mutex
 	logger              *zap.Logger
-	commandHandler      *CommandHandler
-	cdpClient           *CDPClient
+	cdpClient           *cdp.Client
 	highTempMonitoring  bool
 	highTempStartTime   time.Time
 	notificationSent    bool
 	criticalTemperature float64
 }
 
-func NewCPUHandler(logger *zap.Logger, commandHandler *CommandHandler, cdpClient *CDPClient) *CPUHandler {
+func NewCPUHandler(logger *zap.Logger, cdpClient *cdp.Client) *CPUHandler {
 	return &CPUHandler{
 		logger:              logger,
-		commandHandler:      commandHandler,
 		cdpClient:           cdpClient,
 		highTempMonitoring:  false,
 		highTempStartTime:   time.Time{},
@@ -41,7 +40,7 @@ func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float6
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.logger.Info("CPU: Checking CPU temperature", zap.Float64("current_temp", currentTemp))
+	c.logger.Debug("CPU: Checking CPU temperature", zap.Float64("current_temp", currentTemp))
 
 	// If temperature is below threshold, reset monitoring if active
 	if currentTemp < c.criticalTemperature {
@@ -78,14 +77,14 @@ func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float6
 
 		// Send critical temperature notification to website
 		if c.cdpClient != nil {
-			c.sendCriticalCPUTemperatureNotificationToWebsite(ctx)
+			c.sendCriticalTemperatureNotification(ctx)
 		}
 
 		c.notificationSent = true
 	}
 }
 
-func (c *CPUHandler) sendCriticalCPUTemperatureNotificationToWebsite(ctx context.Context) {
+func (c *CPUHandler) sendCriticalTemperatureNotification(ctx context.Context) {
 	// Send temperature data to website via CDP
 	if err := c.cdpClient.SendCriticalCPUTemperatureNotification(ctx); err != nil {
 		c.logger.Error("Failed to send critical CPU temperature notification to website",
@@ -97,7 +96,7 @@ func (c *CPUHandler) sendCriticalCPUTemperatureNotificationToWebsite(ctx context
 
 // Helper method to reset monitoring state
 func (c *CPUHandler) resetMonitoring() {
-	c.logger.Debug("CPU: Resetting temperature monitoring")
+	c.logger.Info("CPU: Resetting temperature monitoring")
 	c.highTempMonitoring = false
 	c.highTempStartTime = time.Time{}
 	c.notificationSent = false

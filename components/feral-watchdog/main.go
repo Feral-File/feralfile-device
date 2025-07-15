@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/cdp"
 	"github.com/feral-file/godbus"
 	"github.com/godbus/dbus/v5"
 	"go.uber.org/zap"
@@ -74,14 +75,18 @@ func main() {
 	commandHandler := NewCommandHandler(logger)
 
 	// Initialize CDP client
-	cdpClient := NewCDPClient(config.CDPEndpoint, logger)
-	defer cdpClient.Stop()
+	cdpClient := cdp.NewDefault(&cdp.Config{Endpoint: config.CDPEndpoint}, logger)
+	err = cdpClient.Init(ctx)
+	if err != nil {
+		logger.Fatal("CDP init failed", zap.Error(err))
+	}
+	defer cdpClient.Close()
 
 	// Initialize resource monitors
 	ramHandler := NewMemoryHandler(logger, commandHandler)
 	diskHandler := NewDiskHandler(logger, commandHandler)
 	gpuHandler := NewGPUHandler(logger, commandHandler)
-	cpuHandler := NewCPUHandler(logger, commandHandler, cdpClient)
+	cpuHandler := NewCPUHandler(logger, cdpClient)
 	defer gpuHandler.GracefulShutdown(ctx)
 
 	// Initialize mediator
