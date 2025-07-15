@@ -45,40 +45,37 @@ flowchart TD
     LastVersion --> |Force Update| Latest
 ```
 
-## Telemetry
+## Telemetry (Heartbeat)
 
-### Start up flow
-| Event Name | Sample JSON | Notes |
-| :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ff1_start` | `{ "event": "ff1_start", "level": "info", "ts": 1234567890 }` | Device started or restarted. |
-| `current_version` | `{ "event": "current_version", "level": "info", "ts": 1234567890, "version": "1.1.0" }` | Current version of the device. |
-| `bluetooth_started` | `{ "event": "bluetooth_started", "level": "info", "ts": 1234567890 }` | Bluetooth service initiated. |
-| `bluetooth_start_failed` | `{ "event": "bluetooth_start_failed", "level": "crit", "ts": 1234567890, "error": "bluetooth_adapter_not_found" }` | Bluetooth failed to start (e.g., adapter not found, permissions issue). |
-| `internet_check_initiated` | `{ "event": "internet_check_initiated", "level": "info", "ts": 1234567890 }` | Internet connectivity check started. |
-| `internet_check_failed` | `{ "event": "internet_check_failed", "level": "crit", "ts": 1234567890, "error": "failed_to_call_nmcli" }` | Internet connectivity check failed. |
-| `internet_connected` | `{ "event": "internet_connected", "level": "info", "ts": 1234567890 }` | Device detected an active internet connection. |
-| `internet_disconnected` | `{ "event": "internet_disconnected", "level": "warn", "ts": 1234567890 }` | Device failed to detect an active internet connection. |
-| `qr_code_displayed` | `{ "event": "qr_code_displayed", "level": "info", "ts": 1234567890, "reason": "no_internet" }` | QR code displayed for initial setup or network configuration. The `reason` field indicates why it's displayed (e.g., `no_internet`, `not_paired`). |
-| `version_check_initiated` | `{ "event": "version_check_initiated", "level": "info", "ts": 1234567890 }` | Started checking for a new firmware version. |
-| `version_check_failed` | `{ "event": "version_check_initiated", "level": "info", "ts": 1234567890 }` | Failed checking for a new firmware version. |
-| `device_up_to_date` | `{ "event": "device_up_to_date", "level": "info", "ts": 1234567890 }` | Device is running the latest firmware version. |
-| `update_available` | `{ "event": "update_available", "level": "info", "ts": 1234567890, "new_version": "1.2.3" }` | A new firmware version is available. |
-| `device_paired` | `{ "event": "device_paired", "level": "info", "ts": 1234567890 }` | Device successfully paired with the mobile app. |
-| `device_not_paired` | `{ "event": "device_not_paired", "level": "info", "ts": 1234567890 }` | Device is not currently paired with the mobile app. |
-| `bluetooth_connect_command_received` | `{ "event": "bluetooth_connect_command_received", "level": "info", "ts": 1234567890, "command": "keep_wifi" }` | A command was received via Bluetooth to connect/manage Wi-Fi. The `command` field specifies the action (e.g., `keep_wifi`, `connect_wifi`). |
-| `relayer_credential_retrieved` | `{ "event": "relayer_credential_retrieved", "level": "info", "ts": 1234567890 }` | Relayer credentials successfully obtained. |
-| `relayer_credential_failed` | `{ "event": "relayer_credential_failed", "level": "crit", "ts": 1234567890, "error": "network_timeout" }` | Failed to retrieve relayer credentials. |
-| `artwork_playback_started` | `{ "event": "artwork_playback_started", "level": "info", "ts": 1234567890 }` | Artwork playback has begun. |
+All the events should only consider network connected scenario otherwise it can't be sent over heartbeat.
 
-### Update flow
-| Event Name | Sample JSON | Notes |
-| :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `update_initiated` | `{ "event": "update_initiated", "level": "info", "ts": 1234567890, "reason": "schedule" }` | Firmware update initiated (e.g., `schedule` for 3 AM update, `force` for immediate). |
-| `update_failed` | `{ "event": "update_failed", "level": "crit", "ts": 1234567890, "error": "insufficient_space" }` | Firmware update failed during scheduled or forced update. |
-| `rollback_to_factory_version` | `{ "event": "rollback_to_factory_version", "level": "info", "ts": 1234567890 }` | Device initiated rollback to factory version. |
-| `rollback_to_last_version` | `{ "event": "rollback_to_last_version", "level": "info", "ts": 1234567890, "version": "1.0.0" }` | Device initiated rollback to the last stable version. |
-| `force_update_initiated` | `{ "event": "force_update_initiated", "level": "info", "ts": 1234567890 }` | A forced update was initiated after a rollback. |
+### Device status
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `Timestamp` | DateTime | The ISO 8601 timestamp (UTC) when the heartbeat was generated. |
+| `MAC Address` | String | The unique, immutable MAC address of the network interface. |
+| `Build` | String | The current firmware build version (e.g., "develop-0.0.1"). |
+| `Screen Info` | String | String detailing screen status (e.g., "1920x1080@60"). |
+| `CPU Temp` | Number | The core CPU temperature in Celsius (°C). **Alerts if > 55.** |
+| `CPU Usage` | Percent | The current CPU utilization (0.00 to 1.00). **Alerts if > 0.80.** |
+| `GPU Usage` | Percent | The current GPU utilization (0.00 to 1.00). **Alerts if > 0.80.** |
+| `Memory Usage`| Percent | The percentage of total RAM currently in use (0.00 to 1.00). **Alerts if > 0.80.** |
+| `Disk Usage` | Percent | The percentage of total disk storage currently in use (0.00 to 1.00). **Alerts if > 0.80.** |
+| `Uptime` | String | The duration the device has been running since last boot, in "D H:M:S" format. |
+| `Status` | String | **(Calculated)** "✅ Online" or "❌ Offline". Derived in the spreadsheet, not sent by device. |
+| `Public Key` | String | The device's public key for signature verification. |
+| `Signature` | String | The payload's cryptographic signature for data integrity. |
+| `Setupd State` | String | The setupd's state. |
+| `Setupd State Uptime` | String | The duration the setupd has been staying under this state, in "D H:M:S" format. |
 
+### Setupd states
+
+| Name | Notes |
+| :- | :- |
+| `qr_code_pairing` | QR code displayed for pairing setup. Network already connected. |
+| `rolling_back_factory_version` | Device initiated rollback to factory version. |
+| `force_updating` | Force firmware update initiated |
+| `artwork_displaying` | Artwork playback has begun. |
 
 ## Version control
 

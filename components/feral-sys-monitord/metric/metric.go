@@ -1,4 +1,4 @@
-package main
+package metric
 
 import (
 	"bufio"
@@ -58,6 +58,28 @@ type SysMetrics struct {
 	Uptime    float64       `json:"uptime"`
 	Disk      DiskMetrics   `json:"disk"`
 	Timestamp time.Time     `json:"timestamp"`
+}
+
+type SysDBusMetrics struct {
+	CPU                CPUMetrics    `json:"cpu"`
+	GPU                GPUMetrics    `json:"gpu"`
+	Memory             MemoryMetrics `json:"memory"`
+	Screen             ScreenMetrics `json:"screen"`
+	Uptime             float64       `json:"uptime"`
+	Disk               DiskMetrics   `json:"disk"`
+	TimestampUnixMilli int64         `json:"timestamp"`
+}
+
+func (p *SysMetrics) DBus() *SysDBusMetrics {
+	return &SysDBusMetrics{
+		CPU:                p.CPU,
+		GPU:                p.GPU,
+		Memory:             p.Memory,
+		Screen:             p.Screen,
+		Uptime:             p.Uptime,
+		Disk:               p.Disk,
+		TimestampUnixMilli: p.Timestamp.UnixMilli(),
+	}
 }
 
 type MonitorHandler func(metrics *SysMetrics)

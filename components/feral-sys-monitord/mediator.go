@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/Feral-File/feralfile-device/components/feral-sys-monitord/metric"
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
 )
 
 type Mediator struct {
 	dbus          *godbus.DBusClient
-	sysResMonitor *SysResMonitor
+	sysResMonitor *metric.SysResMonitor
 	connectivity  *Connectivity
 	eventWatcher  *SysEventWatcher
 	logger        *zap.Logger
@@ -18,7 +19,7 @@ type Mediator struct {
 
 func NewMediator(
 	dbus *godbus.DBusClient,
-	monitor *SysResMonitor,
+	monitor *metric.SysResMonitor,
 	connectivity *Connectivity,
 	eventWatcher *SysEventWatcher,
 	logger *zap.Logger) *Mediator {
@@ -43,7 +44,7 @@ func (p *Mediator) Stop() {
 	p.sysResMonitor.RemoveMonitorHandler(p.handleSysMetrics)
 }
 
-func (p *Mediator) handleSysMetrics(metrics *SysMetrics) {
+func (p *Mediator) handleSysMetrics(metrics *metric.SysMetrics) {
 	p.logger.Debug("Received metrics", zap.Any("metrics", metrics))
 
 	// Marshal the metrics to a byte slice

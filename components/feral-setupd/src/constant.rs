@@ -53,16 +53,18 @@ pub const UPDATING_MSG_PREFIX: &str = "Updating your device to the version ";
 pub const UPDATING_MSG_SUBTEXT: &str =
     "This process may take 5–10 minutes depending on your internet speed.";
 pub const SETUP_SUCCESSFULLY_MSG: &str = "Bringing art to your screen…";
+pub const FACTORY_RESET_MSG: &str = "Factory resetting…";
 
 // D-Bus configuration
-// pub const DBUS_SETUPD_OBJECT: &str = "/com/feralfile/setupd";
+pub const DBUS_SETUPD_OBJECT: &str = "/com/feralfile/setupd";
 pub const DBUS_CONNECTD_OBJECT: &str = "/com/feralfile/connectd";
 pub const DBUS_SYSMONITORD_OBJECT: &str = "/com/feralfile/sysmonitord";
 
+pub const DBUS_SETUPD_DESTINATION: &str = "com.feralfile.setupd";
 pub const DBUS_SYSMONITORD_DESTINATION: &str = "com.feralfile.sysmonitord";
 pub const DBUS_CONNECTD_DESTINATION: &str = "com.feralfile.connectd";
 
-// pub const DBUS_SETUPD_INTERFACE: &str = "com.feralfile.setupd.general";
+pub const DBUS_SETUPD_INTERFACE: &str = "com.feralfile.setupd.general";
 pub const DBUS_CONNECTD_INTERFACE: &str = "com.feralfile.connectd.general";
 pub const DBUS_SYSMONITORD_INTERFACE: &str = "com.feralfile.sysmonitord";
 
@@ -71,6 +73,8 @@ pub const DBUS_SYSMONITORD_INTERFACE: &str = "com.feralfile.sysmonitord";
 pub const DBUS_EVENT_QRCODE_SWITCH: &str = "show_pairing_qr_code";
 pub const DBUS_CONNECTIVITY_METHOD: &str = "GetConnectivityStatus";
 pub const DBUS_RELAYER_TOPIC_ID_METHOD: &str = "GetRelayerTopicID";
+
+pub const DBUS_GET_PAGE_STATE: &str = "GetPageState";
 
 // pub const DBUS_CONNECTD_TIMEOUT: u64 = 30 * 1000; // 30 seconds
 pub const DBUS_MAX_RETRIES: usize = 6;

@@ -2,6 +2,7 @@ use dbus::arg::Append;
 use dbus::blocking::{BlockingSender, Connection};
 use dbus::channel::Sender;
 use dbus::message::Message;
+use dbus_crossroads::Crossroads;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -9,9 +10,44 @@ use tokio::task;
 
 use anyhow::{Result, anyhow};
 
-use crate::constant;
+use crate::{AppState, PageStateDto, constant};
 
 pub type ListenCallback = Box<dyn Fn(Message) + Send + Sync>;
+
+/// Starts a D-Bus service that listens for incoming requests and provides the current page state.
+/// The service runs in a separate thread and can be stopped by setting the `stop` atomic boolean to `true`.
+pub fn start_dbus_service(app_state: Arc<AppState>) {
+    std::thread::spawn(move || {
+        println!("DBUS: start_dbus_service started");
+
+        let conn = Connection::new_session().expect("DBUS: failed to create connection");
+        conn.request_name(constant::DBUS_SETUPD_DESTINATION, false, true, false)
+            .expect("DBUS: failed to request name");
+
+        let mut cr = Crossroads::new();
+
+        let s = app_state.clone();
+        let iface = cr.register(constant::DBUS_SETUPD_INTERFACE, move |b| {
+            let state = s.clone();
+            b.method(
+                constant::DBUS_GET_PAGE_STATE,
+                (),
+                ("page", "page_changed_unix"),
+                move |_, (), ()| {
+                    let dto = PageStateDto::from_state(&state);
+                    println!("DBUS: debug dto: {dto:?}");
+                    Ok((dto.page, dto.page_changed_unix))
+                },
+            );
+        });
+        cr.insert(constant::DBUS_SETUPD_OBJECT, &[iface], ());
+        println!("DBUS: Service started");
+
+        if let Err(e) = cr.serve(&conn) {
+            eprintln!("DBUS: service crashed: {e:?}");
+        }
+    });
+}
 
 /// Sends a signal and waits for an acknowledgement from the same object/interface
 /// whose member name is the original `member` plus `_ack`.

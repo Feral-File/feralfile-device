@@ -2,18 +2,36 @@
 package main
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/coreos/go-systemd/v22/daemon"
+	"github.com/feral-file/godbus"
+	dbus_v5 "github.com/godbus/dbus/v5"
 	"go.uber.org/zap"
 )
 
+const (
+	WATCHDOG_INTERVAL = 15 * time.Second
+	SHUTDOWN_TIMEOUT  = 2 * time.Second
+)
+
 var (
-	debug  = false
-	logger *zap.Logger
+	debug      = false
+	logger     *zap.Logger
+	ctx        context.Context
+	dbusClient *godbus.DBusClient
 )
 
 func main() {
+	// Create context for graceful shutdown
+	c, cancel := context.WithCancel(context.Background())
+	ctx = c
+	defer cancel()
+
 	// Initialize logger with debug enabled for development
 	l, err := NewLogger(debug)
 	if err != nil {
@@ -23,6 +41,26 @@ func main() {
 	defer func() {
 		_ = logger.Sync()
 	}()
+
+	// Handle signals for graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		sig := <-sigCh
+		logger.Info("Received signal, initiating shutdown...",
+			zap.String("signal", sig.String()))
+		cancel()
+
+		time.Sleep(SHUTDOWN_TIMEOUT)
+		logger.Error("Shutdown timed out, forcing exit...",
+			zap.Duration("timeout", SHUTDOWN_TIMEOUT))
+		os.Exit(1)
+	}()
+
+	// Start watchdog in a goroutine
+	watchdog := NewWatchdog(WATCHDOG_INTERVAL, logger)
+	go watchdog.Start(ctx)
+	defer watchdog.Stop()
 
 	if err := EnsureKeyPair(); err != nil {
 		logger.Error("Failed to ensure key pair exists.", zap.Error(err))
@@ -35,6 +73,24 @@ func main() {
 		return
 	}
 	logger.Info("Configuration loaded successfully.")
+
+	// Initialize DBus client
+	mo := dbus_v5.WithMatchPathNamespace(dbus_v5.ObjectPath("/com/feralfile"))
+	dbusClient = godbus.NewDBusClient(c, l, DBUS_NAME, mo)
+	err = dbusClient.Start()
+	if err != nil {
+		l.Fatal("DBus init failed", zap.Error(err))
+	}
+	defer func() {
+		_ = dbusClient.Stop()
+	}()
+
+	// Initialize AppMonitordDBus
+	appMonitordDBus := NewAppMonitordDBus(logger)
+	err = dbusClient.Export(appMonitordDBus, DBUS_PATH, DBUS_INTERFACE)
+	if err != nil {
+		logger.Fatal("DBus export failed", zap.Error(err))
+	}
 
 	// send ready notification to systemd
 	sent, err := daemon.SdNotify(false, daemon.SdNotifyReady)
