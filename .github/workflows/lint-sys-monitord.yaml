@@ -4,11 +4,11 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'components/feral-sys-monitord/**'
+      - 'components/feral-sys-monitord/**/*.go'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'components/feral-sys-monitord/**'
+      - 'components/feral-sys-monitord/**/*.go'
 
 jobs:
   lint:

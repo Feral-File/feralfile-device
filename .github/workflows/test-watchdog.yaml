@@ -4,11 +4,11 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'components/feral-watchdog/**'
+      - 'components/feral-watchdog/**/*.go'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'components/feral-watchdog/**'
+      - 'components/feral-watchdog/**/*.go'
 
 jobs:
   test:

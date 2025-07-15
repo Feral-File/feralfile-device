@@ -4,11 +4,11 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'components/feral-setupd/**'
+      - 'components/feral-setupd/src/**'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'components/feral-setupd/**'
+      - 'components/feral-setupd/src/**'
 
 jobs:
   lint:
