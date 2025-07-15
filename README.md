@@ -1,16 +1,17 @@
 # Feral File Portal: Radxa X4 Digital Art Display System
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/feral-file/feralfile-device/testing.yaml?branch=develop&label=build%20status&logo=github)](https://github.com/feral-file/feralfile-device/actions/workflows/testing.yaml)
-[![Linter](https://img.shields.io/github/actions/workflow/status/feral-file/feralfile-device/linting.yaml?branch=develop&label=linter&logo=github)](https://github.com/feral-file/feralfile-device/actions/workflows/linting.yaml)
 [![Image Build](https://img.shields.io/github/actions/workflow/status/feral-file/feralfile-device/build-image-to-cf.yml?branch=develop&label=image%20build&logo=github)](https://github.com/feral-file/feralfile-device/actions/workflows/build-image-to-cf.yml)
 [![Code Coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?label=code%20coverage&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device)
 
-## Component Coverage
+## Components
 
-[![feral-connectd coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-connectd&label=feral-connectd&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device)
-[![feral-setupd coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-setupd&label=feral-setupd&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device)
-[![feral-sys-monitord coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-sys-monitord&label=feral-sys-monitord&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device)
-[![feral-watchdog coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-watchdog&label=feral-watchdog&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device)
+| Component | Build Status | Code Coverage |
+|-----------|--------------|---------------|
+| **feral-connectd** | [![Build](https://img.shields.io/github/actions/workflow/status/feral-file/feralfile-device/test-connectd.yaml?branch=develop&label=build&logo=github)](https://github.com/feral-file/feralfile-device/actions/workflows/test-connectd.yaml) | [![Coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-connectd&label=coverage&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device) |
+| **feral-setupd** | [![Build](https://img.shields.io/github/actions/workflow/status/feral-file/feralfile-device/test-setupd.yaml?branch=develop&label=build&logo=github)](https://github.com/feral-file/feralfile-device/actions/workflows/test-setupd.yaml) | [![Coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-setupd&label=coverage&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device) |
+| **feral-sys-monitord** | [![Build](https://img.shields.io/github/actions/workflow/status/feral-file/feralfile-device/test-sys-monitord.yaml?branch=develop&label=build&logo=github)](https://github.com/feral-file/feralfile-device/actions/workflows/test-sys-monitord.yaml) | [![Coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-sys-monitord&label=coverage&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device) |
+| **feral-app-monitord** | [![Build](https://img.shields.io/github/actions/workflow/status/feral-file/feralfile-device/test-app-monitord.yaml?branch=develop&label=build&logo=github)](https://github.com/feral-file/feralfile-device/actions/workflows/test-app-monitord.yaml) | [![Coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-app-monitord&label=coverage&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device) |
+| **feral-watchdog** | [![Build](https://img.shields.io/github/actions/workflow/status/feral-file/feralfile-device/test-watchdog.yaml?branch=develop&label=build&logo=github)](https://github.com/feral-file/feralfile-device/actions/workflows/test-watchdog.yaml) | [![Coverage](https://img.shields.io/codecov/c/github/feral-file/feralfile-device/develop?flag=feral-watchdog&label=coverage&logo=codecov)](https://codecov.io/gh/feral-file/feralfile-device) |
 
 ---
 
