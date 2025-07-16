@@ -34,6 +34,7 @@ func Load(logger *zap.Logger) (*Config, error) {
 	logger.Info("Loading config", zap.String("file", CONFIG_FILE))
 
 	// Lock during the entire load process to prevent concurrent access
+	// test
 	configLock.Lock()
 	defer configLock.Unlock()
 
