@@ -1,8 +1,8 @@
-# FFX1
+# FFX1 Device life cycle
 
-## Device life cycle
+## App flows
 
-### App startup flow
+### App startup
 
 ```mermaid
 flowchart TD
@@ -27,7 +27,7 @@ flowchart TD
     Relayer2 --> Artwork
 ```
 
-### App update flow
+### App update
 
 ```mermaid
 flowchart TD
