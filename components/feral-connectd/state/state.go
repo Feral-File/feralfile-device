@@ -1,12 +1,11 @@
 package state
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +16,10 @@ const (
 var (
 	stateLock sync.Mutex
 	state     *State
+
+	// Dependencies
+	os   = wrapper.NewOS()
+	json = wrapper.NewJSON()
 )
 
 type RelayerState struct {
@@ -50,7 +53,7 @@ func Load(logger *zap.Logger) (*State, error) {
 
 	// Try to read the file
 	data, err := os.ReadFile(STATE_FILE)
-	if os.IsNotExist(err) || len(data) == 0 {
+	if os.IsNotExist(err) {
 		// File doesn't exist, return empty state
 		logger.Info("State file does not exist, returning empty state object")
 		return &State{
@@ -59,6 +62,13 @@ func Load(logger *zap.Logger) (*State, error) {
 		}, nil
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to read state file: %w", err)
+	} else if len(data) == 0 {
+		// File is empty, return empty state
+		logger.Info("State file is empty, returning empty state object")
+		return &State{
+			Relayer:         &RelayerState{},
+			ConnectedDevice: &Device{},
+		}, nil
 	}
 
 	// Lock during unmarshaling to prevent concurrent access
@@ -74,6 +84,7 @@ func Load(logger *zap.Logger) (*State, error) {
 	return state, nil
 }
 
+// Save saves state to file
 func (s *State) Save() error {
 	stateLock.Lock()
 	defer stateLock.Unlock()
@@ -114,4 +125,17 @@ func GetState() *State {
 		}
 	}
 	return state
+}
+
+// InjectDepsForTesting allows injection of mock dependencies for testing
+func InjectDepsForTesting(osWrapper wrapper.OSInterface, jsonWrapper wrapper.JSONInterface) {
+	os = osWrapper
+	json = jsonWrapper
+}
+
+// ResetForTesting resets the global state for testing purposes
+func ResetForTesting() {
+	stateLock.Lock()
+	defer stateLock.Unlock()
+	state = nil
 }

@@ -1,14 +1,13 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/cdp"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/logger"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +16,10 @@ var (
 
 	configLock sync.Mutex
 	config     *Config
+
+	// Dependencies
+	os   = wrapper.NewOS()
+	json = wrapper.NewJSON()
 )
 
 // Configuration for all components
@@ -30,6 +33,15 @@ type Config struct {
 func Load(logger *zap.Logger) (*Config, error) {
 	logger.Info("Loading config", zap.String("file", CONFIG_FILE))
 
+	// Lock during the entire load process to prevent concurrent access
+	configLock.Lock()
+	defer configLock.Unlock()
+
+	// Return existing config if already loaded
+	if config != nil {
+		return config, nil
+	}
+
 	// Try to read the file
 	data, err := os.ReadFile(CONFIG_FILE)
 	if os.IsNotExist(err) {
@@ -37,10 +49,6 @@ func Load(logger *zap.Logger) (*Config, error) {
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
-
-	// Lock during unmarshaling to prevent concurrent access
-	configLock.Lock()
-	defer configLock.Unlock()
 
 	var c Config
 	if err := json.Unmarshal(data, &c); err != nil {
@@ -64,4 +72,17 @@ func Get() *Config {
 		}
 	}
 	return config
+}
+
+// InjectDepsForTesting allows injection of mock dependencies for testing
+func InjectDepsForTesting(osWrapper wrapper.OSInterface, jsonWrapper wrapper.JSONInterface) {
+	os = osWrapper
+	json = jsonWrapper
+}
+
+// ResetForTesting resets the global config state for testing purposes
+func ResetForTesting() {
+	configLock.Lock()
+	defer configLock.Unlock()
+	config = nil
 }
