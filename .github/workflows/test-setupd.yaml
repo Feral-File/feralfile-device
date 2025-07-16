@@ -58,6 +58,6 @@ jobs:
           files: ./components/feral-setupd/coverage/cobertura.xml
           flags: feral-setupd
           name: feral-setupd-coverage
-          slug: feral-file/feralfile-device
+          slug: feral-file/feralfile-device/setupd
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true

@@ -41,7 +41,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./components/feral-connectd/coverage.out
-          slug: feral-file/feralfile-device
+          slug: feral-file/feralfile-device/connectd
           flags: feral-connectd
           name: feral-connectd-coverage
           token: ${{ secrets.CODECOV_TOKEN }}
