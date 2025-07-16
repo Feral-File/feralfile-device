@@ -34,7 +34,7 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 use tokio_tungstenite::{
-    MaybeTlsStream, // async-compatible TLS/Plain wrapper
+    MaybeTlsStream, // async-compatible TLS/Plain wrapper test
     WebSocketStream,
     connect_async,
     tungstenite::protocol::Message,

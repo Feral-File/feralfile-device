@@ -20,6 +20,7 @@ type GPUHandler struct {
 	rebootScheduled bool
 }
 
+// test comment
 func NewGPUHandler(logger *zap.Logger, commandHandler *CommandHandler) *GPUHandler {
 	return &GPUHandler{
 		logger:          logger,

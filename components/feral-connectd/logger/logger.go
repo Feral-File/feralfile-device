@@ -11,6 +11,7 @@ import (
 )
 
 // SentryConfig contains Sentry-specific configuration
+// Test comment
 type SentryConfig struct {
 	DSN         string `json:"dsn"`
 	Debug       string `json:"debug"`       // Will be converted to bool
