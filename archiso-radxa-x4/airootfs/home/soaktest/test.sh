@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ARTWORK_URL="file:///home/soaktest/36-point/index.html?edition_number=0&artwork_number=1&blockchain=bitmark#02_hex_hole_open"
+ARTWORK_URL="file:///home/soaktest/CRAWL_MULTI_LEVEL/index.html"
 TEMP_VIEWER_URL="http://localhost:8000"
 
 if [[ $# -lt 2 ]]; then
