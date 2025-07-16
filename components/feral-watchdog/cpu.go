@@ -21,7 +21,6 @@ type CPUHandler struct {
 	cdpClient           *cdp.Client
 	highTempMonitoring  bool
 	highTempStartTime   time.Time
-	notificationSent    bool
 	criticalTemperature float64
 }
 
@@ -31,7 +30,6 @@ func NewCPUHandler(logger *zap.Logger, cdpClient *cdp.Client) *CPUHandler {
 		cdpClient:           cdpClient,
 		highTempMonitoring:  false,
 		highTempStartTime:   time.Time{},
-		notificationSent:    false,
 		criticalTemperature: CPU_CRITICAL_TEMPERATURE,
 	}
 }
@@ -57,7 +55,6 @@ func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float6
 			zap.Float64("threshold", c.criticalTemperature))
 		c.highTempMonitoring = true
 		c.highTempStartTime = time.Now()
-		c.notificationSent = false
 		return
 	}
 
@@ -70,28 +67,20 @@ func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float6
 	}
 
 	// Temperature has been critical for too long, send notification if not already sent
-	if !c.notificationSent {
-		c.logger.Error("CPU: Temperature exceeded critical threshold for too long, sending notification",
-			zap.Float64("current_temp", currentTemp),
-			zap.Duration("duration", durHigh))
+	c.logger.Error("CPU: Temperature exceeded critical threshold for too long, sending notification",
+		zap.Float64("current_temp", currentTemp),
+		zap.Duration("duration", durHigh))
 
-		// Send critical temperature notification to website
-		if c.cdpClient != nil {
-			c.sendCriticalTemperatureNotification(ctx)
+	// Send critical temperature notification to website
+	if c.cdpClient != nil {
+		if err := c.cdpClient.SendCriticalCPUTemperatureNotification(ctx); err != nil {
+			c.logger.Error("Failed to send critical CPU temperature notification to website",
+				zap.Error(err))
+		} else {
+			c.logger.Info("CPU: Sent critical CPU temperature notification via CDP")
 		}
-
-		c.notificationSent = true
 	}
-}
 
-func (c *CPUHandler) sendCriticalTemperatureNotification(ctx context.Context) {
-	// Send temperature data to website via CDP
-	if err := c.cdpClient.SendCriticalCPUTemperatureNotification(ctx); err != nil {
-		c.logger.Error("Failed to send critical CPU temperature notification to website",
-			zap.Error(err))
-	} else {
-		c.logger.Info("CPU: Sent critical CPU temperature notification via CDP")
-	}
 }
 
 // Helper method to reset monitoring state
@@ -99,5 +88,4 @@ func (c *CPUHandler) resetMonitoring() {
 	c.logger.Info("CPU: Resetting temperature monitoring")
 	c.highTempMonitoring = false
 	c.highTempStartTime = time.Time{}
-	c.notificationSent = false
 }
