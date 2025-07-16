@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	// test
 	// CDP configuration
 	CDP_CHECK_INTERVAL         = 5 * time.Second // Check CDP every 5 seconds
 	CDP_REQUEST_TIMEOUT        = 3 * time.Second
