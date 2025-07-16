@@ -703,7 +703,7 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 	stateFile := "/home/feralfile/.state/connectd.state"
 	stateDir := filepath.Dir(stateFile)
 
-	// Initial state data
+	// Initial state data (what's in the file before save)
 	initialStateData := `{
 		"connectedDevice": {
 			"device_id": "initial-device-123",
@@ -715,7 +715,7 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 		}
 	}`
 
-	// Updated state data (what the save operation will write)
+	// Updated state data (what the save operation will write to the file)
 	updatedStateData := `{
 		"connectedDevice": {
 			"device_id": "updated-device-789",
@@ -727,24 +727,30 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 		}
 	}`
 
+	// Synchronization channels for controlled execution order
+	load1CanStart := make(chan struct{})
+	saveCanStart := make(chan struct{})
+	load2CanStart := make(chan struct{})
+	saveCompleted := make(chan struct{})
+
+	// Track whether save has completed to simulate file content changes
+	saveHasCompleted := false
+
 	// Setup expectations for directory creation
 	ts.mockOS.EXPECT().
 		MkdirAll(stateDir, os.FileMode(0750)).
 		Return(nil).
 		Times(3) // 2 loads + 1 save
 
-	// Setup expectations for file reads - first load gets initial data, second load might get updated data
-	// We'll use DoAndReturn to dynamically return different data based on timing
-	readCallCount := 0
+	// Setup expectations for file reads with proper timing simulation
 	ts.mockOS.EXPECT().
 		ReadFile(stateFile).
 		DoAndReturn(func(path string) ([]byte, error) {
-			readCallCount++
-			// First read returns initial data, subsequent reads return updated data
-			if readCallCount == 1 {
-				return []byte(initialStateData), nil
+			// Return data based on whether save has completed
+			if saveHasCompleted {
+				return []byte(updatedStateData), nil
 			}
-			return []byte(updatedStateData), nil
+			return []byte(initialStateData), nil
 		}).
 		Times(2) // 2 loads
 
@@ -754,7 +760,7 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 		Return(false).
 		Times(2) // 2 loads
 
-	// Setup expectations for JSON unmarshal - handle both initial and updated data
+	// Setup expectations for JSON unmarshal - initial data
 	ts.mockJSON.EXPECT().
 		Unmarshal([]byte(initialStateData), gomock.Any()).
 		DoAndReturn(func(data []byte, v any) error {
@@ -769,8 +775,9 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 			}
 			return nil
 		}).
-		Times(1) // First load
+		Times(1) // Load before save
 
+	// Setup expectations for JSON unmarshal - updated data
 	ts.mockJSON.EXPECT().
 		Unmarshal([]byte(updatedStateData), gomock.Any()).
 		DoAndReturn(func(data []byte, v any) error {
@@ -785,7 +792,7 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 			}
 			return nil
 		}).
-		Times(1) // Second load (might see updated data)
+		Times(1) // Load after save
 
 	// Setup expectations for save operation
 	saveState := &state.State{
@@ -816,78 +823,91 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 		Return(nil).
 		Times(1)
 
-	// Execute concurrent load and save with controlled timing
-	loadResults := make(chan *state.State, 2)
-	loadErrors := make(chan error, 2)
-	saveErrors := make(chan error, 1)
-	saveStarted := make(chan struct{})
-	saveCompleted := make(chan struct{})
+	// Execute operations with controlled timing: Load1 → Save → Load2
+	load1Result := make(chan *state.State, 1)
+	load1Error := make(chan error, 1)
+	load2Result := make(chan *state.State, 1)
+	load2Error := make(chan error, 1)
+	saveError := make(chan error, 1)
 
-	// Start first load
+	// Start Load1 (should see initial data)
 	go func() {
+		<-load1CanStart // Wait for signal to start
+		t.Logf("Load1 starting")
 		result, err := state.Load(ts.logger)
-		loadResults <- result
-		loadErrors <- err
+		t.Logf("Load1 completed")
+		load1Result <- result
+		load1Error <- err
+		close(saveCanStart) // Signal that save can start
 	}()
 
-	// Start save operation
+	// Start Save operation (will change the file content)
 	go func() {
-		close(saveStarted) // Signal that save has started
+		<-saveCanStart // Wait for Load1 to complete
+		t.Logf("Save starting")
 		err := saveState.Save()
-		saveErrors <- err
+		saveHasCompleted = true // Mark save as completed
+		t.Logf("Save completed")
+		saveError <- err
 		close(saveCompleted) // Signal that save has completed
+		close(load2CanStart) // Signal that Load2 can start
 	}()
 
-	// Wait for save to start, then start second load
-	<-saveStarted
+	// Start Load2 (should see updated data after save)
 	go func() {
+		<-load2CanStart // Wait for save to complete
+		<-saveCompleted // Ensure save is fully done
+		t.Logf("Load2 starting")
 		result, err := state.Load(ts.logger)
-		loadResults <- result
-		loadErrors <- err
+		t.Logf("Load2 completed")
+		load2Result <- result
+		load2Error <- err
 	}()
 
-	// Collect results
-	var loadedStates []*state.State
-	for i := range 2 {
-		result := <-loadResults
-		err := <-loadErrors
-		assert.NoError(t, err, "expected no error from concurrent load %d", i)
-		assert.NotNil(t, result, "expected non-nil state from concurrent load %d", i)
-		loadedStates = append(loadedStates, result)
-	}
+	// Start the sequence
+	close(load1CanStart)
 
-	saveErr := <-saveErrors
-	assert.NoError(t, saveErr, "expected no error from concurrent save")
+	// Collect results in order
+	result1 := <-load1Result
+	err1 := <-load1Error
+	assert.NoError(t, err1, "expected no error from Load1")
+	assert.NotNil(t, result1, "expected non-nil state from Load1")
 
-	// Verify that the loads returned different data due to the save operation
-	firstLoad := loadedStates[0]
-	secondLoad := loadedStates[1]
+	saveErr := <-saveError
+	assert.NoError(t, saveErr, "expected no error from Save")
 
-	// First load should see initial data
-	assert.Equal(t, "initial-device-123", firstLoad.ConnectedDevice.ID,
-		"first load should see initial device ID")
-	assert.Equal(t, "Initial Device", firstLoad.ConnectedDevice.Name,
-		"first load should see initial device name")
-	assert.Equal(t, 1, firstLoad.ConnectedDevice.Platform,
-		"first load should see initial platform")
-	assert.Equal(t, "initial-topic-456", firstLoad.Relayer.TopicID,
-		"first load should see initial topic ID")
+	result2 := <-load2Result
+	err2 := <-load2Error
+	assert.NoError(t, err2, "expected no error from Load2")
+	assert.NotNil(t, result2, "expected non-nil state from Load2")
 
-	// Second load should see updated data (due to save operation)
-	assert.Equal(t, "updated-device-789", secondLoad.ConnectedDevice.ID,
-		"second load should see updated device ID")
-	assert.Equal(t, "Updated Device", secondLoad.ConnectedDevice.Name,
-		"second load should see updated device name")
-	assert.Equal(t, 2, secondLoad.ConnectedDevice.Platform,
-		"second load should see updated platform")
-	assert.Equal(t, "updated-topic-789", secondLoad.Relayer.TopicID,
-		"second load should see updated topic ID")
+	// Verify Load1 sees initial data (before save)
+	assert.Equal(t, "initial-device-123", result1.ConnectedDevice.ID,
+		"Load1 should see initial device ID (before save)")
+	assert.Equal(t, "Initial Device", result1.ConnectedDevice.Name,
+		"Load1 should see initial device name (before save)")
+	assert.Equal(t, 1, result1.ConnectedDevice.Platform,
+		"Load1 should see initial platform (before save)")
+	assert.Equal(t, "initial-topic-456", result1.Relayer.TopicID,
+		"Load1 should see initial topic ID (before save)")
 
-	// Verify that the data is different between loads
-	assert.NotEqual(t, firstLoad.ConnectedDevice.ID, secondLoad.ConnectedDevice.ID,
-		"loads should return different data due to save operation")
-	assert.NotEqual(t, firstLoad.Relayer.TopicID, secondLoad.Relayer.TopicID,
-		"loads should return different topic IDs due to save operation")
+	// Verify Load2 sees updated data (after save)
+	assert.Equal(t, "updated-device-789", result2.ConnectedDevice.ID,
+		"Load2 should see updated device ID (after save)")
+	assert.Equal(t, "Updated Device", result2.ConnectedDevice.Name,
+		"Load2 should see updated device name (after save)")
+	assert.Equal(t, 2, result2.ConnectedDevice.Platform,
+		"Load2 should see updated platform (after save)")
+	assert.Equal(t, "updated-topic-789", result2.Relayer.TopicID,
+		"Load2 should see updated topic ID (after save)")
+
+	// Verify that the data is different between loads (save operation interfered)
+	assert.NotEqual(t, result1.ConnectedDevice.ID, result2.ConnectedDevice.ID,
+		"Load1 and Load2 should return different data due to save operation")
+	assert.NotEqual(t, result1.Relayer.TopicID, result2.Relayer.TopicID,
+		"Load1 and Load2 should return different topic IDs due to save operation")
+
+	t.Logf("Test completed successfully: Load1 saw initial data, Save updated file, Load2 saw updated data")
 }
 
 func TestConcurrentGetState(t *testing.T) {
