@@ -256,7 +256,7 @@ async fn internet_setup_successfully_cb(
             eprintln!("MAIN: Error checking for update: {e}");
             let _ = show_message(
                 chromium,
-                &app_state,
+                app_state,
                 constant::UPDATER_FAILED_TO_CHECK_VERSION_MSG,
             )
             .await;
