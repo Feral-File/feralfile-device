@@ -25,8 +25,9 @@ const (
 	METHOD_EVALUATE = "Runtime.evaluate"
 
 	// CDP Types
-	TYPE_STRING = "string"
-	TYPE_OBJECT = "object"
+	TYPE_STRING  = "string"
+	TYPE_OBJECT  = "object"
+	TYPE_BOOLEAN = "boolean"
 
 	// CDP Subtypes
 	SUBTYPE_ERROR = "error"
@@ -269,6 +270,8 @@ func (c *Client) Send(method string, params map[string]interface{}) (interface{}
 		}
 		return v, nil
 	case TYPE_OBJECT:
+		return result.Value, nil
+	case TYPE_BOOLEAN:
 		return result.Value, nil
 	case "":
 		return nil, nil
