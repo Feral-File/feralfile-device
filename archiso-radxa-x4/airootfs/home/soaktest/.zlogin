@@ -12,6 +12,8 @@ sudo systemctl disable --now "chromium-kiosk.service"
 sudo chown -R soaktest:soaktest /home/soaktest
 
 sudo chmod 755 /home/soaktest/.automated_script.sh
+sudo chmod 755 /home/soaktest/soak-test-extreme.sh
+sudo chmod 755 /home/soaktest/soak-test-forever.sh
 sudo chmod 755 /home/soaktest/soak-test.sh
 sudo chmod 755 /home/soaktest/test.sh
 sudo chmod 755 /home/soaktest/copy_soak_test_logs.sh

@@ -171,6 +171,14 @@ initrd  /intel-ucode.img
 options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID  script=/home/soaktest/soak-test.sh ipv6.disable=1 rw
 EOF
 
+cat > /mnt/boot/loader/entries/arch-extreme.conf <<EOF
+title   FF X1 Extreme Soak Test
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+initrd  /intel-ucode.img
+options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID  script=/home/soaktest/soak-test-extreme.sh ipv6.disable=1 rw
+EOF
+
 chmod 644 /mnt/boot/loader/entries/*.conf
 
 mount --bind /dev /mnt/dev

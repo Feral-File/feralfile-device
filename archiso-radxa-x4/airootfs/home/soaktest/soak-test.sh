@@ -20,6 +20,6 @@ TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 LOG_FILE="/home/soaktest/run_results/cpu_temp_log_${TIMESTAMP}.csv"
 
 # Launch soak test (duration + timestamp)
-cage -s /home/soaktest/test.sh -- "$DURATION_SECONDS" "$TIMESTAMP"
+cage -s /home/soaktest/test.sh -- "$DURATION_SECONDS" "$TIMESTAMP" "file:///home/soaktest/CRAWL_MULTI_LEVEL/index.html"
 
 /home/soaktest/copy_soak_test_logs.sh $TIMESTAMP

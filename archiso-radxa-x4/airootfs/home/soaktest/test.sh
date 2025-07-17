@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ARTWORK_URL="file:///home/soaktest/CRAWL_MULTI_LEVEL/index.html"
 TEMP_VIEWER_URL="http://localhost:8000"
 
-if [[ $# -lt 2 ]]; then
-  echo "Usage: $0 <duration_seconds> <timestamp>"
-  echo "Example: $0 10800 20250701T140000"
+if [[ $# -lt 3 ]]; then
+  echo "Usage: $0 <duration_seconds> <timestamp> <artwork_url>"
+  echo "Example: $0 10800 20250701T140000 file:///home/soaktest/CRAWL_MULTI_LEVEL/index.html"
   exit 1
 fi
 
 DURATION_SECONDS=$1
 TIMESTAMP=$2
+ARTWORK_URL=$3
 
 LOG_FILE="/home/soaktest/run_results/cpu_temp_log_${TIMESTAMP}.csv"
 SERVER_PY="/home/soaktest/temp_server.py"
@@ -26,7 +26,7 @@ stop() {
 trap stop EXIT INT TERM
 
 # Launch chromium
-chromium --kiosk "$ARTWORK_URL" &
+chromium --kiosk --allow-file-access-from-files "$ARTWORK_URL" &
 ARTWORK_PID=$!
 
 # Launch Python server

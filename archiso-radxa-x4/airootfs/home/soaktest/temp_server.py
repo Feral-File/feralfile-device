@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import json, datetime, os, threading, time, subprocess, sys
+import json, datetime, os, threading, time, subprocess, sys, glob
 
 SAMPLE_INTERVAL_SECONDS = 5
 FLUSH_INTERVAL_SECONDS = 15
@@ -23,6 +23,23 @@ def get_cpu_temp():
     except:
         return 0.0
     return 0.0
+
+def get_cpu_frequencies():
+    try:
+        cur_freq_paths = glob.glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq")
+        if not cur_freq_paths:
+            return None
+
+        cur_sum = 0
+        for path in cur_freq_paths:
+            with open(path, 'r') as f:
+                cur_sum += int(f.read().strip())
+        current_mhz = cur_sum / len(cur_freq_paths) / 1000.0  # kHz → MHz
+
+        return round(current_mhz, 1)
+    except Exception as e:
+        print(f"[WARN] Failed to get CPU frequencies: {e}")
+        return None
 
 def get_screen_info():
     try:
@@ -56,18 +73,19 @@ def background_logger(csv_path):
     first_time = not os.path.exists(csv_path)
     with open(csv_path, "a", buffering=1) as f:
         if first_time:
-            f.write("timestamp,cpu_temp_celsius,width,height,refresh_rate\n")
+            f.write("timestamp,cpu_temp_celsius,cpu_freq_mhz,width,height,refresh_rate\n")
 
         while True:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             temp = get_cpu_temp()
             screen = get_screen_info()
+            freq = get_cpu_frequencies()
 
             width = screen["width"] if screen["width"] is not None else ""
             height = screen["height"] if screen["height"] is not None else ""
             refresh = screen["refresh_rate"] if screen["refresh_rate"] is not None else ""
 
-            f.write(f"{timestamp},{temp:.1f},{width},{height},{refresh}\n")
+            f.write(f"{timestamp},{temp:.1f},{freq:.0f},{width},{height},{refresh}\n")
 
             now = time.time()
             if now - last_flush_time >= FLUSH_INTERVAL_SECONDS:
@@ -104,19 +122,20 @@ class TempHandler(BaseHTTPRequestHandler):
                 with open(CSV_FILE, 'r') as f:
                     last = f.readlines()[-1]
                     parts = last.strip().split(',')
-                    timestamp, temp, width, height, refresh = parts
+                    timestamp, temp, freq, width, height, refresh = parts
                     screen_info = {
                         "width": int(width) if width else None,
                         "height": int(height) if height else None,
                         "refresh_rate": float(refresh) if refresh else None
                     }
             except:
-                timestamp, temp = '', 'N/A'
+                timestamp, temp, freq = '', 'N/A', 'N/A'
                 screen_info = get_screen_info()
 
             payload = {
                 'timestamp': timestamp,
                 'temp': temp,
+                'freq': freq,
                 'screen': screen_info
             }
             self._send_json(payload)

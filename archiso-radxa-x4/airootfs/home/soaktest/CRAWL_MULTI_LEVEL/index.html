@@ -121,6 +121,7 @@ MAPS LOADING...
     </div>
     <div id="info-box">
       CPU Temp: <span id="temp">Loading...</span><br>
+      CPU Freq: <span id="freq">Loading...</span><br>
       Resolution: <span id="resolution">Loading...</span><br>
       Refresh Rate: <span id="refresh">Loading...</span>
     </div>
@@ -130,6 +131,7 @@ MAPS LOADING...
           const res = await fetch('http://localhost:8000/info');
           const data = await res.json();
           document.getElementById('temp').textContent = `${data.temp} °C`;
+          document.getElementById('freq').textContent = `${data.freq} MHz`;
           document.getElementById('resolution').textContent = data.screen.width && data.screen.height
             ? `${data.screen.width}x${data.screen.height}`
             : 'N/A';
@@ -138,6 +140,7 @@ MAPS LOADING...
             : 'N/A';
         } catch {
           document.getElementById('temp').textContent = 'Error';
+          document.getElementById('freq').textContent = 'Error';
           document.getElementById('resolution').textContent = 'Error';
           document.getElementById('refresh').textContent = 'Error';
         }
