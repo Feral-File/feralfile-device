@@ -47,9 +47,7 @@ type ExecInterface interface {
 	CommandContext(ctx context.Context, name string, arg ...string) ExecCmdInterface
 }
 
-type Exec struct {
-	cmd ExecCmdInterface
-}
+type Exec struct{}
 
 func NewExec() ExecInterface {
 	return &Exec{}
