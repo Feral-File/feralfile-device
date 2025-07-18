@@ -1,7 +1,11 @@
 //nolint:gosec
 package wrapper
 
-import "os"
+import (
+	"context"
+	"os"
+	"os/exec"
+)
 
 //go:generate mockgen -source=os.go -destination=../mocks/os.go -package=mocks -mock_names=OSInterface=MockOS
 type OSInterface interface {
@@ -36,4 +40,59 @@ func (o OS) MkdirAll(path string, perm os.FileMode) error {
 
 func (o OS) Rename(oldpath, newpath string) error {
 	return os.Rename(oldpath, newpath)
+}
+
+//go:generate mockgen -source=os.go -destination=../mocks/os.go -package=mocks -mock_names=ExecInterface=MockExec
+type ExecInterface interface {
+	CommandContext(ctx context.Context, name string, arg ...string) ExecCmdInterface
+}
+
+type Exec struct {
+	cmd ExecCmdInterface
+}
+
+func NewExec() ExecInterface {
+	return &Exec{}
+}
+
+func (e *Exec) CommandContext(ctx context.Context, name string, arg ...string) ExecCmdInterface {
+	return ExecCmd{cmd: exec.CommandContext(ctx, name, arg...)}
+}
+
+//go:generate mockgen -source=os.go -destination=../mocks/os.go -package=mocks -mock_names=ExecCmdInterface=MockExecCmd
+type ExecCmdInterface interface {
+	String() string
+	Run() error
+	Start() error
+	Wait() error
+	Output() ([]byte, error)
+	CombinedOutput() ([]byte, error)
+}
+
+type ExecCmd struct {
+	cmd *exec.Cmd
+}
+
+func (e ExecCmd) String() string {
+	return e.cmd.String()
+}
+
+func (e ExecCmd) Run() error {
+	return e.cmd.Run()
+}
+
+func (e ExecCmd) Start() error {
+	return e.cmd.Start()
+}
+
+func (e ExecCmd) Wait() error {
+	return e.cmd.Wait()
+}
+
+func (e ExecCmd) Output() ([]byte, error) {
+	return e.cmd.Output()
+}
+
+func (e ExecCmd) CombinedOutput() ([]byte, error) {
+	return e.cmd.CombinedOutput()
 }

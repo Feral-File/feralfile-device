@@ -2,17 +2,53 @@ package status
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
-	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
 	"golang.org/x/sync/errgroup"
 )
+
+//go:generate mockgen -source=device_status.go -destination=../mocks/device_status.go -package=mocks -mock_names=DeviceStatusInterface=MockDeviceStatus
+type DeviceStatusInterface interface {
+	GetStatus(ctx context.Context) (*DeviceStatusResponse, error)
+}
+
+type DeviceStatus struct {
+	json wrapper.JSONInterface
+	os   wrapper.OSInterface
+	exec wrapper.ExecInterface
+	http wrapper.HTTPInterface
+	io   wrapper.IOInterface
+}
+
+func NewDefaultDeviceStatus() DeviceStatus {
+	return NewDeviceStatus(
+		wrapper.NewJSON(),
+		wrapper.NewOS(),
+		wrapper.NewExec(),
+		wrapper.NewHTTP(),
+		wrapper.NewIO(),
+	)
+}
+
+func NewDeviceStatus(
+	json wrapper.JSONInterface,
+	os wrapper.OSInterface,
+	exec wrapper.ExecInterface,
+	http wrapper.HTTPInterface,
+	io wrapper.IOInterface,
+) DeviceStatus {
+	return DeviceStatus{
+		json: json,
+		os:   os,
+		exec: exec,
+		http: http,
+		io:   io,
+	}
+}
 
 // DeviceStatusResponse represents the structure of device status information
 type DeviceStatusResponse struct {
@@ -22,9 +58,9 @@ type DeviceStatusResponse struct {
 	LatestVersion    string `json:"latestVersion,omitempty"`
 }
 
-// GetDeviceStatus retrieves comprehensive device status information
+// GetStatus retrieves comprehensive device status information
 // This function can be used by both command handlers and status polling
-func GetDeviceStatus(ctx context.Context) (*DeviceStatusResponse, error) {
+func (d DeviceStatus) GetStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 	response := &DeviceStatusResponse{}
 
 	// Use errgroup for parallel execution
@@ -39,7 +75,7 @@ func GetDeviceStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 		screenRotation = "landscape"
 
 		configPath := "/home/feralfile/.config/screen-orientation"
-		configData, err := os.ReadFile(configPath)
+		configData, err := d.os.ReadFile(configPath)
 		if err != nil {
 			return nil // Don't fail if config file doesn't exist
 		}
@@ -61,7 +97,7 @@ func GetDeviceStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 
 	// Get WiFi information
 	g.Go(func() error {
-		cmd := exec.CommandContext(ctx, "nmcli", "-t", "-f", "NAME,DEVICE,STATE", "connection", "show", "--active")
+		cmd := d.exec.CommandContext(ctx, "nmcli", "-t", "-f", "NAME,DEVICE,STATE", "connection", "show", "--active")
 		output, err := cmd.Output()
 		if err != nil {
 			return nil // Don't fail if nmcli command fails
@@ -85,7 +121,7 @@ func GetDeviceStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 	// Get installed version and latest version
 	g.Go(func() error {
 		configFile := "/home/feralfile/x1-config.json"
-		configBytes, err := os.ReadFile(configFile)
+		configBytes, err := d.os.ReadFile(configFile)
 		if err != nil {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
@@ -98,7 +134,7 @@ func GetDeviceStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 			Endpoint         string `json:"endpoint"`
 		}
 
-		if err := json.Unmarshal(configBytes, &config); err != nil {
+		if err := d.json.Unmarshal(configBytes, &config); err != nil {
 			return fmt.Errorf("failed to parse config file: %w", err)
 		}
 
@@ -106,7 +142,7 @@ func GetDeviceStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 
 		// Get latest version from API if credentials are available
 		if config.Branch != "" && config.DistributionAcc != "" && config.DistributionPass != "" && config.Endpoint != "" {
-			version, err := fetchLatestVersion(ctx, config.Endpoint, config.Branch, config.DistributionAcc, config.DistributionPass)
+			version, err := d.fetchLatestVersion(ctx, config.Endpoint, config.Branch, config.DistributionAcc, config.DistributionPass)
 			if err != nil {
 				return fmt.Errorf("failed to fetch latest version: %w", err)
 			}
@@ -131,7 +167,7 @@ func GetDeviceStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 }
 
 // fetchLatestVersion retrieves the latest version from the distribution API
-func fetchLatestVersion(ctx context.Context, endpoint, branch, account, pass string) (string, error) {
+func (d DeviceStatus) fetchLatestVersion(ctx context.Context, endpoint, branch, account, pass string) (string, error) {
 	apiURL := fmt.Sprintf("%s/api/latest/%s", endpoint, branch)
 
 	// Create HTTP client with 2-second timeout
@@ -159,7 +195,7 @@ func fetchLatestVersion(ctx context.Context, endpoint, branch, account, pass str
 		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := d.io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -168,7 +204,7 @@ func fetchLatestVersion(ctx context.Context, endpoint, branch, account, pass str
 		LatestVersion string `json:"latest_version"`
 	}
 
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
+	if err := d.json.Unmarshal(body, &apiResponse); err != nil {
 		return "", err
 	}
 

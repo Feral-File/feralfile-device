@@ -29,20 +29,27 @@ type PollerInterface interface {
 // Poller handles periodic polling of both player status via CDP and device status
 type Poller struct {
 	sync.RWMutex
-	cdp         cdp.ClientInterface
-	relayer     relayer.ClientInterface
-	logger      *zap.Logger
-	stopChan    chan struct{}
-	refreshChan chan struct{}
+	cdp          cdp.ClientInterface
+	relayer      relayer.ClientInterface
+	deviceStatus DeviceStatusInterface
+	logger       *zap.Logger
+	stopChan     chan struct{}
+	refreshChan  chan struct{}
 
 	// Store last status hashes for each notification type to avoid duplicate notifications
 	lastStatusHashes map[relayer.NotificationType]string
 }
 
-func NewPoller(cdp cdp.ClientInterface, relay relayer.ClientInterface, logger *zap.Logger) *Poller {
+func NewPoller(
+	cdp cdp.ClientInterface,
+	relay relayer.ClientInterface,
+	deviceStatus DeviceStatusInterface,
+	logger *zap.Logger,
+) *Poller {
 	return &Poller{
 		cdp:              cdp,
 		relayer:          relay,
+		deviceStatus:     deviceStatus,
 		logger:           logger,
 		stopChan:         make(chan struct{}),
 		refreshChan:      make(chan struct{}, 10), // Buffered channel to prevent blocking
@@ -209,7 +216,7 @@ func (s *Poller) pollDeviceStatus(ctx context.Context) {
 	s.logger.Debug("Polling device status")
 
 	// Get device status using the shared function
-	deviceStatus, err := GetDeviceStatus(ctx)
+	deviceStatus, err := s.deviceStatus.GetStatus(ctx)
 	if err != nil {
 		s.logger.Error("Failed to get device status", zap.Error(err))
 		return

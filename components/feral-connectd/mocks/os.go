@@ -5,37 +5,39 @@
 package mocks
 
 import (
+	context "context"
 	os "os"
 	reflect "reflect"
 
+	wrapper "github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockOS is a mock of OSInterface interface.
-type MockOS struct {
+// MockOSInterface is a mock of OSInterface interface.
+type MockOSInterface struct {
 	ctrl     *gomock.Controller
-	recorder *MockOSMockRecorder
+	recorder *MockOSInterfaceMockRecorder
 }
 
-// MockOSMockRecorder is the mock recorder for MockOS.
-type MockOSMockRecorder struct {
-	mock *MockOS
+// MockOSInterfaceMockRecorder is the mock recorder for MockOSInterface.
+type MockOSInterfaceMockRecorder struct {
+	mock *MockOSInterface
 }
 
-// NewMockOS creates a new mock instance.
-func NewMockOS(ctrl *gomock.Controller) *MockOS {
-	mock := &MockOS{ctrl: ctrl}
-	mock.recorder = &MockOSMockRecorder{mock}
+// NewMockOSInterface creates a new mock instance.
+func NewMockOSInterface(ctrl *gomock.Controller) *MockOSInterface {
+	mock := &MockOSInterface{ctrl: ctrl}
+	mock.recorder = &MockOSInterfaceMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockOS) EXPECT() *MockOSMockRecorder {
+func (m *MockOSInterface) EXPECT() *MockOSInterfaceMockRecorder {
 	return m.recorder
 }
 
 // IsNotExist mocks base method.
-func (m *MockOS) IsNotExist(err error) bool {
+func (m *MockOSInterface) IsNotExist(err error) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsNotExist", err)
 	ret0, _ := ret[0].(bool)
@@ -43,13 +45,13 @@ func (m *MockOS) IsNotExist(err error) bool {
 }
 
 // IsNotExist indicates an expected call of IsNotExist.
-func (mr *MockOSMockRecorder) IsNotExist(err interface{}) *gomock.Call {
+func (mr *MockOSInterfaceMockRecorder) IsNotExist(err interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsNotExist", reflect.TypeOf((*MockOS)(nil).IsNotExist), err)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsNotExist", reflect.TypeOf((*MockOSInterface)(nil).IsNotExist), err)
 }
 
 // MkdirAll mocks base method.
-func (m *MockOS) MkdirAll(path string, perm os.FileMode) error {
+func (m *MockOSInterface) MkdirAll(path string, perm os.FileMode) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MkdirAll", path, perm)
 	ret0, _ := ret[0].(error)
@@ -57,13 +59,13 @@ func (m *MockOS) MkdirAll(path string, perm os.FileMode) error {
 }
 
 // MkdirAll indicates an expected call of MkdirAll.
-func (mr *MockOSMockRecorder) MkdirAll(path, perm interface{}) *gomock.Call {
+func (mr *MockOSInterfaceMockRecorder) MkdirAll(path, perm interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MkdirAll", reflect.TypeOf((*MockOS)(nil).MkdirAll), path, perm)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MkdirAll", reflect.TypeOf((*MockOSInterface)(nil).MkdirAll), path, perm)
 }
 
 // ReadFile mocks base method.
-func (m *MockOS) ReadFile(path string) ([]byte, error) {
+func (m *MockOSInterface) ReadFile(path string) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadFile", path)
 	ret0, _ := ret[0].([]byte)
@@ -72,13 +74,13 @@ func (m *MockOS) ReadFile(path string) ([]byte, error) {
 }
 
 // ReadFile indicates an expected call of ReadFile.
-func (mr *MockOSMockRecorder) ReadFile(path interface{}) *gomock.Call {
+func (mr *MockOSInterfaceMockRecorder) ReadFile(path interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockOS)(nil).ReadFile), path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockOSInterface)(nil).ReadFile), path)
 }
 
 // Rename mocks base method.
-func (m *MockOS) Rename(oldpath, newpath string) error {
+func (m *MockOSInterface) Rename(oldpath, newpath string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Rename", oldpath, newpath)
 	ret0, _ := ret[0].(error)
@@ -86,13 +88,13 @@ func (m *MockOS) Rename(oldpath, newpath string) error {
 }
 
 // Rename indicates an expected call of Rename.
-func (mr *MockOSMockRecorder) Rename(oldpath, newpath interface{}) *gomock.Call {
+func (mr *MockOSInterfaceMockRecorder) Rename(oldpath, newpath interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rename", reflect.TypeOf((*MockOS)(nil).Rename), oldpath, newpath)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rename", reflect.TypeOf((*MockOSInterface)(nil).Rename), oldpath, newpath)
 }
 
 // WriteFile mocks base method.
-func (m *MockOS) WriteFile(path string, data []byte, perm os.FileMode) error {
+func (m *MockOSInterface) WriteFile(path string, data []byte, perm os.FileMode) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WriteFile", path, data, perm)
 	ret0, _ := ret[0].(error)
@@ -100,7 +102,158 @@ func (m *MockOS) WriteFile(path string, data []byte, perm os.FileMode) error {
 }
 
 // WriteFile indicates an expected call of WriteFile.
-func (mr *MockOSMockRecorder) WriteFile(path, data, perm interface{}) *gomock.Call {
+func (mr *MockOSInterfaceMockRecorder) WriteFile(path, data, perm interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteFile", reflect.TypeOf((*MockOS)(nil).WriteFile), path, data, perm)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteFile", reflect.TypeOf((*MockOSInterface)(nil).WriteFile), path, data, perm)
+}
+
+// MockExecInterface is a mock of ExecInterface interface.
+type MockExecInterface struct {
+	ctrl     *gomock.Controller
+	recorder *MockExecInterfaceMockRecorder
+}
+
+// MockExecInterfaceMockRecorder is the mock recorder for MockExecInterface.
+type MockExecInterfaceMockRecorder struct {
+	mock *MockExecInterface
+}
+
+// NewMockExecInterface creates a new mock instance.
+func NewMockExecInterface(ctrl *gomock.Controller) *MockExecInterface {
+	mock := &MockExecInterface{ctrl: ctrl}
+	mock.recorder = &MockExecInterfaceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockExecInterface) EXPECT() *MockExecInterfaceMockRecorder {
+	return m.recorder
+}
+
+// CommandContext mocks base method.
+func (m *MockExecInterface) CommandContext(ctx context.Context, name string, arg ...string) wrapper.ExecCmdInterface {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, name}
+	for _, a := range arg {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CommandContext", varargs...)
+	ret0, _ := ret[0].(wrapper.ExecCmdInterface)
+	return ret0
+}
+
+// CommandContext indicates an expected call of CommandContext.
+func (mr *MockExecInterfaceMockRecorder) CommandContext(ctx, name interface{}, arg ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, name}, arg...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommandContext", reflect.TypeOf((*MockExecInterface)(nil).CommandContext), varargs...)
+}
+
+// MockExecCmd is a mock of ExecCmdInterface interface.
+type MockExecCmd struct {
+	ctrl     *gomock.Controller
+	recorder *MockExecCmdMockRecorder
+}
+
+// MockExecCmdMockRecorder is the mock recorder for MockExecCmd.
+type MockExecCmdMockRecorder struct {
+	mock *MockExecCmd
+}
+
+// NewMockExecCmd creates a new mock instance.
+func NewMockExecCmd(ctrl *gomock.Controller) *MockExecCmd {
+	mock := &MockExecCmd{ctrl: ctrl}
+	mock.recorder = &MockExecCmdMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockExecCmd) EXPECT() *MockExecCmdMockRecorder {
+	return m.recorder
+}
+
+// CombinedOutput mocks base method.
+func (m *MockExecCmd) CombinedOutput() ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CombinedOutput")
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CombinedOutput indicates an expected call of CombinedOutput.
+func (mr *MockExecCmdMockRecorder) CombinedOutput() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CombinedOutput", reflect.TypeOf((*MockExecCmd)(nil).CombinedOutput))
+}
+
+// Output mocks base method.
+func (m *MockExecCmd) Output() ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Output")
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Output indicates an expected call of Output.
+func (mr *MockExecCmdMockRecorder) Output() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Output", reflect.TypeOf((*MockExecCmd)(nil).Output))
+}
+
+// Run mocks base method.
+func (m *MockExecCmd) Run() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Run")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Run indicates an expected call of Run.
+func (mr *MockExecCmdMockRecorder) Run() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockExecCmd)(nil).Run))
+}
+
+// Start mocks base method.
+func (m *MockExecCmd) Start() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Start")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Start indicates an expected call of Start.
+func (mr *MockExecCmdMockRecorder) Start() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockExecCmd)(nil).Start))
+}
+
+// String mocks base method.
+func (m *MockExecCmd) String() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "String")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// String indicates an expected call of String.
+func (mr *MockExecCmdMockRecorder) String() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "String", reflect.TypeOf((*MockExecCmd)(nil).String))
+}
+
+// Wait mocks base method.
+func (m *MockExecCmd) Wait() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Wait")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Wait indicates an expected call of Wait.
+func (mr *MockExecCmdMockRecorder) Wait() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Wait", reflect.TypeOf((*MockExecCmd)(nil).Wait))
 }
