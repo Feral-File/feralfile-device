@@ -2,11 +2,7 @@ package command
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"math"
-	"os"
-	"os/exec"
 	"strings"
 	"sync"
 
@@ -15,6 +11,7 @@ import (
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/state"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/status"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
 )
@@ -45,10 +42,12 @@ type HandlerInterface interface {
 
 type Handler struct {
 	sync.Mutex
-	cdp    cdp.ClientInterface
-	dbus   dbus.ClientInterface
-	logger *zap.Logger
+	cdp          cdp.ClientInterface
+	dbus         dbus.ClientInterface
+	deviceStatus status.DeviceStatusInterface
+	logger       *zap.Logger
 
+	// State
 	lastSysMetrics []byte
 
 	// Add reference to StatusPoller to get metrics
@@ -61,13 +60,51 @@ type Handler struct {
 	screenHeight      float64
 	screenInitialized bool
 	movingScaleFactor float64
+
+	// Deps
+	json wrapper.JSONInterface
+	os   wrapper.OSInterface
+	exec wrapper.ExecInterface
+	math wrapper.MathInterface
 }
 
-func NewHandler(cdp cdp.ClientInterface, dbus dbus.ClientInterface, logger *zap.Logger) *Handler {
+func NewDefaultHandler(
+	cdp cdp.ClientInterface,
+	dbus dbus.ClientInterface,
+	deviceStatus status.DeviceStatusInterface,
+	logger *zap.Logger,
+) *Handler {
+	return NewHandler(
+		cdp,
+		dbus,
+		deviceStatus,
+		logger,
+		wrapper.NewJSON(),
+		wrapper.NewOS(),
+		wrapper.NewExec(),
+		wrapper.NewMath(),
+	)
+}
+
+func NewHandler(
+	cdp cdp.ClientInterface,
+	dbus dbus.ClientInterface,
+	deviceStatus status.DeviceStatusInterface,
+	logger *zap.Logger,
+	json wrapper.JSONInterface,
+	os wrapper.OSInterface,
+	exec wrapper.ExecInterface,
+	math wrapper.MathInterface,
+) *Handler {
 	return &Handler{
-		cdp:    cdp,
-		dbus:   dbus,
-		logger: logger,
+		cdp:          cdp,
+		dbus:         dbus,
+		deviceStatus: deviceStatus,
+		logger:       logger,
+		json:         json,
+		os:           os,
+		exec:         exec,
+		math:         math,
 	}
 }
 
@@ -88,7 +125,7 @@ func (c *Handler) Execute(ctx context.Context, cmd Command) (interface{}, error)
 	var err error
 	var bytes []byte
 
-	bytes, err = json.Marshal(cmd.Arguments)
+	bytes, err = c.json.Marshal(cmd.Arguments)
 	if err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -112,7 +149,7 @@ func (c *Handler) Execute(ctx context.Context, cmd Command) (interface{}, error)
 	case relayer.CMD_SHUTDOWN:
 		result, err = c.shutdown(ctx)
 	case relayer.CMD_DEVICE_STATUS:
-		result, err = c.deviceStatus(ctx)
+		result, err = c.getDeviceStatus(ctx)
 	case relayer.CMD_UPDATE_TO_LATEST:
 		result, err = c.updateToLatest(ctx)
 	default:
@@ -127,7 +164,7 @@ func (c *Handler) connect(args []byte) (interface{}, error) {
 		Device         Device `json:"clientDevice"`
 		PrimaryAddress string `json:"primaryAddress"`
 	}
-	err := json.Unmarshal(args, &cmdArgs)
+	err := c.json.Unmarshal(args, &cmdArgs)
 	if err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -150,7 +187,7 @@ func (c *Handler) showPairingQRCode(ctx context.Context, args []byte) (interface
 	var cmdArgs struct {
 		Show bool `json:"show"`
 	}
-	err := json.Unmarshal(args, &cmdArgs)
+	err := c.json.Unmarshal(args, &cmdArgs)
 	if err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -162,11 +199,15 @@ func (c *Handler) showPairingQRCode(ctx context.Context, args []byte) (interface
 			Member:    dbus.SETUPD_EVENT_SHOW_PAIRING_QR_CODE,
 			Body:      []interface{}{cmdArgs.Show},
 		})
-	return CmdOK, err
+	if err != nil {
+		return nil, fmt.Errorf("failed to send show pairing QR code: %w", err)
+	}
+
+	return CmdOK, nil
 }
 
-func (c *Handler) deviceStatus(ctx context.Context) (interface{}, error) {
-	return status.GetDeviceStatus(ctx)
+func (c *Handler) getDeviceStatus(ctx context.Context) (interface{}, error) {
+	return c.deviceStatus.GetStatus(ctx)
 }
 
 func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interface{}, error) {
@@ -174,7 +215,7 @@ func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interf
 		Clockwise bool `json:"clockwise"`
 	}
 
-	err := json.Unmarshal(args, &cmdArgs)
+	err := c.json.Unmarshal(args, &cmdArgs)
 	if err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -184,7 +225,7 @@ func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interf
 		zap.Bool("clockwise", clockwise))
 
 	// Execute wlr-randr command
-	cmd := exec.CommandContext(ctx, "wlr-randr")
+	cmd := c.exec.CommandContext(ctx, "wlr-randr")
 
 	// Get current outputs
 	output, err := cmd.Output()
@@ -225,7 +266,7 @@ func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interf
 	// Read current orientation from config file (this is what user perceives)
 	currentIndex := 0 // Default to normal
 	configPath := "/home/feralfile/.config/screen-orientation"
-	configData, err := os.ReadFile(configPath)
+	configData, err := c.os.ReadFile(configPath)
 	if err == nil && len(configData) > 0 {
 		savedRotation := strings.TrimSpace(string(configData))
 		for i, rot := range rotations {
@@ -252,7 +293,7 @@ func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interf
 	// Apply with wlr-randr (force absolute orientation)
 	// This makes wlr-randr and config file stay in sync
 	//nolint:gosec
-	rotateCmd := exec.CommandContext(ctx, "wlr-randr", "--output", outputName, "--transform", newRotation)
+	rotateCmd := c.exec.CommandContext(ctx, "wlr-randr", "--output", outputName, "--transform", newRotation)
 	err = rotateCmd.Run()
 	if err != nil {
 		c.logger.Error("Failed to rotate screen", zap.Error(err))
@@ -260,7 +301,7 @@ func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interf
 	}
 
 	// Write rotation value to file
-	if err := os.WriteFile(configPath, []byte(newRotation), 0600); err != nil {
+	if err := c.os.WriteFile(configPath, []byte(newRotation), 0600); err != nil {
 		c.logger.Warn("Failed to save screen orientation", zap.Error(err))
 	}
 
@@ -290,16 +331,17 @@ func (c *Handler) handleKeyboardEvent(args []byte) (interface{}, error) {
 		Code int `json:"code"`
 	}
 
-	err := json.Unmarshal(args, &cmdArgs)
+	err := c.json.Unmarshal(args, &cmdArgs)
 	if err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
-	keyName := ""
-	if cmdArgs.Code >= 32 && cmdArgs.Code <= 126 {
+	// Always map special keys first
+	keyName := c.mapToYdoKey(cmdArgs.Code)
+	isPrintable := false
+	if keyName == "" && cmdArgs.Code >= 32 && cmdArgs.Code <= 126 {
 		keyName = string(rune(cmdArgs.Code))
-	} else {
-		keyName = c.mapToYdoKey(cmdArgs.Code)
+		isPrintable = true
 	}
 
 	c.logger.Info("Keyboard event", zap.Int("code", cmdArgs.Code), zap.String("key", keyName))
@@ -321,8 +363,8 @@ func (c *Handler) handleKeyboardEvent(args []byte) (interface{}, error) {
 		return nil, fmt.Errorf("failed to send keyboard event: %w", err)
 	}
 
-	// For keys that need keyUp events as well (like letters)
-	if cmdArgs.Code >= 32 {
+	// Only send keyUp for printable ASCII (not for special keys)
+	if isPrintable {
 		keyEventParams["type"] = "keyUp"
 		_, err := c.cdp.Send("Input.dispatchKeyEvent", keyEventParams)
 		if err != nil {
@@ -333,9 +375,9 @@ func (c *Handler) handleKeyboardEvent(args []byte) (interface{}, error) {
 	return CmdOK, nil
 }
 
-func (c *Handler) initializeScreenDimensions() error {
+func (c *Handler) initializeScreenDimensions() {
 	if c.screenInitialized {
-		return nil
+		return
 	}
 
 	// Get screen dimensions using CDP's Runtime.evaluate
@@ -376,15 +418,11 @@ func (c *Handler) initializeScreenDimensions() error {
 		zap.Float64("height", c.screenHeight),
 		zap.Float64("cursorX", c.cursorPositionX),
 		zap.Float64("cursorY", c.cursorPositionY))
-
-	return nil
 }
 
 func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 	// Initialize screen dimensions if not done already
-	if err := c.initializeScreenDimensions(); err != nil {
-		return nil, err
-	}
+	c.initializeScreenDimensions()
 
 	// Parse cursor offsets
 	var cursorArgs struct {
@@ -395,7 +433,7 @@ func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 		} `json:"cursorOffsets"`
 	}
 
-	err := json.Unmarshal(args, &cursorArgs)
+	err := c.json.Unmarshal(args, &cursorArgs)
 	if err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -405,7 +443,7 @@ func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 
 	for i, offset := range cursorArgs.CursorOffsets {
 		// Calculate the magnitude of this offset
-		magnitude := math.Sqrt(offset.DX*offset.DX + offset.DY*offset.DY)
+		magnitude := c.math.Sqrt(offset.DX*offset.DX + offset.DY*offset.DY)
 
 		var clampedDX, clampedDY float64
 
@@ -413,8 +451,8 @@ func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 		if magnitude > 150 {
 			// This is likely a catch-up jump, clamp aggressively
 			maxOffset := 25.0
-			clampedDX = math.Max(-maxOffset, math.Min(maxOffset, offset.DX))
-			clampedDY = math.Max(-maxOffset, math.Min(maxOffset, offset.DY))
+			clampedDX = c.math.Max(-maxOffset, c.math.Min(maxOffset, offset.DX))
+			clampedDY = c.math.Max(-maxOffset, c.math.Min(maxOffset, offset.DY))
 
 			c.logger.Debug("Clamping outlier offset",
 				zap.Int("index", i),
@@ -434,8 +472,8 @@ func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 		c.cursorPositionY += (clampedDY * c.movingScaleFactor)
 
 		// Ensure position stays within screen bounds
-		c.cursorPositionX = math.Max(0, math.Min(c.cursorPositionX, c.screenWidth))
-		c.cursorPositionY = math.Max(0, math.Min(c.cursorPositionY, c.screenHeight))
+		c.cursorPositionX = c.math.Max(0, c.math.Min(c.cursorPositionX, c.screenWidth))
+		c.cursorPositionY = c.math.Max(0, c.math.Min(c.cursorPositionY, c.screenHeight))
 
 		// Add to absolute positions array
 		absolutePositions = append(absolutePositions, map[string]float64{
@@ -450,7 +488,7 @@ func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 	}
 
 	// 1. Pass the entire array of absolute positions to JavaScript via CDP
-	positionsJSON, err := json.Marshal(map[string]interface{}{
+	positionsJSON, err := c.json.Marshal(map[string]interface{}{
 		"messageID": cursorArgs.MessageID,
 		"message": map[string]interface{}{
 			"command": "cursorUpdate",
@@ -500,9 +538,7 @@ func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 
 func (c *Handler) handleMouseTapEvent() (interface{}, error) {
 	// Initialize screen dimensions if not done already
-	if err := c.initializeScreenDimensions(); err != nil {
-		return nil, err
-	}
+	c.initializeScreenDimensions()
 
 	c.logger.Info("Mouse tap event at current position",
 		zap.Float64("x", c.cursorPositionX),
@@ -572,7 +608,7 @@ func (c *Handler) mapToYdoKey(keyCode int) string {
 func (c *Handler) shutdown(ctx context.Context) (interface{}, error) {
 	c.logger.Info("Executing shutdown command")
 
-	cmd := exec.CommandContext(ctx, "sudo", "shutdown", "-h", "now")
+	cmd := c.exec.CommandContext(ctx, "sudo", "shutdown", "-h", "now")
 
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("failed to execute shutdown command: %w", err)
@@ -587,7 +623,7 @@ func (c *Handler) getSysMetrics() (interface{}, error) {
 
 	var sysMetrics map[string]interface{}
 	if c.lastSysMetrics != nil {
-		err := json.Unmarshal(c.lastSysMetrics, &sysMetrics)
+		err := c.json.Unmarshal(c.lastSysMetrics, &sysMetrics)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal last sys metrics: %w", err)
 		}
@@ -600,7 +636,7 @@ func (c *Handler) updateToLatest(ctx context.Context) (interface{}, error) {
 	c.logger.Info("Executing update to latest version command")
 
 	// execute command systemctl start feral-updater@00:00.service
-	cmd := exec.CommandContext(ctx, "systemctl", "start", "feral-updater@00:00.service")
+	cmd := c.exec.CommandContext(ctx, "systemctl", "start", "feral-updater@00:00.service")
 
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("failed to execute update to latest command: %w", err)

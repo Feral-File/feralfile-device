@@ -18,7 +18,7 @@ import (
 type testSetup struct {
 	ctrl     *gomock.Controller
 	ctx      context.Context
-	mockOS   *mocks.MockOS
+	mockOS   *mocks.MockOSInterface
 	mockJSON *mocks.MockJSON
 	logger   *zap.Logger
 }
@@ -29,7 +29,7 @@ func setup(t *testing.T) *testSetup {
 	ctx := context.Background()
 
 	// Dependencies
-	mockOS := mocks.NewMockOS(ctrl)
+	mockOS := mocks.NewMockOSInterface(ctrl)
 	mockJSON := mocks.NewMockJSON(ctrl)
 
 	// Setup and inject mocks for testing

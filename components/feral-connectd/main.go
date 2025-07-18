@@ -152,7 +152,8 @@ func main() {
 	}
 
 	// Initialize command handler
-	cmd := command.NewHandler(cdpClient, dbusClient, l)
+	ds := status.NewDefaultDeviceStatus()
+	cmd := command.NewDefaultHandler(cdpClient, dbusClient, ds, l)
 
 	// Initialize Mediator
 	mediator := mediator.New(relayerClient, dbusClient, cdpClient, cmd, l)
@@ -174,7 +175,12 @@ func main() {
 	}
 
 	// Initialize StatusPoller
-	statusPoller := status.NewPoller(cdpClient, relayerClient, l)
+	statusPoller := status.NewPoller(
+		cdpClient,
+		relayerClient,
+		ds,
+		l,
+	)
 
 	// Set the StatusPoller reference in mediator for force refresh
 	mediator.SetStatusPoller(statusPoller)
@@ -195,11 +201,11 @@ func main() {
 		l.Warn("Failed to notify systemd, notification not supported. It could because NOTIFY_SOCKET is unset")
 	}
 
-	l.Info("feral-connectd started successfully")
+	l.Info("connectd started successfully")
 
 	<-ctx.Done()
 
-	l.Info("feral-connectd shutdown completed")
+	l.Info("connectd shutdown completed")
 }
 
 func getConnectivityStatus(ctx context.Context, dc *godbus.DBusClient, logger *zap.Logger) (bool, error) {
