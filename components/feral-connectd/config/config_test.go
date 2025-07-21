@@ -22,6 +22,7 @@ type testSetup struct {
 	ctx      context.Context
 	mockOS   *mocks.MockOSInterface
 	mockJSON *mocks.MockJSON
+	cm       config.ConfigManager
 	logger   *zap.Logger
 }
 
@@ -30,18 +31,16 @@ func setup(t *testing.T) *testSetup {
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.FatalLevel))
 	ctx := context.Background()
 
-	// Dependencies
 	mockOS := mocks.NewMockOSInterface(ctrl)
 	mockJSON := mocks.NewMockJSON(ctrl)
-
-	// Setup and inject mocks for testing
-	config.InjectDepsForTesting(mockOS, mockJSON)
+	cm := config.NewConfigManagerWithDeps(mockOS, mockJSON)
 
 	return &testSetup{
 		ctrl:     ctrl,
 		ctx:      ctx,
 		mockOS:   mockOS,
 		mockJSON: mockJSON,
+		cm:       cm,
 		logger:   logger,
 	}
 }
@@ -51,7 +50,9 @@ func (ts *testSetup) teardown() {
 	ts.ctrl.Finish()
 }
 
-func TestLoad_Success(t *testing.T) {
+// Test ConfigManager interface
+
+func TestConfigManager_Load_Success_ExistingFile(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
@@ -70,19 +71,17 @@ func TestLoad_Success(t *testing.T) {
 		}
 	}`
 
-	// Expect ReadFile to return config data
+	// Setup expectations
 	ts.mockOS.EXPECT().
 		ReadFile(configFile).
 		Return([]byte(configData), nil).
 		Times(1)
 
-	// Expect IsNotExist check with nil error (this is called even on success)
 	ts.mockOS.EXPECT().
 		IsNotExist(nil).
 		Return(false).
 		Times(1)
 
-	// Expect JSON unmarshal to succeed
 	ts.mockJSON.EXPECT().
 		Unmarshal([]byte(configData), gomock.Any()).
 		DoAndReturn(func(data []byte, v interface{}) error {
@@ -102,23 +101,65 @@ func TestLoad_Success(t *testing.T) {
 		}).
 		Times(1)
 
-	// Execute the method under test
-	result, err := config.Load(ts.logger)
+	// Execute
+	result, err := ts.cm.Load(ts.logger)
 
-	// Verify results
-	assert.NoError(t, err, "expected no error, got %v", err)
-	assert.NotNil(t, result, "expected non-nil config")
-	assert.NotNil(t, result.CDPConfig, "expected non-nil CDP config")
+	// Verify
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
 	assert.Equal(t, "http://localhost:9222", result.CDPConfig.Endpoint)
-	assert.NotNil(t, result.RelayerConfig, "expected non-nil relayer config")
 	assert.Equal(t, "wss://relay.feralfile.com", result.RelayerConfig.Endpoint)
 	assert.Equal(t, "test-api-key", result.RelayerConfig.APIKey)
-	assert.NotNil(t, result.SentryConfig, "expected non-nil sentry config")
 	assert.Equal(t, "https://test@sentry.io/123", result.SentryConfig.DSN)
 	assert.Equal(t, "test", result.SentryConfig.Environment)
 }
 
-func TestLoad_Error(t *testing.T) {
+func TestConfigManager_Load_Success_AlreadyLoaded(t *testing.T) {
+	ts := setup(t)
+	defer ts.teardown()
+
+	configFile := "/home/feralfile/.config/connectd.json"
+	configData := `{
+		"cdp": {
+			"endpoint": "http://localhost:9222"
+		}
+	}`
+
+	// First load - should read from file
+	ts.mockOS.EXPECT().
+		ReadFile(configFile).
+		Return([]byte(configData), nil).
+		Times(1)
+
+	ts.mockOS.EXPECT().
+		IsNotExist(nil).
+		Return(false).
+		Times(1)
+
+	ts.mockJSON.EXPECT().
+		Unmarshal([]byte(configData), gomock.Any()).
+		DoAndReturn(func(data []byte, v interface{}) error {
+			cfg := v.(*config.Config)
+			cfg.CDPConfig = &cdp.Config{
+				Endpoint: "http://localhost:9222",
+			}
+			cfg.RelayerConfig = &relayer.Config{}
+			cfg.SentryConfig = &logger.SentryConfig{}
+			return nil
+		}).
+		Times(1)
+
+	// First load
+	result1, err1 := ts.cm.Load(ts.logger)
+	assert.NoError(t, err1)
+
+	// Second load - should return cached config without file operations
+	result2, err2 := ts.cm.Load(ts.logger)
+	assert.NoError(t, err2)
+	assert.Equal(t, result1, result2)
+}
+
+func TestConfigManager_Load_Errors(t *testing.T) {
 	tests := []struct {
 		name      string
 		setupFunc func(*testSetup)
@@ -130,13 +171,11 @@ func TestLoad_Error(t *testing.T) {
 				configFile := "/home/feralfile/.config/connectd.json"
 				notFoundErr := &os.PathError{Op: "open", Path: configFile, Err: os.ErrNotExist}
 
-				// Expect ReadFile to return file not found
 				ts.mockOS.EXPECT().
 					ReadFile(configFile).
 					Return(nil, notFoundErr).
 					Times(1)
 
-				// Expect IsNotExist check
 				ts.mockOS.EXPECT().
 					IsNotExist(notFoundErr).
 					Return(true).
@@ -147,16 +186,13 @@ func TestLoad_Error(t *testing.T) {
 		{
 			name: "read file error",
 			setupFunc: func(ts *testSetup) {
-				configFile := "/home/feralfile/.config/connectd.json"
 				readErr := fmt.Errorf("permission denied")
 
-				// Expect ReadFile to return permission error
 				ts.mockOS.EXPECT().
-					ReadFile(configFile).
+					ReadFile(gomock.Any()).
 					Return(nil, readErr).
 					Times(1)
 
-				// Expect IsNotExist check to return false
 				ts.mockOS.EXPECT().
 					IsNotExist(readErr).
 					Return(false).
@@ -167,22 +203,18 @@ func TestLoad_Error(t *testing.T) {
 		{
 			name: "JSON unmarshal error",
 			setupFunc: func(ts *testSetup) {
-				configFile := "/home/feralfile/.config/connectd.json"
 				invalidJSON := `{"invalid": json}`
 
-				// Expect ReadFile to return invalid JSON
 				ts.mockOS.EXPECT().
-					ReadFile(configFile).
+					ReadFile(gomock.Any()).
 					Return([]byte(invalidJSON), nil).
 					Times(1)
 
-				// Expect IsNotExist check with nil error (called even when ReadFile succeeds)
 				ts.mockOS.EXPECT().
 					IsNotExist(nil).
 					Return(false).
 					Times(1)
 
-				// Expect JSON unmarshal to fail
 				ts.mockJSON.EXPECT().
 					Unmarshal([]byte(invalidJSON), gomock.Any()).
 					Return(fmt.Errorf("invalid character 'j' looking for beginning of value")).
@@ -197,55 +229,45 @@ func TestLoad_Error(t *testing.T) {
 			ts := setup(t)
 			defer ts.teardown()
 
-			// Reset global state for clean test
-			config.ResetForTesting()
-
-			// Re-inject mocks after reset
-			config.InjectDepsForTesting(ts.mockOS, ts.mockJSON)
-
-			// Setup error condition
 			tt.setupFunc(ts)
 
-			// Execute the method under test
-			result, err := config.Load(ts.logger)
+			result, err := ts.cm.Load(ts.logger)
 
-			// Assert error occurred and contains expected message
-			assert.Error(t, err, "expected error, got %v", err)
-			assert.Contains(t, err.Error(), tt.wantErr, "expected error message to contain %q, got %q", tt.wantErr, err.Error())
-			assert.Nil(t, result, "expected nil result on error")
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Nil(t, result)
 		})
 	}
 }
 
-func TestGet_InitialCall(t *testing.T) {
+func TestConfigManager_Get_InitialCall(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
-	result := config.Get()
+	cm := config.NewConfigManager()
+	result := cm.Get()
 
-	// Verify default config is returned
-	assert.NotNil(t, result, "expected non-nil config")
-	assert.NotNil(t, result.CDPConfig, "expected non-nil CDP config")
+	assert.NotNil(t, result)
+	assert.NotNil(t, result.CDPConfig)
+	assert.NotNil(t, result.RelayerConfig)
+	assert.NotNil(t, result.SentryConfig)
 	assert.Empty(t, result.CDPConfig.Endpoint)
-	assert.NotNil(t, result.RelayerConfig, "expected non-nil relayer config")
 	assert.Empty(t, result.RelayerConfig.Endpoint)
 	assert.Empty(t, result.RelayerConfig.APIKey)
-	assert.NotNil(t, result.SentryConfig, "expected non-nil sentry config")
 	assert.Empty(t, result.SentryConfig.DSN)
 	assert.Empty(t, result.SentryConfig.Environment)
-	assert.Empty(t, result.SentryConfig.Debug)
-	assert.Empty(t, result.SentryConfig.SampleRate)
-	assert.Empty(t, result.SentryConfig.Release)
-	assert.Empty(t, result.SentryConfig.Repository)
 }
 
-func TestGet_AfterLoad(t *testing.T) {
+func TestConfigManager_Get_AfterLoad(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
 	configData := `{
 		"cdp": {
 			"endpoint": "http://localhost:9222"
+		},
+		"relayer": {
+			"endpoint": "wss://relay.feralfile.com"
 		}
 	}`
 
@@ -255,7 +277,6 @@ func TestGet_AfterLoad(t *testing.T) {
 		Return([]byte(configData), nil).
 		Times(1)
 
-	// Expect IsNotExist check with nil error
 	ts.mockOS.EXPECT().
 		IsNotExist(nil).
 		Return(false).
@@ -268,34 +289,87 @@ func TestGet_AfterLoad(t *testing.T) {
 			cfg.CDPConfig = &cdp.Config{
 				Endpoint: "http://localhost:9222",
 			}
-			cfg.RelayerConfig = &relayer.Config{}
+			cfg.RelayerConfig = &relayer.Config{
+				Endpoint: "wss://relay.feralfile.com",
+			}
 			cfg.SentryConfig = &logger.SentryConfig{}
 			return nil
 		}).
 		Times(1)
 
 	// Load config
-	loadedConfig, err := config.Load(ts.logger)
-	assert.NoError(t, err, "expected no error during load")
+	loadedConfig, err := ts.cm.Load(ts.logger)
+	assert.NoError(t, err)
 
 	// Get should return the same config
-	result := config.Get()
-	assert.Equal(t, loadedConfig, result, "Get() should return the loaded config")
+	result := ts.cm.Get()
+	assert.Equal(t, loadedConfig, result)
+	assert.Equal(t, "http://localhost:9222", result.CDPConfig.Endpoint)
+	assert.Equal(t, "wss://relay.feralfile.com", result.RelayerConfig.Endpoint)
 }
 
-func TestLoad_Concurrent(t *testing.T) {
+// Test concurrent access patterns with ConfigManager
+
+func TestConfigManager_ConcurrentGet(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
-	configData := `{"cdp": {"endpoint": "http://localhost:9222"}}`
+	// Test concurrent Get calls
+	const numGoroutines = 20
+	results := make(chan *config.Config, numGoroutines)
 
-	// Expect only one successful read - others should get already loaded config
+	for range numGoroutines {
+		go func() {
+			result := ts.cm.Get()
+			results <- result
+		}()
+	}
+
+	// Collect results
+	var configs []*config.Config
+	for range numGoroutines {
+		result := <-results
+		assert.NotNil(t, result)
+		assert.NotNil(t, result.CDPConfig)
+		assert.NotNil(t, result.RelayerConfig)
+		assert.NotNil(t, result.SentryConfig)
+		assert.Empty(t, result.CDPConfig.Endpoint)
+		assert.Empty(t, result.RelayerConfig.Endpoint)
+		configs = append(configs, result)
+	}
+
+	// Verify all results are identical (due to mutex protection)
+	firstConfig := configs[0]
+	for i, cfg := range configs {
+		assert.Equal(t, firstConfig.CDPConfig.Endpoint, cfg.CDPConfig.Endpoint,
+			"concurrent Get %d: CDP endpoint mismatch", i)
+		assert.Equal(t, firstConfig.RelayerConfig.Endpoint, cfg.RelayerConfig.Endpoint,
+			"concurrent Get %d: relayer endpoint mismatch", i)
+	}
+}
+
+func TestConfigManager_ConcurrentLoad(t *testing.T) {
+	ts := setup(t)
+	defer ts.teardown()
+
+	configFile := "/home/feralfile/.config/connectd.json"
+	configData := `{
+		"cdp": {
+			"endpoint": "http://concurrent-test:9222"
+		},
+		"relayer": {
+			"endpoint": "wss://concurrent-relay.test.com"
+		}
+	}`
+
+	const numGoroutines = 5
+
+	// Expect ReadFile to succeed only once (first caller wins, others get cached result)
 	ts.mockOS.EXPECT().
-		ReadFile(gomock.Any()).
+		ReadFile(configFile).
 		Return([]byte(configData), nil).
 		Times(1)
 
-	// Expect IsNotExist check with nil error (only called once for the successful read)
 	ts.mockOS.EXPECT().
 		IsNotExist(nil).
 		Return(false).
@@ -306,7 +380,84 @@ func TestLoad_Concurrent(t *testing.T) {
 		DoAndReturn(func(data []byte, v interface{}) error {
 			cfg := v.(*config.Config)
 			cfg.CDPConfig = &cdp.Config{
-				Endpoint: "http://localhost:9222",
+				Endpoint: "http://concurrent-test:9222",
+			}
+			cfg.RelayerConfig = &relayer.Config{
+				Endpoint: "wss://concurrent-relay.test.com",
+			}
+			cfg.SentryConfig = &logger.SentryConfig{}
+			return nil
+		}).
+		Times(1)
+
+	// Execute concurrent loads
+	results := make(chan *config.Config, numGoroutines)
+	errors := make(chan error, numGoroutines)
+
+	for range numGoroutines {
+		go func() {
+			result, err := ts.cm.Load(ts.logger)
+			results <- result
+			errors <- err
+		}()
+	}
+
+	// Collect results
+	var loadedConfigs []*config.Config
+	for range numGoroutines {
+		result := <-results
+		err := <-errors
+		assert.NoError(t, err, "expected no error from concurrent load")
+		assert.NotNil(t, result, "expected non-nil config from concurrent load")
+		loadedConfigs = append(loadedConfigs, result)
+	}
+
+	// Verify all results are identical (due to mutex protection and caching)
+	firstConfig := loadedConfigs[0]
+	for i, loadedConfig := range loadedConfigs {
+		assert.Equal(t, firstConfig.CDPConfig.Endpoint, loadedConfig.CDPConfig.Endpoint,
+			"concurrent load %d: CDP endpoint mismatch", i)
+		assert.Equal(t, firstConfig.RelayerConfig.Endpoint, loadedConfig.RelayerConfig.Endpoint,
+			"concurrent load %d: relayer endpoint mismatch", i)
+	}
+
+	// Verify the expected values
+	assert.Equal(t, "http://concurrent-test:9222", firstConfig.CDPConfig.Endpoint)
+	assert.Equal(t, "wss://concurrent-relay.test.com", firstConfig.RelayerConfig.Endpoint)
+}
+
+// Test config package-level functions
+func TestConfig_Load_Success(t *testing.T) {
+	ts := setup(t)
+	defer ts.teardown()
+
+	// Use ConfigManager with mocked dependencies for testing global Load function
+	cm := config.NewConfigManagerWithDeps(ts.mockOS, ts.mockJSON)
+	config.InjectConfigManagerForTesting(cm)
+
+	configFile := "/home/feralfile/.config/connectd.json"
+	configData := `{
+		"cdp": {
+			"endpoint": "http://global-test:9222"
+		}
+	}`
+
+	ts.mockOS.EXPECT().
+		ReadFile(configFile).
+		Return([]byte(configData), nil).
+		Times(1)
+
+	ts.mockOS.EXPECT().
+		IsNotExist(nil).
+		Return(false).
+		Times(1)
+
+	ts.mockJSON.EXPECT().
+		Unmarshal([]byte(configData), gomock.Any()).
+		DoAndReturn(func(data []byte, v interface{}) error {
+			cfg := v.(*config.Config)
+			cfg.CDPConfig = &cdp.Config{
+				Endpoint: "http://global-test:9222",
 			}
 			cfg.RelayerConfig = &relayer.Config{}
 			cfg.SentryConfig = &logger.SentryConfig{}
@@ -314,48 +465,23 @@ func TestLoad_Concurrent(t *testing.T) {
 		}).
 		Times(1)
 
-	// Test concurrent loads
-	numGoroutines := 5
-	errChan := make(chan error, numGoroutines)
-	configChan := make(chan *config.Config, numGoroutines)
-	startChan := make(chan struct{})
+	result, err := config.Load(ts.logger)
 
-	// Start multiple goroutines trying to load concurrently
-	for i := range numGoroutines {
-		go func(id int) {
-			// Wait for all goroutines to be ready
-			<-startChan
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "http://global-test:9222", result.CDPConfig.Endpoint)
+}
 
-			cfg, err := config.Load(ts.logger)
-			errChan <- err
-			configChan <- cfg
-		}(i)
-	}
+func TestConfig_Get_Success(t *testing.T) {
+	ts := setup(t)
+	defer ts.teardown()
 
-	// Start all goroutines at the same time
-	close(startChan)
+	result := config.Get()
 
-	// Collect results
-	var configs []*config.Config
-	var loadErrors []error
-
-	for range numGoroutines {
-		err := <-errChan
-		cfg := <-configChan
-		if err != nil {
-			loadErrors = append(loadErrors, err)
-		} else {
-			configs = append(configs, cfg)
-		}
-	}
-
-	// Verify results - all should succeed and return the same config
-	assert.Empty(t, loadErrors, "Expected no errors, got: %v", loadErrors)
-	assert.Len(t, configs, numGoroutines, "Expected %d configs", numGoroutines)
-
-	// All configs should be the same instance
-	firstConfig := configs[0]
-	for i, cfg := range configs {
-		assert.Equal(t, firstConfig, cfg, "Config %d should be same as first config", i)
-	}
+	assert.NotNil(t, result)
+	assert.NotNil(t, result.CDPConfig)
+	assert.NotNil(t, result.RelayerConfig)
+	assert.NotNil(t, result.SentryConfig)
+	assert.Empty(t, result.CDPConfig.Endpoint)
+	assert.Empty(t, result.RelayerConfig.Endpoint)
 }

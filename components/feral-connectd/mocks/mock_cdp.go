@@ -60,6 +60,20 @@ func (mr *MockCDPClientMockRecorder) Init(ctx interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockCDPClient)(nil).Init), ctx)
 }
 
+// Initialized mocks base method.
+func (m *MockCDPClient) Initialized() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Initialized")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Initialized indicates an expected call of Initialized.
+func (mr *MockCDPClientMockRecorder) Initialized() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialized", reflect.TypeOf((*MockCDPClient)(nil).Initialized))
+}
+
 // Send mocks base method.
 func (m *MockCDPClient) Send(method string, params map[string]interface{}) (interface{}, error) {
 	m.ctrl.T.Helper()

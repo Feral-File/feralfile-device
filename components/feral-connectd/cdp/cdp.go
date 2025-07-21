@@ -39,6 +39,7 @@ type ClientInterface interface {
 	Init(ctx context.Context) error
 	Send(method string, params map[string]interface{}) (interface{}, error)
 	Close()
+	Initialized() bool
 }
 
 type Client struct {

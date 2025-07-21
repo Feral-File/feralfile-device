@@ -23,7 +23,7 @@ import (
 type testSetup struct {
 	ctrl             *gomock.Controller
 	ctx              context.Context
-	handler          *command.Handler
+	handler          command.HandlerInterface
 	mockCDP          *mocks.MockCDPClient
 	mockDBus         *mocks.MockDBusClient
 	mockStatus       *mocks.MockStatusPoller
@@ -33,6 +33,7 @@ type testSetup struct {
 	mockExecCmd      *mocks.MockExecCmd
 	mockDeviceStatus *mocks.MockDeviceStatus
 	mockMath         *mocks.MockMath
+	mockStateManager *mocks.MockStateManager
 	logger           *zap.Logger
 }
 
@@ -51,9 +52,8 @@ func setup(t *testing.T) *testSetup {
 	mockExecCmd := mocks.NewMockExecCmd(ctrl)
 	mockDeviceStatus := mocks.NewMockDeviceStatus(ctrl)
 	mockMath := mocks.NewMockMath(ctrl)
-
-	// Inject mocks into state package for testing
-	state.InjectDepsForTesting(mockOS, mockJSON)
+	mockStateManager := mocks.NewMockStateManager(ctrl)
+	state.InjectStateManagerForTesting(mockStateManager)
 
 	// Create handler with mocks
 	handler := command.NewHandler(mockCDP, mockDBus, mockDeviceStatus, logger, mockJSON, mockOS, mockExec, mockMath)
@@ -72,6 +72,7 @@ func setup(t *testing.T) *testSetup {
 		mockExecCmd:      mockExecCmd,
 		mockDeviceStatus: mockDeviceStatus,
 		mockMath:         mockMath,
+		mockStateManager: mockStateManager,
 		logger:           logger,
 	}
 }
@@ -168,33 +169,20 @@ func TestHandler_Connect_Success(t *testing.T) {
 			return nil
 		})
 
-	// Mock MkdirAll for state directory
-	ts.mockOS.EXPECT().
-		MkdirAll(gomock.Any(), gomock.Any()).
-		Return(nil)
+	// Mock state manager get
+	ts.mockStateManager.EXPECT().
+		GetState().
+		Return(&state.State{
+			ConnectedDevice: &state.Device{
+				ID:       device.ID,
+				Name:     device.Name,
+				Platform: device.Platform,
+			},
+		}).Times(2)
 
-	// Mock JSON marshal for state
-	ts.mockJSON.EXPECT().
-		Marshal(gomock.Any()).
-		DoAndReturn(func(v interface{}) ([]byte, error) {
-			// Verify the state contains the correct device info
-			stateData, ok := v.(*state.State)
-			if ok && stateData.ConnectedDevice != nil {
-				assert.Equal(t, device.ID, stateData.ConnectedDevice.ID)
-				assert.Equal(t, device.Name, stateData.ConnectedDevice.Name)
-				assert.Equal(t, device.Platform, stateData.ConnectedDevice.Platform)
-			}
-			return []byte(fmt.Sprintf(`{"connectedDevice":{"device_id":"%s","device_name":"%s","platform":%d},"relayer":{"topicId":""}}`, device.ID, device.Name, device.Platform)), nil
-		})
-
-	// Mock WriteFile for state
-	ts.mockOS.EXPECT().
-		WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil)
-
-	// Mock Rename for state
-	ts.mockOS.EXPECT().
-		Rename(gomock.Any(), gomock.Any()).
+	// Mock state manager save
+	ts.mockStateManager.EXPECT().
+		Save(gomock.Any()).
 		Return(nil)
 
 	// Execute command
@@ -242,39 +230,7 @@ func TestHandler_Connect_Errors(t *testing.T) {
 			wantErr: "invalid arguments",
 		},
 		{
-			name: "State save failure - MkdirAll failure",
-			setupFunc: func(ts *testSetup) {
-				// Mock JSON marshaling success
-				ts.mockJSON.EXPECT().
-					Marshal(gomock.Any()).
-					Return([]byte(`{"clientDevice":{"device_id":"test-device-id","device_name":"Test Device","platform":1},"primaryAddress":"192.168.1.100"}`), nil)
-
-				// Mock JSON unmarshaling success
-				ts.mockJSON.EXPECT().
-					Unmarshal(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(data []byte, v interface{}) error {
-						args := v.(*struct {
-							Device         command.Device `json:"clientDevice"`
-							PrimaryAddress string         `json:"primaryAddress"`
-						})
-						args.Device = command.Device{
-							ID:       "test-device-id",
-							Name:     "Test Device",
-							Platform: 1,
-						}
-						args.PrimaryAddress = "192.168.1.100"
-						return nil
-					})
-
-				// Mock state save to fail
-				ts.mockOS.EXPECT().
-					MkdirAll(gomock.Any(), gomock.Any()).
-					Return(errors.New("failed to create state directory"))
-			},
-			wantErr: "failed to create state directory",
-		},
-		{
-			name: "State save failure - JSON marshal failure",
+			name: "State save failure",
 			setupFunc: func(ts *testSetup) {
 				// Mock JSON marshaling success for arguments
 				ts.mockJSON.EXPECT().
@@ -298,106 +254,23 @@ func TestHandler_Connect_Errors(t *testing.T) {
 						return nil
 					})
 
-				// Mock MkdirAll success
-				ts.mockOS.EXPECT().
-					MkdirAll(gomock.Any(), gomock.Any()).
-					Return(nil)
-
-				// Mock JSON marshal for state to fail
-				ts.mockJSON.EXPECT().
-					Marshal(gomock.Any()).
-					Return(nil, errors.New("state marshal failed"))
-			},
-			wantErr: "failed to marshal state",
-		},
-		{
-			name: "State save failure - WriteFile failure",
-			setupFunc: func(ts *testSetup) {
-				// Mock JSON marshaling success for arguments
-				ts.mockJSON.EXPECT().
-					Marshal(gomock.Any()).
-					Return([]byte(`{"clientDevice":{"device_id":"test-device-id","device_name":"Test Device","platform":1},"primaryAddress":"192.168.1.100"}`), nil)
-
-				// Mock JSON unmarshaling success
-				ts.mockJSON.EXPECT().
-					Unmarshal(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(data []byte, v interface{}) error {
-						args := v.(*struct {
-							Device         command.Device `json:"clientDevice"`
-							PrimaryAddress string         `json:"primaryAddress"`
-						})
-						args.Device = command.Device{
+				// Mock state manager get
+				ts.mockStateManager.EXPECT().
+					GetState().
+					Return(&state.State{
+						ConnectedDevice: &state.Device{
 							ID:       "test-device-id",
 							Name:     "Test Device",
 							Platform: 1,
-						}
-						args.PrimaryAddress = "192.168.1.100"
-						return nil
+						},
 					})
 
-				// Mock MkdirAll success
-				ts.mockOS.EXPECT().
-					MkdirAll(gomock.Any(), gomock.Any()).
-					Return(nil)
-
-				// Mock JSON marshal for state success
-				ts.mockJSON.EXPECT().
-					Marshal(gomock.Any()).
-					Return([]byte(`{"connectedDevice":{"device_id":"test-device-id","device_name":"Test Device","platform":1},"relayer":{"topicId":""}}`), nil)
-
-				// Mock WriteFile to fail
-				ts.mockOS.EXPECT().
-					WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(errors.New("write file failed"))
+				// Mock state manager save to fail
+				ts.mockStateManager.EXPECT().
+					Save(gomock.Any()).
+					Return(errors.New("permission denied"))
 			},
-			wantErr: "failed to write state file",
-		},
-		{
-			name: "State save failure - Rename failure",
-			setupFunc: func(ts *testSetup) {
-				// Mock JSON marshaling success for arguments
-				ts.mockJSON.EXPECT().
-					Marshal(gomock.Any()).
-					Return([]byte(`{"clientDevice":{"device_id":"test-device-id","device_name":"Test Device","platform":1},"primaryAddress":"192.168.1.100"}`), nil)
-
-				// Mock JSON unmarshaling success
-				ts.mockJSON.EXPECT().
-					Unmarshal(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(data []byte, v interface{}) error {
-						args := v.(*struct {
-							Device         command.Device `json:"clientDevice"`
-							PrimaryAddress string         `json:"primaryAddress"`
-						})
-						args.Device = command.Device{
-							ID:       "test-device-id",
-							Name:     "Test Device",
-							Platform: 1,
-						}
-						args.PrimaryAddress = "192.168.1.100"
-						return nil
-					})
-
-				// Mock MkdirAll success
-				ts.mockOS.EXPECT().
-					MkdirAll(gomock.Any(), gomock.Any()).
-					Return(nil)
-
-				// Mock JSON marshal for state success
-				ts.mockJSON.EXPECT().
-					Marshal(gomock.Any()).
-					Return([]byte(`{"connectedDevice":{"device_id":"test-device-id","device_name":"Test Device","platform":1},"relayer":{"topicId":""}}`), nil)
-
-				// Mock WriteFile success
-				ts.mockOS.EXPECT().
-					WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(nil)
-
-				// Mock Rename to fail
-				ts.mockOS.EXPECT().
-					Rename(gomock.Any(), gomock.Any()).
-					Return(errors.New("rename failed"))
-			},
-			wantErr: "failed to finalize state file",
+			wantErr: "failed to save state",
 		},
 	}
 
