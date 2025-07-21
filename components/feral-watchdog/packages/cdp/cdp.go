@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/wrapper"
@@ -54,10 +55,11 @@ type Client struct {
 	http   wrapper.HTTPInterface
 
 	// Internal state
-	conn     wrapper.WebSocketConnInterface
-	reqID    int
-	endpoint string
-	doneChan chan struct{}
+	conn           wrapper.WebSocketConnInterface
+	reqID          int
+	endpoint       string
+	isReconnecting bool
+	doneChan       chan struct{}
 
 	// Logger
 	logger *zap.Logger
@@ -73,14 +75,14 @@ func NewClient(
 	http wrapper.HTTPInterface,
 ) *Client {
 	return &Client{
-		dialer:   dialer,
-		io:       io,
-		json:     json,
-		http:     http,
-		endpoint: config.Endpoint,
-		reqID:    0,
-		doneChan: make(chan struct{}),
-		logger:   logger,
+		dialer:         dialer,
+		io:             io,
+		json:           json,
+		http:           http,
+		endpoint:       config.Endpoint,
+		reqID:          0,
+		logger:         logger,
+		isReconnecting: false,
 	}
 }
 
@@ -114,10 +116,16 @@ func (c *Client) Init(ctx context.Context) error {
 		return ErrAlreadyInitialized
 	}
 
+	err := c.initLocked(ctx)
+	c.mu.Unlock()
+	return err
+}
+
+// initLocked performs the actual initialization logic (assumes lock is held)
+func (c *Client) initLocked(ctx context.Context) error {
 	// Fetch JSON with websocket debugger URL
 	resp, err := c.http.Get(c.endpoint + "/json")
 	if err != nil {
-		c.mu.Unlock()
 		return fmt.Errorf("failed to fetch debug targets: %w", err)
 	}
 	defer func() {
@@ -128,7 +136,6 @@ func (c *Client) Init(ctx context.Context) error {
 
 	body, err := c.io.ReadAll(resp.Body)
 	if err != nil {
-		c.mu.Unlock()
 		return fmt.Errorf("failed to read targets: %w", err)
 	}
 
@@ -138,7 +145,6 @@ func (c *Client) Init(ctx context.Context) error {
 		WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
 	}
 	if err := c.json.Unmarshal(body, &targets); err != nil {
-		c.mu.Unlock()
 		return fmt.Errorf("invalid targets format: %w", err)
 	}
 
@@ -156,12 +162,10 @@ func (c *Client) Init(ctx context.Context) error {
 	}
 
 	if len(pageTargets) == 0 {
-		c.mu.Unlock()
 		return ErrNoPageTargetFound
 	}
 
 	if len(pageTargets) > 1 {
-		c.mu.Unlock()
 		return ErrMultiplePageTargetsFound
 	}
 
@@ -169,11 +173,10 @@ func (c *Client) Init(ctx context.Context) error {
 	target := pageTargets[0]
 	conn, _, err := c.dialer.DialContext(ctx, target.WebSocketDebuggerURL, nil)
 	if err != nil {
-		c.mu.Unlock()
 		return fmt.Errorf("cdp dial error: %w", err)
 	}
 	c.conn = conn
-	c.mu.Unlock()
+	c.doneChan = make(chan struct{})
 
 	c.logger.Info("Connected to CDP", zap.String("url", target.WebSocketDebuggerURL))
 
@@ -215,20 +218,20 @@ func (c *Client) Send(method string, params map[string]interface{}) (interface{}
 
 	data, err := c.json.Marshal(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal CDP message: %w", err)
+		return nil, err
 	}
 
 	c.mu.Lock()
 	if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
 		c.mu.Unlock()
-		return nil, fmt.Errorf("CDP write error: %w", err)
+		return nil, err
 	}
 
 	// Wait for response
 	_, response, err := c.conn.ReadMessage()
 	if err != nil {
 		c.mu.Unlock()
-		return nil, fmt.Errorf("failed to read CDP response: %w", err)
+		return nil, err
 	}
 	c.mu.Unlock()
 
@@ -249,7 +252,7 @@ func (c *Client) Send(method string, params map[string]interface{}) (interface{}
 		} `json:"result"`
 	}
 	if err := c.json.Unmarshal(response, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse CDP response: %w", err)
+		return nil, err
 	}
 
 	result := resp.Result.Result
@@ -258,7 +261,7 @@ func (c *Client) Send(method string, params map[string]interface{}) (interface{}
 	if result.Type == TYPE_OBJECT &&
 		result.Subtype != nil &&
 		*result.Subtype == SUBTYPE_ERROR {
-		return nil, fmt.Errorf("CDP error: %v", *result.Description)
+		return nil, errors.New(*result.Description)
 	}
 
 	// Check for response type mismatch
@@ -266,7 +269,7 @@ func (c *Client) Send(method string, params map[string]interface{}) (interface{}
 	case TYPE_STRING:
 		var v map[string]interface{}
 		if err := c.json.Unmarshal([]byte(result.Value.(string)), &v); err != nil {
-			return nil, fmt.Errorf("CDP unmarshal error: %w", err)
+			return nil, err
 		}
 		return v, nil
 	case TYPE_OBJECT:
@@ -276,18 +279,86 @@ func (c *Client) Send(method string, params map[string]interface{}) (interface{}
 	case "":
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("CDP response type mismatch: %s", result.Type)
+		return nil, errors.New("CDP response type mismatch: " + result.Type)
 	}
+}
+
+func (c *Client) IsReconnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check for websocket close errors
+	var closeErr *websocket.CloseError
+	if errors.As(err, &closeErr) {
+		c.logger.Debug("Detected websocket close error",
+			zap.Int("code", closeErr.Code),
+			zap.String("text", closeErr.Text))
+		return true
+	}
+
+	// Check for common network errors that indicate connection issues
+	errStr := err.Error()
+	reconnectionErrors := []string{
+		"connection reset by peer",
+		"broken pipe",
+		"connection refused",
+		"network is unreachable",
+		"no route to host",
+		"timeout",
+		"use of closed network connection",
+		"write: broken pipe",
+		"write: connection reset by peer",
+	}
+
+	for _, reconnectionError := range reconnectionErrors {
+		if strings.Contains(errStr, reconnectionError) {
+			c.logger.Debug("Detected reconnection error", zap.String("error", errStr))
+			return true
+		}
+	}
+
+	return false
+}
+
+func (c *Client) Reconnect(ctx context.Context) error {
+	if c.isReconnecting {
+		return nil
+	}
+
+	c.logger.Info("Reconnecting to CDP")
+	c.mu.Lock()
+	c.isReconnecting = true
+	defer func() {
+		c.isReconnecting = false
+		c.mu.Unlock()
+	}()
+
+	// Close the connection if it exists
+	if c.conn != nil {
+		c.logger.Info("Closing existing CDP connection")
+
+		select {
+		case <-c.doneChan:
+			// Already closed
+		default:
+			close(c.doneChan)
+		}
+
+		err := c.conn.Close()
+		if err != nil {
+			c.logger.Warn("Failed to close CDP connection", zap.Error(err))
+		}
+
+		c.conn = nil
+	}
+
+	// Re-initialize the connection
+	return c.initLocked(ctx)
 }
 
 // SendCriticalCPUTemperatureNotification sends a critical CPU temperature notification
 func (c *Client) SendCriticalCPUTemperatureNotification(ctx context.Context) error {
-	if !c.Initialized() {
-		if err := c.Init(ctx); err != nil {
-			return fmt.Errorf("failed to initialize WebSocket connection: %w", err)
-		}
-	}
-
 	// Send the CDP command
 	params := map[string]interface{}{
 		"expression": fmt.Sprintf("window.handleWatchdogEvent(%q)", CDP_CRITICAL_CPU_TEMPERATURE_EVENT),
@@ -295,7 +366,11 @@ func (c *Client) SendCriticalCPUTemperatureNotification(ctx context.Context) err
 
 	_, err := c.Send(METHOD_EVALUATE, params)
 	if err != nil {
-		return fmt.Errorf("failed to send CDP command: %w", err)
+		if c.IsReconnectionError(err) {
+			return c.Reconnect(ctx)
+		}
+
+		return err
 	}
 
 	c.logger.Info("Critical CPU temperature notification sent successfully")
