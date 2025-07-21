@@ -11,15 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
+const (
 	CONFIG_FILE = "/home/feralfile/.config/connectd.json"
-
-	configLock sync.Mutex
-	config     *Config
-
-	// Dependencies
-	os   = wrapper.NewOS()
-	json = wrapper.NewJSON()
 )
 
 // Configuration for all components
@@ -29,60 +22,95 @@ type Config struct {
 	SentryConfig  *logger.SentryConfig `json:"sentry"`
 }
 
-// Load loads the configuration from a JSON file
-func Load(logger *zap.Logger) (*Config, error) {
+//go:generate mockgen -source=config.go -destination=../mocks/mock_config.go -package=mocks -mock_names=ConfigManager=MockConfigManager
+type ConfigManager interface {
+	Load(*zap.Logger) (*Config, error)
+	Get() *Config
+}
+
+type defaultConfigManager struct {
+	configLock sync.Mutex
+	config     *Config
+	os         wrapper.OSInterface
+	json       wrapper.JSONInterface
+}
+
+func NewConfigManager() ConfigManager {
+	return &defaultConfigManager{
+		os:   wrapper.NewOS(),
+		json: wrapper.NewJSON(),
+	}
+}
+
+// NewConfigManagerWithDeps creates a ConfigManager with custom dependencies (for testing)
+func NewConfigManagerWithDeps(osWrapper wrapper.OSInterface, jsonWrapper wrapper.JSONInterface) ConfigManager {
+	return &defaultConfigManager{
+		os:   osWrapper,
+		json: jsonWrapper,
+	}
+}
+
+func (m *defaultConfigManager) Load(logger *zap.Logger) (*Config, error) {
 	logger.Info("Loading config", zap.String("file", CONFIG_FILE))
 
 	// Lock during the entire load process to prevent concurrent access
-	configLock.Lock()
-	defer configLock.Unlock()
+	m.configLock.Lock()
+	defer m.configLock.Unlock()
 
 	// Return existing config if already loaded
-	if config != nil {
-		return config, nil
+	if m.config != nil {
+		return m.config, nil
 	}
 
 	// Try to read the file
-	data, err := os.ReadFile(CONFIG_FILE)
-	if os.IsNotExist(err) {
+	data, err := m.os.ReadFile(CONFIG_FILE)
+	if m.os.IsNotExist(err) {
 		return nil, fmt.Errorf("config file not found: %w", err)
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	var c Config
-	if err := json.Unmarshal(data, &c); err != nil {
+	if err := m.json.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	config = &c
-	return config, nil
+	m.config = &c
+	return m.config, nil
 }
 
-// Get returns the current configuration safely
-func Get() *Config {
-	configLock.Lock()
-	defer configLock.Unlock()
+func (m *defaultConfigManager) Get() *Config {
+	m.configLock.Lock()
+	defer m.configLock.Unlock()
 
-	if config == nil {
-		config = &Config{
+	if m.config == nil {
+		m.config = &Config{
 			CDPConfig:     &cdp.Config{},
 			RelayerConfig: &relayer.Config{},
 			SentryConfig:  &logger.SentryConfig{},
 		}
 	}
-	return config
+	return m.config
 }
 
-// InjectDepsForTesting allows injection of mock dependencies for testing
-func InjectDepsForTesting(osWrapper wrapper.OSInterface, jsonWrapper wrapper.JSONInterface) {
-	os = osWrapper
-	json = jsonWrapper
+// Global instance for backward compatibility
+var globalConfigManager ConfigManager = NewConfigManager()
+
+// Backward compatible functions
+func Load(logger *zap.Logger) (*Config, error) {
+	return globalConfigManager.Load(logger)
 }
 
-// ResetForTesting resets the global config state for testing purposes
+func Get() *Config {
+	return globalConfigManager.Get()
+}
+
+// For testing - inject a mock config manager
+func InjectConfigManagerForTesting(cm ConfigManager) {
+	globalConfigManager = cm
+}
+
+// Reset for testing
 func ResetForTesting() {
-	configLock.Lock()
-	defer configLock.Unlock()
-	config = nil
+	globalConfigManager = NewConfigManager()
 }

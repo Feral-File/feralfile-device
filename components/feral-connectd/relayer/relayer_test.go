@@ -29,7 +29,7 @@ type testSetup struct {
 	mockConn       *mocks.MockWebSocketConn
 	mockRandomizer *mocks.MockRandomizer
 	mockClock      *mocks.MockClock
-	client         *relayer.Client
+	client         relayer.ClientInterface
 }
 
 func setup(t *testing.T) *testSetup {

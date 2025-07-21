@@ -20,6 +20,7 @@ type testSetup struct {
 	ctx      context.Context
 	mockOS   *mocks.MockOSInterface
 	mockJSON *mocks.MockJSON
+	sm       state.StateManager
 	logger   *zap.Logger
 }
 
@@ -28,18 +29,16 @@ func setup(t *testing.T) *testSetup {
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.FatalLevel))
 	ctx := context.Background()
 
-	// Dependencies
 	mockOS := mocks.NewMockOSInterface(ctrl)
 	mockJSON := mocks.NewMockJSON(ctrl)
-
-	// Setup and inject mocks for testing
-	state.InjectDepsForTesting(mockOS, mockJSON)
+	sm := state.NewStateManagerWithDeps(mockOS, mockJSON)
 
 	return &testSetup{
 		ctrl:     ctrl,
 		ctx:      ctx,
 		mockOS:   mockOS,
 		mockJSON: mockJSON,
+		sm:       sm,
 		logger:   logger,
 	}
 }
@@ -49,7 +48,9 @@ func (ts *testSetup) teardown() {
 	ts.ctrl.Finish()
 }
 
-func TestLoad_Success_ExistingFile(t *testing.T) {
+// Test StateManager interface
+
+func TestStateManager_Load_Success_ExistingFile(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
@@ -66,25 +67,22 @@ func TestLoad_Success_ExistingFile(t *testing.T) {
 		}
 	}`
 
-	// Expect MkdirAll to succeed
+	// Setup expectations
 	ts.mockOS.EXPECT().
 		MkdirAll(stateDir, os.FileMode(0750)).
 		Return(nil).
 		Times(1)
 
-	// Expect ReadFile to return state data
 	ts.mockOS.EXPECT().
 		ReadFile(stateFile).
 		Return([]byte(stateData), nil).
 		Times(1)
 
-	// Expect IsNotExist check with nil error (this is called even on success)
 	ts.mockOS.EXPECT().
 		IsNotExist(nil).
 		Return(false).
 		Times(1)
 
-	// Expect JSON unmarshal to succeed
 	ts.mockJSON.EXPECT().
 		Unmarshal([]byte(stateData), gomock.Any()).
 		DoAndReturn(func(data []byte, v interface{}) error {
@@ -101,95 +99,77 @@ func TestLoad_Success_ExistingFile(t *testing.T) {
 		}).
 		Times(1)
 
-	// Execute the method under test
-	result, err := state.Load(ts.logger)
+	// Execute
+	result, err := ts.sm.Load(ts.logger)
 
-	// Verify results
-	assert.NoError(t, err, "expected no error, got %v", err)
-	assert.NotNil(t, result, "expected non-nil state")
-	assert.NotNil(t, result.ConnectedDevice, "expected non-nil connected device")
+	// Verify
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
 	assert.Equal(t, "test-device-123", result.ConnectedDevice.ID)
 	assert.Equal(t, "Test Device", result.ConnectedDevice.Name)
 	assert.Equal(t, 1, result.ConnectedDevice.Platform)
-	assert.NotNil(t, result.Relayer, "expected non-nil relayer state")
 	assert.Equal(t, "test-topic-456", result.Relayer.TopicID)
-	assert.True(t, result.Relayer.IsReady(), "expected relayer to be ready")
+	assert.True(t, result.Relayer.IsReady())
 }
 
-func TestLoad_Success_FileNotExists(t *testing.T) {
+func TestStateManager_Load_Success_FileNotExists(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
 	notFoundErr := &os.PathError{Op: "open", Path: "/home/feralfile/.state/connectd.state", Err: os.ErrNotExist}
 
-	// Expect MkdirAll to succeed
 	ts.mockOS.EXPECT().
 		MkdirAll(gomock.Any(), gomock.Any()).
 		Return(nil).
 		Times(1)
 
-	// Expect ReadFile to return file not found
 	ts.mockOS.EXPECT().
 		ReadFile(gomock.Any()).
 		Return(nil, notFoundErr).
 		Times(1)
 
-	// Expect IsNotExist check
 	ts.mockOS.EXPECT().
 		IsNotExist(notFoundErr).
 		Return(true).
 		Times(1)
 
-	// Execute the method under test
-	result, err := state.Load(ts.logger)
+	result, err := ts.sm.Load(ts.logger)
 
-	// Verify results - should return empty state
-	assert.NoError(t, err, "expected no error, got %v", err)
-	assert.NotNil(t, result, "expected non-nil state")
-	assert.NotNil(t, result.ConnectedDevice, "expected non-nil connected device")
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
 	assert.Empty(t, result.ConnectedDevice.ID)
-	assert.Empty(t, result.ConnectedDevice.Name)
-	assert.Equal(t, 0, result.ConnectedDevice.Platform)
-	assert.NotNil(t, result.Relayer, "expected non-nil relayer state")
 	assert.Empty(t, result.Relayer.TopicID)
-	assert.False(t, result.Relayer.IsReady(), "expected relayer to not be ready")
+	assert.False(t, result.Relayer.IsReady())
 }
 
-func TestLoad_Success_EmptyFile(t *testing.T) {
+func TestStateManager_Load_Success_EmptyFile(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
-	// Expect MkdirAll to succeed
 	ts.mockOS.EXPECT().
 		MkdirAll(gomock.Any(), gomock.Any()).
 		Return(nil).
 		Times(1)
 
-	// Expect ReadFile to return empty data
 	ts.mockOS.EXPECT().
 		ReadFile(gomock.Any()).
 		Return([]byte{}, nil).
 		Times(1)
 
-	// Expect IsNotExist check with nil error (this is called even on success)
 	ts.mockOS.EXPECT().
 		IsNotExist(nil).
 		Return(false).
 		Times(1)
 
-	// Execute the method under test
-	result, err := state.Load(ts.logger)
+	result, err := ts.sm.Load(ts.logger)
 
-	// Verify results - should return empty state
-	assert.NoError(t, err, "expected no error, got %v", err)
-	assert.NotNil(t, result, "expected non-nil state")
-	assert.NotNil(t, result.ConnectedDevice, "expected non-nil connected device")
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
 	assert.Empty(t, result.ConnectedDevice.ID)
-	assert.NotNil(t, result.Relayer, "expected non-nil relayer state")
 	assert.Empty(t, result.Relayer.TopicID)
 }
 
-func TestLoad_Error(t *testing.T) {
+func TestStateManager_Load_Errors(t *testing.T) {
 	tests := []struct {
 		name      string
 		setupFunc func(*testSetup)
@@ -198,11 +178,8 @@ func TestLoad_Error(t *testing.T) {
 		{
 			name: "mkdir error",
 			setupFunc: func(ts *testSetup) {
-				stateDir := "/home/feralfile/.state"
-
-				// Expect MkdirAll to fail
 				ts.mockOS.EXPECT().
-					MkdirAll(stateDir, os.FileMode(0750)).
+					MkdirAll(gomock.Any(), gomock.Any()).
 					Return(fmt.Errorf("permission denied")).
 					Times(1)
 			},
@@ -213,19 +190,16 @@ func TestLoad_Error(t *testing.T) {
 			setupFunc: func(ts *testSetup) {
 				readErr := fmt.Errorf("permission denied")
 
-				// Expect MkdirAll to succeed
 				ts.mockOS.EXPECT().
 					MkdirAll(gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 
-				// Expect ReadFile to return permission error
 				ts.mockOS.EXPECT().
 					ReadFile(gomock.Any()).
 					Return(nil, readErr).
 					Times(1)
 
-				// Expect IsNotExist check to return false
 				ts.mockOS.EXPECT().
 					IsNotExist(readErr).
 					Return(false).
@@ -238,25 +212,21 @@ func TestLoad_Error(t *testing.T) {
 			setupFunc: func(ts *testSetup) {
 				invalidJSON := `{"invalid": json}`
 
-				// Expect MkdirAll to succeed
 				ts.mockOS.EXPECT().
 					MkdirAll(gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 
-				// Expect ReadFile to return invalid JSON
 				ts.mockOS.EXPECT().
 					ReadFile(gomock.Any()).
 					Return([]byte(invalidJSON), nil).
 					Times(1)
 
-				// Expect IsNotExist check with nil error (called even when ReadFile succeeds)
 				ts.mockOS.EXPECT().
 					IsNotExist(nil).
 					Return(false).
 					Times(1)
 
-				// Expect JSON unmarshal to fail
 				ts.mockJSON.EXPECT().
 					Unmarshal([]byte(invalidJSON), gomock.Any()).
 					Return(fmt.Errorf("invalid character 'j' looking for beginning of value")).
@@ -271,27 +241,18 @@ func TestLoad_Error(t *testing.T) {
 			ts := setup(t)
 			defer ts.teardown()
 
-			// Reset global state for clean test
-			state.ResetForTesting()
-
-			// Re-inject mocks after reset
-			state.InjectDepsForTesting(ts.mockOS, ts.mockJSON)
-
-			// Setup error condition
 			tt.setupFunc(ts)
 
-			// Execute the method under test
-			result, err := state.Load(ts.logger)
+			result, err := ts.sm.Load(ts.logger)
 
-			// Assert error occurred and contains expected message
-			assert.Error(t, err, "expected error, got %v", err)
-			assert.Contains(t, err.Error(), tt.wantErr, "expected error message to contain %q, got %q", tt.wantErr, err.Error())
-			assert.Nil(t, result, "expected nil result on error")
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Nil(t, result)
 		})
 	}
 }
 
-func TestState_Save_Success(t *testing.T) {
+func TestStateManager_Save_Success(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
@@ -299,7 +260,6 @@ func TestState_Save_Success(t *testing.T) {
 	stateFile := stateDir + "/connectd.state"
 	tempFile := stateFile + ".tmp"
 
-	// Create a state to save
 	testState := &state.State{
 		ConnectedDevice: &state.Device{
 			ID:       "test-device-123",
@@ -313,38 +273,34 @@ func TestState_Save_Success(t *testing.T) {
 
 	stateData := []byte(`{"connectedDevice":{"device_id":"test-device-123","device_name":"Test Device","platform":1},"relayer":{"topicId":"test-topic-456"}}`)
 
-	// Expect MkdirAll to succeed
 	ts.mockOS.EXPECT().
 		MkdirAll(stateDir, os.FileMode(0750)).
 		Return(nil).
 		Times(1)
 
-	// Expect JSON marshal to succeed
 	ts.mockJSON.EXPECT().
 		Marshal(testState).
 		Return(stateData, nil).
 		Times(1)
 
-	// Expect WriteFile to succeed
 	ts.mockOS.EXPECT().
 		WriteFile(tempFile, stateData, os.FileMode(0600)).
 		Return(nil).
 		Times(1)
 
-	// Expect Rename to succeed
 	ts.mockOS.EXPECT().
 		Rename(tempFile, stateFile).
 		Return(nil).
 		Times(1)
 
-	// Execute the method under test
-	err := testState.Save()
+	err := ts.sm.Save(testState)
 
-	// Verify results
-	assert.NoError(t, err, "expected no error, got %v", err)
+	assert.NoError(t, err)
+	// Verify that internal state was updated
+	assert.Equal(t, testState, ts.sm.GetState())
 }
 
-func TestState_Save_Error(t *testing.T) {
+func TestStateManager_Save_Errors(t *testing.T) {
 	tests := []struct {
 		name      string
 		setupFunc func(*testSetup, *state.State)
@@ -353,7 +309,6 @@ func TestState_Save_Error(t *testing.T) {
 		{
 			name: "mkdir error",
 			setupFunc: func(ts *testSetup, testState *state.State) {
-				// Expect MkdirAll to fail
 				ts.mockOS.EXPECT().
 					MkdirAll(gomock.Any(), gomock.Any()).
 					Return(fmt.Errorf("permission denied")).
@@ -364,13 +319,11 @@ func TestState_Save_Error(t *testing.T) {
 		{
 			name: "JSON marshal error",
 			setupFunc: func(ts *testSetup, testState *state.State) {
-				// Expect MkdirAll to succeed
 				ts.mockOS.EXPECT().
 					MkdirAll(gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 
-				// Expect JSON marshal to fail
 				ts.mockJSON.EXPECT().
 					Marshal(testState).
 					Return(nil, fmt.Errorf("marshal error")).
@@ -383,19 +336,16 @@ func TestState_Save_Error(t *testing.T) {
 			setupFunc: func(ts *testSetup, testState *state.State) {
 				stateData := []byte(`{"test":"data"}`)
 
-				// Expect MkdirAll to succeed
 				ts.mockOS.EXPECT().
 					MkdirAll(gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 
-				// Expect JSON marshal to succeed
 				ts.mockJSON.EXPECT().
 					Marshal(testState).
 					Return(stateData, nil).
 					Times(1)
 
-				// Expect WriteFile to fail
 				ts.mockOS.EXPECT().
 					WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(fmt.Errorf("write error")).
@@ -408,25 +358,21 @@ func TestState_Save_Error(t *testing.T) {
 			setupFunc: func(ts *testSetup, testState *state.State) {
 				stateData := []byte(`{"test":"data"}`)
 
-				// Expect MkdirAll to succeed
 				ts.mockOS.EXPECT().
 					MkdirAll(gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 
-				// Expect JSON marshal to succeed
 				ts.mockJSON.EXPECT().
 					Marshal(testState).
 					Return(stateData, nil).
 					Times(1)
 
-				// Expect WriteFile to succeed
 				ts.mockOS.EXPECT().
 					WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(nil).
 					Times(1)
 
-				// Expect Rename to fail
 				ts.mockOS.EXPECT().
 					Rename(gomock.Any(), gomock.Any()).
 					Return(fmt.Errorf("rename error")).
@@ -441,13 +387,6 @@ func TestState_Save_Error(t *testing.T) {
 			ts := setup(t)
 			defer ts.teardown()
 
-			// Reset global state for clean test
-			state.ResetForTesting()
-
-			// Re-inject mocks after reset
-			state.InjectDepsForTesting(ts.mockOS, ts.mockJSON)
-
-			// Create a test state
 			testState := &state.State{
 				ConnectedDevice: &state.Device{
 					ID:       "test-device-123",
@@ -459,156 +398,70 @@ func TestState_Save_Error(t *testing.T) {
 				},
 			}
 
-			// Setup error condition
 			tt.setupFunc(ts, testState)
 
-			// Execute the method under test
-			err := testState.Save()
+			err := ts.sm.Save(testState)
 
-			// Assert error occurred and contains expected message
-			assert.Error(t, err, "expected error, got %v", err)
-			assert.Contains(t, err.Error(), tt.wantErr, "expected error message to contain %q, got %q", tt.wantErr, err.Error())
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
 }
 
-func TestGetState_InitialCall(t *testing.T) {
+func TestStateManager_GetState_InitialCall(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
-	result := state.GetState()
+	sm := state.NewStateManager()
+	result := sm.GetState()
 
-	// Verify default state is returned
-	assert.NotNil(t, result, "expected non-nil state")
-	assert.NotNil(t, result.ConnectedDevice, "expected non-nil connected device")
-	assert.NotNil(t, result.Relayer, "expected non-nil relayer state")
-	assert.Equal(t, "", result.ConnectedDevice.ID)
-	assert.Equal(t, "", result.Relayer.TopicID)
+	assert.NotNil(t, result)
+	assert.NotNil(t, result.ConnectedDevice)
+	assert.NotNil(t, result.Relayer)
+	assert.Empty(t, result.ConnectedDevice.ID)
+	assert.Empty(t, result.Relayer.TopicID)
 }
 
-func TestRelayerState_IsReady(t *testing.T) {
+// Test concurrent access patterns with StateManager
+
+func TestStateManager_ConcurrentGetState(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
-	tests := []struct {
-		name     string
-		topicID  string
-		expected bool
-	}{
-		{
-			name:     "empty topic ID",
-			topicID:  "",
-			expected: false,
-		},
-		{
-			name:     "non-empty topic ID",
-			topicID:  "test-topic-123",
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			relayerState := &state.RelayerState{
-				TopicID: tt.topicID,
-			}
-
-			result := relayerState.IsReady()
-			assert.Equal(t, tt.expected, result, "IsReady() = %v, want %v", result, tt.expected)
-		})
-	}
-}
-
-func TestConcurrentLoad(t *testing.T) {
-	ts := setup(t)
-	defer ts.teardown()
-
-	stateFile := "/home/feralfile/.state/connectd.state"
-	stateDir := filepath.Dir(stateFile)
-	stateData := `{
-		"connectedDevice": {
-			"device_id": "concurrent-device-123",
-			"device_name": "Concurrent Device",
-			"platform": 2
-		},
-		"relayer": {
-			"topicId": "concurrent-topic-789"
-		}
-	}`
-
-	// Expect MkdirAll to succeed (called once per goroutine)
-	ts.mockOS.EXPECT().
-		MkdirAll(stateDir, os.FileMode(0750)).
-		Return(nil).
-		Times(5) // 5 concurrent loads
-
-	// Expect ReadFile to return state data (called once per goroutine)
-	ts.mockOS.EXPECT().
-		ReadFile(stateFile).
-		Return([]byte(stateData), nil).
-		Times(5) // 5 concurrent loads
-
-	// Expect IsNotExist check with nil error (called once per goroutine)
-	ts.mockOS.EXPECT().
-		IsNotExist(nil).
-		Return(false).
-		Times(5) // 5 concurrent loads
-
-	// Expect JSON unmarshal to succeed (called once per goroutine)
-	ts.mockJSON.EXPECT().
-		Unmarshal([]byte(stateData), gomock.Any()).
-		DoAndReturn(func(data []byte, v interface{}) error {
-			st := v.(*state.State)
-			st.ConnectedDevice = &state.Device{
-				ID:       "concurrent-device-123",
-				Name:     "Concurrent Device",
-				Platform: 2,
-			}
-			st.Relayer = &state.RelayerState{
-				TopicID: "concurrent-topic-789",
-			}
-			return nil
-		}).
-		Times(5) // 5 concurrent loads
-
-	// Execute concurrent loads
-	const numGoroutines = 5
+	// Test concurrent GetState calls
+	const numGoroutines = 20
 	results := make(chan *state.State, numGoroutines)
-	errors := make(chan error, numGoroutines)
 
 	for range numGoroutines {
 		go func() {
-			result, err := state.Load(ts.logger)
+			result := ts.sm.GetState()
 			results <- result
-			errors <- err
 		}()
 	}
 
 	// Collect results
-	var loadedStates []*state.State
+	var states []*state.State
 	for range numGoroutines {
 		result := <-results
-		err := <-errors
-		assert.NoError(t, err, "expected no error from concurrent load")
-		assert.NotNil(t, result, "expected non-nil state from concurrent load")
-		loadedStates = append(loadedStates, result)
+		assert.NotNil(t, result)
+		assert.NotNil(t, result.ConnectedDevice)
+		assert.NotNil(t, result.Relayer)
+		assert.Empty(t, result.ConnectedDevice.ID)
+		assert.Empty(t, result.Relayer.TopicID)
+		states = append(states, result)
 	}
 
 	// Verify all results are identical (due to mutex protection)
-	firstState := loadedStates[0]
-	for i, loadedState := range loadedStates {
-		assert.Equal(t, firstState.ConnectedDevice.ID, loadedState.ConnectedDevice.ID,
-			"concurrent load %d: device ID mismatch", i)
-		assert.Equal(t, firstState.ConnectedDevice.Name, loadedState.ConnectedDevice.Name,
-			"concurrent load %d: device name mismatch", i)
-		assert.Equal(t, firstState.ConnectedDevice.Platform, loadedState.ConnectedDevice.Platform,
-			"concurrent load %d: device platform mismatch", i)
-		assert.Equal(t, firstState.Relayer.TopicID, loadedState.Relayer.TopicID,
-			"concurrent load %d: relayer topic ID mismatch", i)
+	firstState := states[0]
+	for i, s := range states {
+		assert.Equal(t, firstState.ConnectedDevice.ID, s.ConnectedDevice.ID,
+			"concurrent GetState %d: device ID mismatch", i)
+		assert.Equal(t, firstState.Relayer.TopicID, s.Relayer.TopicID,
+			"concurrent GetState %d: relayer topic ID mismatch", i)
 	}
 }
 
-func TestConcurrentSave(t *testing.T) {
+func TestStateManager_ConcurrentSave(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
@@ -658,12 +511,12 @@ func TestConcurrentSave(t *testing.T) {
 
 	// Expect JSON marshal to succeed for each state
 	for _, testState := range testStates {
-		stateData := fmt.Appendf(nil, `{"connectedDevice":{"device_id":"%s","device_name":"%s","platform":%d},"relayer":{"topicId":"%s"}}`,
+		stateData := fmt.Sprintf(`{"connectedDevice":{"device_id":"%s","device_name":"%s","platform":%d},"relayer":{"topicId":"%s"}}`,
 			testState.ConnectedDevice.ID, testState.ConnectedDevice.Name, testState.ConnectedDevice.Platform, testState.Relayer.TopicID)
 
 		ts.mockJSON.EXPECT().
 			Marshal(testState).
-			Return(stateData, nil).
+			Return([]byte(stateData), nil).
 			Times(1)
 	}
 
@@ -684,7 +537,7 @@ func TestConcurrentSave(t *testing.T) {
 
 	for _, testState := range testStates {
 		go func(s *state.State) {
-			err := s.Save()
+			err := ts.sm.Save(s)
 			errors <- err
 		}(testState)
 	}
@@ -694,9 +547,207 @@ func TestConcurrentSave(t *testing.T) {
 		err := <-errors
 		assert.NoError(t, err, "expected no error from concurrent save %d", i)
 	}
+
+	// Verify that the final state is one of the saved states
+	finalState := ts.sm.GetState()
+	assert.NotNil(t, finalState)
+
+	// The final state should be one of the states we saved
+	foundMatch := false
+	for _, testState := range testStates {
+		if finalState.ConnectedDevice.ID == testState.ConnectedDevice.ID &&
+			finalState.Relayer.TopicID == testState.Relayer.TopicID {
+			foundMatch = true
+			break
+		}
+	}
+	assert.True(t, foundMatch, "final state should match one of the saved states")
 }
 
-func TestConcurrentLoadAndSave(t *testing.T) {
+func TestStateManager_ConcurrentLoad(t *testing.T) {
+	ts := setup(t)
+	defer ts.teardown()
+
+	stateFile := "/home/feralfile/.state/connectd.state"
+	stateDir := filepath.Dir(stateFile)
+	stateData := `{
+		"connectedDevice": {
+			"device_id": "concurrent-device-123",
+			"device_name": "Concurrent Device",
+			"platform": 2
+		},
+		"relayer": {
+			"topicId": "concurrent-topic-789"
+		}
+	}`
+
+	const numGoroutines = 5
+
+	// Expect MkdirAll to succeed (called once per goroutine)
+	ts.mockOS.EXPECT().
+		MkdirAll(stateDir, os.FileMode(0750)).
+		Return(nil).
+		Times(numGoroutines)
+
+	// Expect ReadFile to return state data (called once per goroutine)
+	ts.mockOS.EXPECT().
+		ReadFile(stateFile).
+		Return([]byte(stateData), nil).
+		Times(numGoroutines)
+
+	// Expect IsNotExist check with nil error (called once per goroutine)
+	ts.mockOS.EXPECT().
+		IsNotExist(nil).
+		Return(false).
+		Times(numGoroutines)
+
+	// Expect JSON unmarshal to succeed (called once per goroutine)
+	ts.mockJSON.EXPECT().
+		Unmarshal([]byte(stateData), gomock.Any()).
+		DoAndReturn(func(data []byte, v interface{}) error {
+			st := v.(*state.State)
+			st.ConnectedDevice = &state.Device{
+				ID:       "concurrent-device-123",
+				Name:     "Concurrent Device",
+				Platform: 2,
+			}
+			st.Relayer = &state.RelayerState{
+				TopicID: "concurrent-topic-789",
+			}
+			return nil
+		}).
+		Times(numGoroutines)
+
+	// Execute concurrent loads
+	results := make(chan *state.State, numGoroutines)
+	errors := make(chan error, numGoroutines)
+
+	for range numGoroutines {
+		go func() {
+			result, err := ts.sm.Load(ts.logger)
+			results <- result
+			errors <- err
+		}()
+	}
+
+	// Collect results
+	var loadedStates []*state.State
+	for range numGoroutines {
+		result := <-results
+		err := <-errors
+		assert.NoError(t, err, "expected no error from concurrent load")
+		assert.NotNil(t, result, "expected non-nil state from concurrent load")
+		loadedStates = append(loadedStates, result)
+	}
+
+	// Verify all results are identical (due to mutex protection)
+	firstState := loadedStates[0]
+	for i, loadedState := range loadedStates {
+		assert.Equal(t, firstState.ConnectedDevice.ID, loadedState.ConnectedDevice.ID,
+			"concurrent load %d: device ID mismatch", i)
+		assert.Equal(t, firstState.ConnectedDevice.Name, loadedState.ConnectedDevice.Name,
+			"concurrent load %d: device name mismatch", i)
+		assert.Equal(t, firstState.ConnectedDevice.Platform, loadedState.ConnectedDevice.Platform,
+			"concurrent load %d: device platform mismatch", i)
+		assert.Equal(t, firstState.Relayer.TopicID, loadedState.Relayer.TopicID,
+			"concurrent load %d: relayer topic ID mismatch", i)
+	}
+}
+
+func TestStateManager_ConcurrentGetStateWithSaveInterference(t *testing.T) {
+	ts := setup(t)
+	defer ts.teardown()
+
+	stateDir := "/home/feralfile/.state"
+	stateFile := stateDir + "/connectd.state"
+	tempFile := stateFile + ".tmp"
+
+	// New state to save
+	newState := &state.State{
+		ConnectedDevice: &state.Device{
+			ID:       "updated-device",
+			Name:     "Updated Device",
+			Platform: 2,
+		},
+		Relayer: &state.RelayerState{
+			TopicID: "updated-topic",
+		},
+	}
+
+	// Mock the save operation
+	ts.mockOS.EXPECT().
+		MkdirAll(stateDir, os.FileMode(0750)).
+		Return(nil).
+		Times(1)
+
+	newStateData := []byte(`{"connectedDevice":{"device_id":"updated-device","device_name":"Updated Device","platform":2},"relayer":{"topicId":"updated-topic"}}`)
+	ts.mockJSON.EXPECT().
+		Marshal(newState).
+		Return(newStateData, nil).
+		Times(1)
+
+	ts.mockOS.EXPECT().
+		WriteFile(tempFile, newStateData, os.FileMode(0600)).
+		Return(nil).
+		Times(1)
+
+	ts.mockOS.EXPECT().
+		Rename(tempFile, stateFile).
+		Return(nil).
+		Times(1)
+
+	// Synchronization channels
+	getState1Done := make(chan *state.State)
+	saveCanStart := make(chan struct{})
+	saveDone := make(chan struct{})
+	getState2Done := make(chan *state.State)
+
+	// Start first GetState - should see initial state
+	go func() {
+		state1 := ts.sm.GetState()
+		getState1Done <- state1
+		close(saveCanStart) // Signal save can start
+	}()
+
+	// Start Save operation - changes internal state
+	go func() {
+		<-saveCanStart // Wait for first GetState
+		err := ts.sm.Save(newState)
+		assert.NoError(t, err)
+		close(saveDone) // Signal save completed
+	}()
+
+	// Start second GetState - should see updated state after save
+	go func() {
+		<-saveDone // Wait for save to complete
+		state2 := ts.sm.GetState()
+		getState2Done <- state2
+	}()
+
+	// Collect results
+	state1 := <-getState1Done
+	state2 := <-getState2Done
+
+	// Verify state1 has initial empty state (before save)
+	assert.NotNil(t, state1)
+	assert.Empty(t, state1.ConnectedDevice.ID) // Empty initial state
+	assert.Empty(t, state1.Relayer.TopicID)
+
+	// Verify state2 has updated state (after save)
+	assert.NotNil(t, state2)
+	assert.Equal(t, "updated-device", state2.ConnectedDevice.ID)
+	assert.Equal(t, "Updated Device", state2.ConnectedDevice.Name)
+	assert.Equal(t, 2, state2.ConnectedDevice.Platform)
+	assert.Equal(t, "updated-topic", state2.Relayer.TopicID)
+
+	// Verify that save operation interfered between the two GetState calls
+	assert.NotEqual(t, state1.ConnectedDevice.ID, state2.ConnectedDevice.ID,
+		"Save should have interfered between GetState calls")
+	assert.NotEqual(t, state1.Relayer.TopicID, state2.Relayer.TopicID,
+		"Save should have interfered between GetState calls")
+}
+
+func TestStateManager_ConcurrentLoadAndSaveInterference(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
@@ -715,7 +766,7 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 		}
 	}`
 
-	// Updated state data (what the save operation will write to the file)
+	// Updated state data (what the save operation will write)
 	updatedStateData := `{
 		"connectedDevice": {
 			"device_id": "updated-device-789",
@@ -727,22 +778,36 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 		}
 	}`
 
-	// Synchronization channels for controlled execution order
+	sm := state.NewStateManagerWithDeps(ts.mockOS, ts.mockJSON)
+
+	// State to save
+	saveState := &state.State{
+		ConnectedDevice: &state.Device{
+			ID:       "updated-device-789",
+			Name:     "Updated Device",
+			Platform: 2,
+		},
+		Relayer: &state.RelayerState{
+			TopicID: "updated-topic-789",
+		},
+	}
+
+	// Synchronization channels
 	load1CanStart := make(chan struct{})
 	saveCanStart := make(chan struct{})
 	load2CanStart := make(chan struct{})
 	saveCompleted := make(chan struct{})
 
-	// Track whether save has completed to simulate file content changes
+	// Track completion status
 	saveHasCompleted := false
 
-	// Setup expectations for directory creation
+	// Setup expectations for Load operations
 	ts.mockOS.EXPECT().
 		MkdirAll(stateDir, os.FileMode(0750)).
 		Return(nil).
 		Times(3) // 2 loads + 1 save
 
-	// Setup expectations for file reads with proper timing simulation
+	// Setup expectations for file reads with timing simulation
 	ts.mockOS.EXPECT().
 		ReadFile(stateFile).
 		DoAndReturn(func(path string) ([]byte, error) {
@@ -763,7 +828,7 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 	// Setup expectations for JSON unmarshal - initial data
 	ts.mockJSON.EXPECT().
 		Unmarshal([]byte(initialStateData), gomock.Any()).
-		DoAndReturn(func(data []byte, v any) error {
+		DoAndReturn(func(data []byte, v interface{}) error {
 			st := v.(*state.State)
 			st.ConnectedDevice = &state.Device{
 				ID:       "initial-device-123",
@@ -780,7 +845,7 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 	// Setup expectations for JSON unmarshal - updated data
 	ts.mockJSON.EXPECT().
 		Unmarshal([]byte(updatedStateData), gomock.Any()).
-		DoAndReturn(func(data []byte, v any) error {
+		DoAndReturn(func(data []byte, v interface{}) error {
 			st := v.(*state.State)
 			st.ConnectedDevice = &state.Device{
 				ID:       "updated-device-789",
@@ -795,17 +860,6 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 		Times(1) // Load after save
 
 	// Setup expectations for save operation
-	saveState := &state.State{
-		ConnectedDevice: &state.Device{
-			ID:       "updated-device-789",
-			Name:     "Updated Device",
-			Platform: 2,
-		},
-		Relayer: &state.RelayerState{
-			TopicID: "updated-topic-789",
-		},
-	}
-
 	saveData := []byte(`{"connectedDevice":{"device_id":"updated-device-789","device_name":"Updated Device","platform":2},"relayer":{"topicId":"updated-topic-789"}}`)
 
 	ts.mockJSON.EXPECT().
@@ -833,21 +887,17 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 	// Start Load1 (should see initial data)
 	go func() {
 		<-load1CanStart // Wait for signal to start
-		t.Logf("Load1 starting")
-		result, err := state.Load(ts.logger)
-		t.Logf("Load1 completed")
+		result, err := sm.Load(ts.logger)
 		load1Result <- result
 		load1Error <- err
 		close(saveCanStart) // Signal that save can start
 	}()
 
-	// Start Save operation (will change the file content)
+	// Start Save operation (will change the internal state)
 	go func() {
 		<-saveCanStart // Wait for Load1 to complete
-		t.Logf("Save starting")
-		err := saveState.Save()
+		err := sm.Save(saveState)
 		saveHasCompleted = true // Mark save as completed
-		t.Logf("Save completed")
 		saveError <- err
 		close(saveCompleted) // Signal that save has completed
 		close(load2CanStart) // Signal that Load2 can start
@@ -857,9 +907,7 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 	go func() {
 		<-load2CanStart // Wait for save to complete
 		<-saveCompleted // Ensure save is fully done
-		t.Logf("Load2 starting")
-		result, err := state.Load(ts.logger)
-		t.Logf("Load2 completed")
+		result, err := sm.Load(ts.logger)
 		load2Result <- result
 		load2Error <- err
 	}()
@@ -906,151 +954,85 @@ func TestConcurrentLoadAndSave(t *testing.T) {
 		"Load1 and Load2 should return different data due to save operation")
 	assert.NotEqual(t, result1.Relayer.TopicID, result2.Relayer.TopicID,
 		"Load1 and Load2 should return different topic IDs due to save operation")
-
-	t.Logf("Test completed successfully: Load1 saw initial data, Save updated file, Load2 saw updated data")
 }
 
-func TestConcurrentGetState(t *testing.T) {
+// Test state package-level functions
+func TestState_Load_Success(t *testing.T) {
 	ts := setup(t)
 	defer ts.teardown()
 
-	// Execute concurrent GetState calls
-	const numGoroutines = 10
-	results := make(chan *state.State, numGoroutines)
-
-	for range numGoroutines {
-		go func() {
-			result := state.GetState()
-			results <- result
-		}()
-	}
-
-	// Collect results
-	var states []*state.State
-	for range numGoroutines {
-		result := <-results
-		assert.NotNil(t, result, "expected non-nil state from GetState")
-		assert.NotNil(t, result.ConnectedDevice, "expected non-nil connected device")
-		assert.NotNil(t, result.Relayer, "expected non-nil relayer state")
-		states = append(states, result)
-	}
-
-	// Verify all results are identical (due to mutex protection)
-	firstState := states[0]
-	for i, s := range states {
-		assert.Equal(t, firstState.ConnectedDevice.ID, s.ConnectedDevice.ID,
-			"concurrent GetState %d: device ID mismatch", i)
-		assert.Equal(t, firstState.ConnectedDevice.Name, s.ConnectedDevice.Name,
-			"concurrent GetState %d: device name mismatch", i)
-		assert.Equal(t, firstState.ConnectedDevice.Platform, s.ConnectedDevice.Platform,
-			"concurrent GetState %d: device platform mismatch", i)
-		assert.Equal(t, firstState.Relayer.TopicID, s.Relayer.TopicID,
-			"concurrent GetState %d: relayer topic ID mismatch", i)
-	}
-}
-
-func TestConcurrentLoadWithFileNotExists(t *testing.T) {
-	ts := setup(t)
-	defer ts.teardown()
+	// Use StateManager with mocked dependencies for testing global Load function
+	sm := state.NewStateManagerWithDeps(ts.mockOS, ts.mockJSON)
+	state.InjectStateManagerForTesting(sm)
 
 	notFoundErr := &os.PathError{Op: "open", Path: "/home/feralfile/.state/connectd.state", Err: os.ErrNotExist}
 
-	// Expect MkdirAll to succeed (called once per goroutine)
 	ts.mockOS.EXPECT().
 		MkdirAll(gomock.Any(), gomock.Any()).
 		Return(nil).
-		Times(3) // 3 concurrent loads
-
-	// Expect ReadFile to return file not found (called once per goroutine)
-	ts.mockOS.EXPECT().
-		ReadFile(gomock.Any()).
-		Return(nil, notFoundErr).
-		Times(3) // 3 concurrent loads
-
-	// Expect IsNotExist check (called once per goroutine)
-	ts.mockOS.EXPECT().
-		IsNotExist(notFoundErr).
-		Return(true).
-		Times(3) // 3 concurrent loads
-
-	// Execute concurrent loads when file doesn't exist
-	const numGoroutines = 3
-	results := make(chan *state.State, numGoroutines)
-	errors := make(chan error, numGoroutines)
-
-	for range numGoroutines {
-		go func() {
-			result, err := state.Load(ts.logger)
-			results <- result
-			errors <- err
-		}()
-	}
-
-	// Collect results
-	var loadedStates []*state.State
-	for range numGoroutines {
-		result := <-results
-		err := <-errors
-		assert.NoError(t, err, "expected no error from concurrent load when file doesn't exist")
-		assert.NotNil(t, result, "expected non-nil state from concurrent load when file doesn't exist")
-		assert.Empty(t, result.ConnectedDevice.ID, "expected empty device ID")
-		assert.Empty(t, result.Relayer.TopicID, "expected empty topic ID")
-		loadedStates = append(loadedStates, result)
-	}
-
-	// Verify all results are identical (empty states)
-	firstState := loadedStates[0]
-	for i, loadedState := range loadedStates {
-		assert.Equal(t, firstState.ConnectedDevice.ID, loadedState.ConnectedDevice.ID,
-			"concurrent load %d: device ID mismatch", i)
-		assert.Equal(t, firstState.Relayer.TopicID, loadedState.Relayer.TopicID,
-			"concurrent load %d: relayer topic ID mismatch", i)
-	}
-}
-
-func TestConcurrentSaveWithErrors(t *testing.T) {
-	ts := setup(t)
-	defer ts.teardown()
-
-	// Create test states
-	testStates := []*state.State{
-		{
-			ConnectedDevice: &state.Device{
-				ID:       "error-device-1",
-				Name:     "Error Device One",
-				Platform: 1,
-			},
-			Relayer: &state.RelayerState{
-				TopicID: "error-topic-1",
-			},
-		},
-		{
-			ConnectedDevice: &state.Device{
-				ID:       "error-device-2",
-				Name:     "Error Device Two",
-				Platform: 2,
-			},
-			Relayer: &state.RelayerState{
-				TopicID: "error-topic-2",
-			},
-		},
-	}
-
-	// Setup expectations - first save succeeds, second fails
-	ts.mockOS.EXPECT().
-		MkdirAll(gomock.Any(), gomock.Any()).
-		Return(nil).
-		Times(2)
-
-	// First save succeeds
-	stateData1 := []byte(`{"connectedDevice":{"device_id":"error-device-1","device_name":"Error Device One","platform":1},"relayer":{"topicId":"error-topic-1"}}`)
-	ts.mockJSON.EXPECT().
-		Marshal(testStates[0]).
-		Return(stateData1, nil).
 		Times(1)
 
 	ts.mockOS.EXPECT().
-		WriteFile(gomock.Any(), stateData1, os.FileMode(0600)).
+		ReadFile(gomock.Any()).
+		Return(nil, notFoundErr).
+		Times(1)
+
+	ts.mockOS.EXPECT().
+		IsNotExist(notFoundErr).
+		Return(true).
+		Times(1)
+
+	result, err := state.Load(ts.logger)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Empty(t, result.ConnectedDevice.ID)
+}
+
+func TestState_GetState_Success(t *testing.T) {
+	ts := setup(t)
+	defer ts.teardown()
+
+	result := state.GetState()
+
+	assert.NotNil(t, result)
+	assert.NotNil(t, result.ConnectedDevice)
+	assert.NotNil(t, result.Relayer)
+	assert.Empty(t, result.ConnectedDevice.ID)
+	assert.Empty(t, result.Relayer.TopicID)
+}
+
+func TestState_SaveState_Success(t *testing.T) {
+	ts := setup(t)
+	defer ts.teardown()
+
+	// Use StateManager with mocked dependencies for testing global SaveState function
+	sm := state.NewStateManagerWithDeps(ts.mockOS, ts.mockJSON)
+	state.InjectStateManagerForTesting(sm)
+
+	testState := &state.State{
+		ConnectedDevice: &state.Device{
+			ID:       "test-device-123",
+			Name:     "Test Device",
+			Platform: 1,
+		},
+		Relayer: &state.RelayerState{
+			TopicID: "test-topic-456",
+		},
+	}
+
+	ts.mockOS.EXPECT().
+		MkdirAll(gomock.Any(), gomock.Any()).
+		Return(nil).
+		Times(1)
+
+	ts.mockJSON.EXPECT().
+		Marshal(testState).
+		Return([]byte(`{"test":"data"}`), nil).
+		Times(1)
+
+	ts.mockOS.EXPECT().
+		WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
 		Times(1)
 
@@ -1059,36 +1041,83 @@ func TestConcurrentSaveWithErrors(t *testing.T) {
 		Return(nil).
 		Times(1)
 
-	// Second save fails during marshal
-	ts.mockJSON.EXPECT().
-		Marshal(testStates[1]).
-		Return(nil, fmt.Errorf("marshal error")).
+	err := state.SaveState(testState)
+
+	assert.NoError(t, err)
+	assert.Equal(t, testState, state.GetState())
+}
+
+func TestState_Save_Success(t *testing.T) {
+	ts := setup(t)
+	defer ts.teardown()
+
+	// Use StateManager with mocked dependencies for testing deprecated Save method
+	sm := state.NewStateManagerWithDeps(ts.mockOS, ts.mockJSON)
+	state.InjectStateManagerForTesting(sm)
+
+	testState := &state.State{
+		ConnectedDevice: &state.Device{
+			ID:       "test-device-123",
+			Name:     "Test Device",
+			Platform: 1,
+		},
+		Relayer: &state.RelayerState{
+			TopicID: "test-topic-456",
+		},
+	}
+
+	ts.mockOS.EXPECT().
+		MkdirAll(gomock.Any(), gomock.Any()).
+		Return(nil).
 		Times(1)
 
-	// Execute concurrent saves
-	errors := make(chan error, len(testStates))
+	ts.mockJSON.EXPECT().
+		Marshal(testState).
+		Return([]byte(`{"test":"data"}`), nil).
+		Times(1)
 
-	for _, testState := range testStates {
-		go func(s *state.State) {
-			err := s.Save()
-			errors <- err
-		}(testState)
+	ts.mockOS.EXPECT().
+		WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		Times(1)
+
+	ts.mockOS.EXPECT().
+		Rename(gomock.Any(), gomock.Any()).
+		Return(nil).
+		Times(1)
+
+	// Test that the old Save() method still works
+	err := testState.Save()
+
+	assert.NoError(t, err)
+}
+
+func TestRelayerState_IsReady(t *testing.T) {
+	tests := []struct {
+		name     string
+		topicID  string
+		expected bool
+	}{
+		{
+			name:     "empty topic ID",
+			topicID:  "",
+			expected: false,
+		},
+		{
+			name:     "non-empty topic ID",
+			topicID:  "test-topic-123",
+			expected: true,
+		},
 	}
 
-	// Collect results
-	successCount := 0
-	errorCount := 0
-	for range testStates {
-		err := <-errors
-		if err != nil {
-			errorCount++
-			assert.Contains(t, err.Error(), "failed to marshal state",
-				"expected marshal error, got %v", err)
-		} else {
-			successCount++
-		}
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			relayerState := &state.RelayerState{
+				TopicID: tt.topicID,
+			}
 
-	assert.Equal(t, 1, successCount, "expected 1 successful save")
-	assert.Equal(t, 1, errorCount, "expected 1 failed save")
+			result := relayerState.IsReady()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }

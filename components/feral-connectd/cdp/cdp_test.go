@@ -29,7 +29,7 @@ type testSetup struct {
 	mockIO     *mocks.MockIO
 	mockJSON   *mocks.MockJSON
 	mockHTTP   *mocks.MockHTTP
-	client     *cdp.Client
+	client     cdp.ClientInterface
 }
 
 func setup(t *testing.T) *testSetup {
@@ -1512,7 +1512,7 @@ func TestClient_Send_Async(t *testing.T) {
 			// Extract goroutine ID from the expression (we embed it in the command)
 			// Format: "console.log('test {goroutineID}')"
 			var goroutineID int
-			fmt.Sscanf(expression, "console.log('test %d')", &goroutineID)
+			_, _ = fmt.Sscanf(expression, "console.log('test %d')", &goroutineID)
 
 			// Store requestID by goroutine ID
 			requestIDMap.Store(goroutineID, requestID)
