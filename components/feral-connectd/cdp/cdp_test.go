@@ -1487,65 +1487,67 @@ func TestClient_Send_Async(t *testing.T) {
 	assert.True(t, ts.client.Initialized(), "expected client to be initialized")
 
 	// Test concurrent sends
-	numGoroutines := 10
+	numGoroutines := 1000
 	resultChan := make(chan struct {
-		id     int
-		result interface{}
-		err    error
+		goroutineID int
+		result      interface{}
+		err         error
 	}, numGoroutines)
 
-	// Track actual request IDs assigned by the client
-	var actualRequestIDs []int
-	var idMutex sync.Mutex
+	// Use sync.Map to track requestID by goroutine ID
+	var requestIDMap sync.Map
+	// Channel to track the order of requests for ReadMessage correlation
+	requestIDQueue := make(chan int, numGoroutines)
 
-	// Expect JSON marshal for any request structure - 10 times
+	// Expect JSON marshal for any request structure
 	ts.mockJSON.EXPECT().
 		Marshal(gomock.Any()).
 		DoAndReturn(func(msg interface{}) ([]byte, error) {
 			// Extract the request to get ID and command
 			reqMap := msg.(map[string]interface{})
-			id := reqMap["id"].(int)
+			requestID := reqMap["id"].(int)
 			params := reqMap["params"].(map[string]interface{})
 			expression := params["expression"].(string)
 
-			// Capture the actual ID assigned by the client
-			idMutex.Lock()
-			actualRequestIDs = append(actualRequestIDs, id)
-			idMutex.Unlock()
+			// Extract goroutine ID from the expression (we embed it in the command)
+			// Format: "console.log('test {goroutineID}')"
+			var goroutineID int
+			fmt.Sscanf(expression, "console.log('test %d')", &goroutineID)
+
+			// Store requestID by goroutine ID
+			requestIDMap.Store(goroutineID, requestID)
+
+			// Queue the request ID for ReadMessage correlation
+			requestIDQueue <- requestID
 
 			// Return the marshaled data
 			return []byte(fmt.Sprintf(`{"id":%d,"method":"%s","params":{"expression":"%s"}}`,
-				id, cdp.METHOD_EVALUATE, expression)), nil
+				requestID, cdp.METHOD_EVALUATE, expression)), nil
 		}).
 		Times(numGoroutines)
 
-	// Expect WriteMessage for any data - 10 times
+	// Expect WriteMessage for any data
 	ts.mockConn.EXPECT().
 		WriteMessage(websocket.TextMessage, gomock.Any()).
 		Return(nil).
 		Times(numGoroutines)
 
-	// Expect ReadMessage to return responses - 10 times
-	// Use simple incrementing IDs for responses (we don't care about correlation here)
-	responseID := 0
+	// Expect ReadMessage to return responses
 	ts.mockConn.EXPECT().
 		ReadMessage().
 		DoAndReturn(func() (int, []byte, error) {
-			responseID++
-			// Create response with simple incrementing ID
-			respData := []byte(fmt.Sprintf(`{"id":%d,"result":{"result":{"type":"string","value":"{}"}}}`, responseID))
+			// Get the request ID that corresponds to this ReadMessage call
+			requestID := <-requestIDQueue
+			// Create response with the same ID as the request
+			respData := []byte(fmt.Sprintf(`{"id":%d,"result":{"result":{"type":"string","value":"{}"}}}`, requestID))
 			return websocket.TextMessage, respData, nil
 		}).
 		Times(numGoroutines)
 
-	// Handle the two different Unmarshal calls
-	unmarshalCallCount := 0
-
-	// Expect JSON unmarshal calls - 20 times total (2 per Send operation)
+	// Expect JSON unmarshal calls (2 per Send operation)
 	ts.mockJSON.EXPECT().
 		Unmarshal(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(data []byte, v interface{}) error {
-			unmarshalCallCount++
 
 			// Check if this is a CDP response structure (the first unmarshal call)
 			if _, ok := v.(*struct {
@@ -1560,26 +1562,30 @@ func TestClient_Send_Async(t *testing.T) {
 					} `json:"result"`
 				} `json:"result"`
 			}); ok {
-				// This is the CDP response unmarshal
-				resp := v.(*struct {
-					ID     int `json:"id"`
-					Result struct {
+				// Parse the actual response to get the ID
+				var rawResp struct {
+					ID int `json:"id"`
+				}
+				if _, err := fmt.Sscanf(string(data), `{"id":%d,`, &rawResp.ID); err == nil {
+					// This is the CDP response unmarshal
+					resp := v.(*struct {
+						ID     int `json:"id"`
 						Result struct {
-							Type        string      `json:"type"`
-							Subtype     *string     `json:"subtype"`
-							ClassName   *string     `json:"className"`
-							Description *string     `json:"description"`
-							Value       interface{} `json:"value"`
+							Result struct {
+								Type        string      `json:"type"`
+								Subtype     *string     `json:"subtype"`
+								ClassName   *string     `json:"className"`
+								Description *string     `json:"description"`
+								Value       interface{} `json:"value"`
+							} `json:"result"`
 						} `json:"result"`
-					} `json:"result"`
-				})
+					})
 
-				// Use the unmarshal call count to determine ID
-				responseID := ((unmarshalCallCount - 1) / 2) + 1
-				resp.ID = responseID
-				resp.Result.Result.Type = cdp.TYPE_STRING
-				resp.Result.Result.Value = "{}"
-				return nil
+					resp.ID = rawResp.ID
+					resp.Result.Result.Type = cdp.TYPE_STRING
+					resp.Result.Result.Value = "{}"
+					return nil
+				}
 			} else if _, ok := v.(*map[string]interface{}); ok {
 				// This is the string value unmarshal (second call)
 				*v.(*map[string]interface{}) = map[string]interface{}{}
@@ -1598,24 +1604,24 @@ func TestClient_Send_Async(t *testing.T) {
 	// Start concurrent goroutines
 	startChan := make(chan struct{})
 	for i := 1; i <= numGoroutines; i++ {
-		go func(id int) {
+		go func(goroutineID int) {
 			// Wait for all goroutines to be ready
 			<-startChan
 
-			command := fmt.Sprintf("console.log('test %d')", id)
+			command := fmt.Sprintf("console.log('test %d')", goroutineID)
 			result, err := ts.client.Send(cdp.METHOD_EVALUATE,
 				map[string]interface{}{
 					"expression": command,
 				})
 
 			resultChan <- struct {
-				id     int
-				result interface{}
-				err    error
+				goroutineID int
+				result      interface{}
+				err         error
 			}{
-				id:     id,
-				result: result,
-				err:    err,
+				goroutineID: goroutineID,
+				result:      result,
+				err:         err,
 			}
 		}(i)
 	}
@@ -1630,9 +1636,9 @@ func TestClient_Send_Async(t *testing.T) {
 	for range numGoroutines {
 		res := <-resultChan
 		if res.err != nil {
-			errors[res.id] = res.err
+			errors[res.goroutineID] = res.err
 		} else {
-			results[res.id] = res.result
+			results[res.goroutineID] = res.result
 		}
 	}
 
@@ -1643,19 +1649,21 @@ func TestClient_Send_Async(t *testing.T) {
 	assert.Len(t, results, numGoroutines, "Expected %d results, got %d", numGoroutines, len(results))
 
 	// Verify each response is an empty map (our expected result)
-	for id := 1; id <= numGoroutines; id++ {
-		assert.Contains(t, results, id, "Missing result for ID %d", id)
-		assert.Equal(t, map[string]interface{}{}, results[id], "Incorrect result for ID %d", id)
+	for goroutineID := 1; goroutineID <= numGoroutines; goroutineID++ {
+		assert.Contains(t, results, goroutineID, "Missing result for goroutine %d", goroutineID)
+		assert.Equal(t, map[string]interface{}{}, results[goroutineID], "Incorrect result for goroutine %d", goroutineID)
 	}
 
-	// Check for duplicates
+	// Check for duplicate request IDs using requestIDMap
 	idSet := make(map[int]bool)
-	for _, id := range actualRequestIDs {
-		if idSet[id] {
-			t.Errorf("Duplicate request ID found: %d", id)
+	requestIDMap.Range(func(key, value interface{}) bool {
+		requestID := value.(int)
+		if idSet[requestID] {
+			t.Errorf("Duplicate request ID found: %d", requestID)
 		}
-		idSet[id] = true
-	}
+		idSet[requestID] = true
+		return true
+	})
 
 	// Verify we got the expected number of unique IDs
 	assert.Len(t, idSet, numGoroutines, "Should have %d unique request IDs", numGoroutines)
