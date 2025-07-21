@@ -73,6 +73,7 @@ func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float6
 
 	// Send critical temperature notification to website
 	if c.cdpClient != nil {
+		c.logger.Error(">>>>>> 4")
 		if err := c.cdpClient.SendCriticalCPUTemperatureNotification(ctx); err != nil {
 			c.logger.Error("Failed to send critical CPU temperature notification to website",
 				zap.Error(err))

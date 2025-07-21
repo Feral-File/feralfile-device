@@ -311,7 +311,9 @@ func (c *Client) IsReconnectionError(err error) bool {
 		"write: connection reset by peer",
 	}
 
+	c.logger.Error(">>>>>> 3", zap.String("errStr", errStr))
 	for _, reconnectionError := range reconnectionErrors {
+		c.logger.Error(">>>>>> 3", zap.String("reconnectionError", reconnectionError))
 		if strings.Contains(errStr, reconnectionError) {
 			c.logger.Debug("Detected reconnection error", zap.String("error", errStr))
 			return true
@@ -366,7 +368,9 @@ func (c *Client) SendCriticalCPUTemperatureNotification(ctx context.Context) err
 
 	_, err := c.Send(METHOD_EVALUATE, params)
 	if err != nil {
+		c.logger.Error(">>>>>> 1", zap.Error(err))
 		if c.IsReconnectionError(err) {
+			c.logger.Error(">>>>>> 2", zap.Error(err))
 			return c.Reconnect(ctx)
 		}
 
