@@ -19,6 +19,7 @@ import (
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/state"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/status"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/watchdog"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
 	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/feral-file/godbus"
 	"github.com/getsentry/sentry-go"
@@ -156,7 +157,7 @@ func main() {
 	cmd := command.NewDefaultHandler(cdpClient, dbusClient, ds, l)
 
 	// Initialize Mediator
-	mediator := mediator.New(relayerClient, dbusClient, cdpClient, cmd, l)
+	mediator := mediator.New(relayerClient, dbusClient, cdpClient, cmd, wrapper.NewClock(), l)
 	mediator.Start()
 	defer mediator.Stop()
 

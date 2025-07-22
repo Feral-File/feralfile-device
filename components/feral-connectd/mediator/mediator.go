@@ -13,6 +13,7 @@ import (
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/state"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/status"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
 )
@@ -31,6 +32,7 @@ type Mediator struct {
 	cdp          cdp.ClientInterface
 	cmd          command.HandlerInterface
 	statusPoller status.PollerInterface
+	clock        wrapper.ClockInterface
 	logger       *zap.Logger
 	tracer       *logger.RelayerMessageTracer
 }
@@ -40,6 +42,7 @@ func New(
 	dbus dbus.ClientInterface,
 	cdp cdp.ClientInterface,
 	cmd command.HandlerInterface,
+	clock wrapper.ClockInterface,
 	l *zap.Logger,
 ) *Mediator {
 	return &Mediator{
@@ -47,6 +50,7 @@ func New(
 		dbus:    dbus,
 		cdp:     cdp,
 		cmd:     cmd,
+		clock:   clock,
 		logger:  l,
 		tracer:  logger.NewRelayerMessageTracer(l),
 	}
@@ -246,7 +250,7 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload relayer.Pay
 			m.tracer.FinishSpanWithError(cdpSpan, nil)
 
 			// Add brief pause as in original code
-			time.Sleep(500 * time.Millisecond)
+			m.clock.Sleep(500 * time.Millisecond)
 
 			// Force refresh status poller
 			if m.statusPoller != nil {
