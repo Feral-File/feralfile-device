@@ -38,11 +38,10 @@ func main() {
 		_ = logger.Sync()
 	}()
 
+	logger.Info("Starting feral-watchdog daemon")
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	logger.Error(">>>>>> 5")
 
 	// Handle signals for graceful shutdown
 	sigCh := make(chan os.Signal, 1)
