@@ -3,7 +3,7 @@ package wrapper
 
 import "time"
 
-//go:generate mockgen -source=clock.go -destination=../mocks/mock_clock.go -package=mocks -mock_names=ClockInterface=MockClock
+//go:generate mockgen -source=clock.go -destination=../mocks/clock.go -package=mocks -mock_names=ClockInterface=MockClock
 type ClockInterface interface {
 	Now() time.Time
 	Sleep(d time.Duration)

@@ -18,7 +18,7 @@ const (
 	POLL_INTERVAL = 5 * time.Second
 )
 
-//go:generate mockgen -source=status.go -destination=../mocks/mock_status.go -package=mocks -mock_names=PollerInterface=MockStatusPoller
+//go:generate mockgen -source=status.go -destination=../mocks/status.go -package=mocks -mock_names=PollerInterface=MockStatusPoller
 
 type PollerInterface interface {
 	Start(ctx context.Context)

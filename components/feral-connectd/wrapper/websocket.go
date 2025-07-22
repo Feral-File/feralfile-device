@@ -9,12 +9,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-//go:generate mockgen -source=websocket.go -destination=../mocks/mock_websocket.go -package=mocks -mock_names=WebSocketDialerInterface=MockWebSocketDialer
+//go:generate mockgen -source=websocket.go -destination=../mocks/websocket.go -package=mocks -mock_names=WebSocketDialerInterface=MockWebSocketDialer
 type WebSocketDialerInterface interface {
 	DialContext(ctx context.Context, url string, requestHeader http.Header) (WebSocketConnInterface, *http.Response, error)
 }
 
-//go:generate mockgen -source=websocket.go -destination=../mocks/mock_websocket.go -package=mocks -mock_names=WebSocketConnInterface=MockWebSocketConn
+//go:generate mockgen -source=websocket.go -destination=../mocks/websocket.go -package=mocks -mock_names=WebSocketConnInterface=MockWebSocketConn
 type WebSocketConnInterface interface {
 	WriteJSON(v interface{}) error
 	ReadMessage() (messageType int, p []byte, err error)

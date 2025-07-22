@@ -32,7 +32,7 @@ type State struct {
 	Relayer         *RelayerState `json:"relayer"`
 }
 
-//go:generate mockgen -source=state.go -destination=../mocks/mock_state.go -package=mocks -mock_names=StateManager=MockStateManager
+//go:generate mockgen -source=state.go -destination=../mocks/state.go -package=mocks -mock_names=StateManager=MockStateManager
 type StateManager interface {
 	Load(*zap.Logger) (*State, error)
 	Save(*State) error

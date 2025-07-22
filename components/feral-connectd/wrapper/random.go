@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-//go:generate mockgen -source=random.go -destination=../mocks/mock_random.go -package=mocks -mock_names=Randomizer=MockRandomizer
+//go:generate mockgen -source=random.go -destination=../mocks/random.go -package=mocks -mock_names=Randomizer=MockRandomizer
 type Randomizer interface {
 	Intn(n int) int
 	Duration(min, max time.Duration) time.Duration

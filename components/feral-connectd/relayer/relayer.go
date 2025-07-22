@@ -131,7 +131,7 @@ var notificationPersistConfig = map[NotificationType]int{
 	NOTIFICATION_TYPE_DEVICE_STATUS: 1,
 }
 
-//go:generate mockgen -source=relayer.go -destination=../mocks/mock_relayer.go -package=mocks -mock_names=ClientInterface=MockRelayerClient
+//go:generate mockgen -source=relayer.go -destination=../mocks/relayer.go -package=mocks -mock_names=ClientInterface=MockRelayerClient
 type ClientInterface interface {
 	IsConnected() bool
 	Connect(ctx context.Context) error

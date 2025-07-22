@@ -33,7 +33,7 @@ type Device struct {
 	Platform int    `json:"platform"`
 }
 
-//go:generate mockgen -source=command.go -destination=../mocks/mock_command.go -package=mocks -mock_names=HandlerInterface=MockCommandHandler
+//go:generate mockgen -source=command.go -destination=../mocks/command.go -package=mocks -mock_names=HandlerInterface=MockCommandHandler
 type HandlerInterface interface {
 	SaveLastSysMetrics(metrics []byte)
 	Execute(ctx context.Context, cmd Command) (interface{}, error)

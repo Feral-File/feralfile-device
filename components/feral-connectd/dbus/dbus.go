@@ -28,7 +28,7 @@ const (
 	SETUPD_EVENT_SHOW_PAIRING_QR_CODE godbus.Member = "show_pairing_qr_code"
 )
 
-//go:generate mockgen -source=dbus.go -destination=../mocks/mock_dbus.go -package=mocks -mock_names=ClientInterface=MockDBusClient
+//go:generate mockgen -source=dbus.go -destination=../mocks/dbus.go -package=mocks -mock_names=ClientInterface=MockDBusClient
 type ClientInterface interface {
 	Start() error
 	Stop() error

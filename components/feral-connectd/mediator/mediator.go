@@ -17,7 +17,7 @@ import (
 	"go.uber.org/zap"
 )
 
-//go:generate mockgen -source=mediator.go -destination=../mocks/mock_mediator.go -package=mocks -mock_names=Interface=MockMediator
+//go:generate mockgen -source=mediator.go -destination=../mocks/mediator.go -package=mocks -mock_names=Interface=MockMediator
 
 type Interface interface {
 	Start()

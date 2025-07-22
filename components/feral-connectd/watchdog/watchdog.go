@@ -10,7 +10,7 @@ import (
 
 const INTERVAL = 15 * time.Second
 
-//go:generate mockgen -source=watchdog.go -destination=../mocks/mock_watchdog.go -package=mocks -mock_names=Interface=MockWatchdog
+//go:generate mockgen -source=watchdog.go -destination=../mocks/watchdog.go -package=mocks -mock_names=Interface=MockWatchdog
 
 type Interface interface {
 	Start(ctx context.Context)

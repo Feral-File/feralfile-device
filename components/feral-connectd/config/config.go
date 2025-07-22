@@ -22,7 +22,7 @@ type Config struct {
 	SentryConfig  *logger.SentryConfig `json:"sentry"`
 }
 
-//go:generate mockgen -source=config.go -destination=../mocks/mock_config.go -package=mocks -mock_names=ConfigManager=MockConfigManager
+//go:generate mockgen -source=config.go -destination=../mocks/config.go -package=mocks -mock_names=ConfigManager=MockConfigManager
 type ConfigManager interface {
 	Load(*zap.Logger) (*Config, error)
 	Get() *Config

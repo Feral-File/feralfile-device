@@ -34,7 +34,7 @@ type Config struct {
 	Endpoint string `json:"endpoint"`
 }
 
-//go:generate mockgen -source=cdp.go -destination=../mocks/mock_cdp.go -package=mocks -mock_names=ClientInterface=MockCDPClient
+//go:generate mockgen -source=cdp.go -destination=../mocks/cdp.go -package=mocks -mock_names=ClientInterface=MockCDPClient
 type ClientInterface interface {
 	Init(ctx context.Context) error
 	Send(method string, params map[string]interface{}) (interface{}, error)
