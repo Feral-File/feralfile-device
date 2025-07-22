@@ -129,7 +129,7 @@ func TestClient_GetRelayerTopicID_Success(t *testing.T) {
 							}
 
 							if capturedHandler != nil {
-								capturedHandler(context.Background(), payload)
+								_ = capturedHandler(context.Background(), payload)
 								close(handlerCalled)
 							}
 						}()
@@ -217,7 +217,7 @@ func TestClient_GetRelayerTopicID_Success(t *testing.T) {
 							}
 
 							if capturedHandler != nil {
-								capturedHandler(context.Background(), nonSystemPayload)
+								_ = capturedHandler(context.Background(), nonSystemPayload)
 							}
 
 							// Then send the system message (should be processed)
@@ -234,7 +234,7 @@ func TestClient_GetRelayerTopicID_Success(t *testing.T) {
 							}
 
 							if capturedHandler != nil {
-								capturedHandler(context.Background(), systemPayload)
+								_ = capturedHandler(context.Background(), systemPayload)
 								close(handlerCalled)
 							}
 						}()
@@ -348,7 +348,7 @@ func TestClient_GetRelayerTopicID_Failures(t *testing.T) {
 							}
 
 							if capturedHandler != nil {
-								capturedHandler(context.Background(), payload)
+								_ = capturedHandler(context.Background(), payload)
 							}
 						}()
 						return nil
@@ -407,7 +407,7 @@ func TestClient_GetRelayerTopicID_Failures(t *testing.T) {
 							}
 
 							if capturedHandler != nil {
-								capturedHandler(context.Background(), payload)
+								_ = capturedHandler(context.Background(), payload)
 							}
 						}()
 						return nil
