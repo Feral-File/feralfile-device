@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/cdp"
 	"github.com/feral-file/godbus"
 	"github.com/godbus/dbus/v5"
 	"go.uber.org/zap"
@@ -38,7 +39,6 @@ func main() {
 	}()
 
 	logger.Info("Starting feral-watchdog daemon")
-
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -73,14 +73,23 @@ func main() {
 	// Initialize system command executor
 	commandHandler := NewCommandHandler(logger)
 
+	// Initialize CDP client
+	cdpClient := cdp.NewDefault(&cdp.Config{Endpoint: config.CDPEndpoint}, logger)
+	err = cdpClient.Init(ctx)
+	if err != nil {
+		logger.Fatal("CDP init failed", zap.Error(err))
+	}
+	defer cdpClient.Close()
+
 	// Initialize resource monitors
 	ramHandler := NewMemoryHandler(logger, commandHandler)
 	diskHandler := NewDiskHandler(logger, commandHandler)
 	gpuHandler := NewGPUHandler(logger, commandHandler)
+	cpuHandler := NewCPUHandler(logger, cdpClient)
 	defer gpuHandler.GracefulShutdown(ctx)
 
 	// Initialize mediator
-	mediator := NewMediator(dbusClient, diskHandler, ramHandler, gpuHandler, logger)
+	mediator := NewMediator(dbusClient, diskHandler, ramHandler, gpuHandler, cpuHandler, logger)
 	mediator.Start()
 	defer mediator.Stop()
 
@@ -95,13 +104,13 @@ func main() {
 		systemdWatchdog.Start(ctx)
 	}()
 
-	// Start CDP monitor
-	cdpMonitor := NewCDPMonitor(config.CDPEndpoint, logger, commandHandler)
-	defer cdpMonitor.Stop()
+	// Start Chromium monitor
+	chromiumMonitor := NewChromiumMonitor(config.CDPEndpoint, logger, commandHandler)
+	defer chromiumMonitor.Stop()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		cdpMonitor.Start(ctx)
+		chromiumMonitor.Start(ctx)
 	}()
 
 	// Notify systemd that we're ready
