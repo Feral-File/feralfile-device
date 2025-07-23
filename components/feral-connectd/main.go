@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	go_os "os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -90,8 +89,8 @@ func main() {
 	defer cancel()
 
 	// Handle signals for graceful shutdown
-	sigCh := make(chan go_os.Signal, 1)
-	signal.Notify(sigCh, go_os.Interrupt, syscall.SIGTERM)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		sig := <-sigCh
 		l.Info("Received signal, initiating shutdown...",
