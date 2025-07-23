@@ -10,7 +10,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockMath is a mock of MathInterface interface.
+// MockMath is a mock of Math interface.
 type MockMath struct {
 	ctrl     *gomock.Controller
 	recorder *MockMathMockRecorder

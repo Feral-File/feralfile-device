@@ -11,7 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockStatusPoller is a mock of PollerInterface interface.
+// MockStatusPoller is a mock of Poller interface.
 type MockStatusPoller struct {
 	ctrl     *gomock.Controller
 	recorder *MockStatusPollerMockRecorder

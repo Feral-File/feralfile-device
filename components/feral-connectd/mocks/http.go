@@ -11,7 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockHTTP is a mock of HTTPInterface interface.
+// MockHTTP is a mock of HTTP interface.
 type MockHTTP struct {
 	ctrl     *gomock.Controller
 	recorder *MockHTTPMockRecorder

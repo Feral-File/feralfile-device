@@ -11,7 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockClock is a mock of ClockInterface interface.
+// MockClock is a mock of Clock interface.
 type MockClock struct {
 	ctrl     *gomock.Controller
 	recorder *MockClockMockRecorder

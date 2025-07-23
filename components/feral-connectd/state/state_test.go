@@ -18,7 +18,7 @@ import (
 type testSetup struct {
 	ctrl     *gomock.Controller
 	ctx      context.Context
-	mockOS   *mocks.MockOSInterface
+	mockOS   *mocks.MockOS
 	mockJSON *mocks.MockJSON
 	sm       state.StateManager
 	logger   *zap.Logger
@@ -29,7 +29,7 @@ func setup(t *testing.T) *testSetup {
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.FatalLevel))
 	ctx := context.Background()
 
-	mockOS := mocks.NewMockOSInterface(ctrl)
+	mockOS := mocks.NewMockOS(ctrl)
 	mockJSON := mocks.NewMockJSON(ctrl)
 	sm := state.NewStateManagerWithDeps(mockOS, mockJSON)
 

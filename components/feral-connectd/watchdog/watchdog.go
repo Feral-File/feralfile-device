@@ -10,29 +10,29 @@ import (
 
 const INTERVAL = 15 * time.Second
 
-//go:generate mockgen -source=watchdog.go -destination=../mocks/watchdog.go -package=mocks -mock_names=Interface=MockWatchdog
+//go:generate mockgen -source=watchdog.go -destination=../mocks/watchdog.go -package=mocks -mock_names=Watchdog=MockWatchdog
 
-type Interface interface {
+type Watchdog interface {
 	Start(ctx context.Context)
 	Stop()
 }
 
-// Watchdog handles systemd watchdog notifications
-type Watchdog struct {
+// watchdog handles systemd watchdog notifications
+type watchdog struct {
 	done   chan struct{}
 	logger *zap.Logger
 }
 
 // New creates a new watchdog with the given interval
-func New(logger *zap.Logger) *Watchdog {
-	return &Watchdog{
+func New(logger *zap.Logger) Watchdog {
+	return &watchdog{
 		done:   make(chan struct{}),
 		logger: logger,
 	}
 }
 
 // Start starts the watchdog process
-func (w *Watchdog) Start(ctx context.Context) {
+func (w *watchdog) Start(ctx context.Context) {
 	ticker := time.NewTicker(INTERVAL)
 	defer ticker.Stop()
 
@@ -59,7 +59,7 @@ func (w *Watchdog) Start(ctx context.Context) {
 }
 
 // Stop stops the watchdog process
-func (w *Watchdog) Stop() {
+func (w *watchdog) Stop() {
 	select {
 	case <-w.done:
 		// Already closed

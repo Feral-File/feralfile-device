@@ -34,25 +34,25 @@ type Config struct {
 	Endpoint string `json:"endpoint"`
 }
 
-//go:generate mockgen -source=cdp.go -destination=../mocks/cdp.go -package=mocks -mock_names=ClientInterface=MockCDPClient
-type ClientInterface interface {
+//go:generate mockgen -source=cdp.go -destination=../mocks/cdp.go -package=mocks -mock_names=CDP=MockCDP
+type CDP interface {
 	Init(ctx context.Context) error
 	Send(method string, params map[string]interface{}) (interface{}, error)
 	Close()
 	Initialized() bool
 }
 
-type Client struct {
+type cdp struct {
 	mu sync.Mutex
 
 	// Wrappers to be injected
-	dialer wrapper.WebSocketDialerInterface
-	io     wrapper.IOInterface
-	json   wrapper.JSONInterface
-	http   wrapper.HTTPInterface
+	dialer wrapper.WebSocketDialer
+	io     wrapper.IO
+	json   wrapper.JSON
+	http   wrapper.HTTP
 
 	// Internal state
-	conn     wrapper.WebSocketConnInterface
+	conn     wrapper.WebSocketConn
 	reqID    int
 	endpoint string
 	doneChan chan struct{}
@@ -61,16 +61,16 @@ type Client struct {
 	logger *zap.Logger
 }
 
-// NewClient creates a new CDP client with custom injected wrappers
-func NewClient(
+// New creates a new CDP client with custom injected wrappers
+func New(
 	config *Config,
 	logger *zap.Logger,
-	dialer wrapper.WebSocketDialerInterface,
-	io wrapper.IOInterface,
-	json wrapper.JSONInterface,
-	http wrapper.HTTPInterface,
-) *Client {
-	return &Client{
+	dialer wrapper.WebSocketDialer,
+	io wrapper.IO,
+	json wrapper.JSON,
+	http wrapper.HTTP,
+) CDP {
+	return &cdp{
 		dialer:   dialer,
 		io:       io,
 		json:     json,
@@ -83,8 +83,8 @@ func NewClient(
 }
 
 // NewDefault creates a new CDP client with the default wrappers
-func NewDefault(config *Config, logger *zap.Logger) *Client {
-	return NewClient(
+func NewDefault(config *Config, logger *zap.Logger) CDP {
+	return New(
 		config,
 		logger,
 		wrapper.NewWebSocketDialer(websocket.DefaultDialer),
@@ -95,14 +95,14 @@ func NewDefault(config *Config, logger *zap.Logger) *Client {
 }
 
 // Initialized returns true if the CDP connection is initialized
-func (c *Client) Initialized() bool {
+func (c *cdp) Initialized() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.conn != nil
 }
 
 // Init fetches WS endpoint and dials Chromium
-func (c *Client) Init(ctx context.Context) error {
+func (c *cdp) Init(ctx context.Context) error {
 	c.logger.Info("Initializing CDP", zap.String("endpoint", c.endpoint))
 
 	// Ensure the relayer is not connected
@@ -192,7 +192,7 @@ func (c *Client) Init(ctx context.Context) error {
 }
 
 // Send sends a raw CDP JSON-RPC message and waits for response
-func (c *Client) Send(method string, params map[string]interface{}) (interface{}, error) {
+func (c *cdp) Send(method string, params map[string]interface{}) (interface{}, error) {
 	c.logger.Info("Sending CDP request", zap.String("method", method), zap.Any("params", params))
 
 	c.mu.Lock()
@@ -277,7 +277,7 @@ func (c *Client) Send(method string, params map[string]interface{}) (interface{}
 }
 
 // Close closes the CDP connection
-func (c *Client) Close() {
+func (c *cdp) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

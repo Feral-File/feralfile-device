@@ -14,46 +14,46 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockWebSocketDialerInterface is a mock of WebSocketDialerInterface interface.
-type MockWebSocketDialerInterface struct {
+// MockWebSocketDialer is a mock of WebSocketDialer interface.
+type MockWebSocketDialer struct {
 	ctrl     *gomock.Controller
-	recorder *MockWebSocketDialerInterfaceMockRecorder
+	recorder *MockWebSocketDialerMockRecorder
 }
 
-// MockWebSocketDialerInterfaceMockRecorder is the mock recorder for MockWebSocketDialerInterface.
-type MockWebSocketDialerInterfaceMockRecorder struct {
-	mock *MockWebSocketDialerInterface
+// MockWebSocketDialerMockRecorder is the mock recorder for MockWebSocketDialer.
+type MockWebSocketDialerMockRecorder struct {
+	mock *MockWebSocketDialer
 }
 
-// NewMockWebSocketDialerInterface creates a new mock instance.
-func NewMockWebSocketDialerInterface(ctrl *gomock.Controller) *MockWebSocketDialerInterface {
-	mock := &MockWebSocketDialerInterface{ctrl: ctrl}
-	mock.recorder = &MockWebSocketDialerInterfaceMockRecorder{mock}
+// NewMockWebSocketDialer creates a new mock instance.
+func NewMockWebSocketDialer(ctrl *gomock.Controller) *MockWebSocketDialer {
+	mock := &MockWebSocketDialer{ctrl: ctrl}
+	mock.recorder = &MockWebSocketDialerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockWebSocketDialerInterface) EXPECT() *MockWebSocketDialerInterfaceMockRecorder {
+func (m *MockWebSocketDialer) EXPECT() *MockWebSocketDialerMockRecorder {
 	return m.recorder
 }
 
 // DialContext mocks base method.
-func (m *MockWebSocketDialerInterface) DialContext(ctx context.Context, url string, requestHeader http.Header) (wrapper.WebSocketConnInterface, *http.Response, error) {
+func (m *MockWebSocketDialer) DialContext(ctx context.Context, url string, requestHeader http.Header) (wrapper.WebSocketConn, *http.Response, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DialContext", ctx, url, requestHeader)
-	ret0, _ := ret[0].(wrapper.WebSocketConnInterface)
+	ret0, _ := ret[0].(wrapper.WebSocketConn)
 	ret1, _ := ret[1].(*http.Response)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
 
 // DialContext indicates an expected call of DialContext.
-func (mr *MockWebSocketDialerInterfaceMockRecorder) DialContext(ctx, url, requestHeader interface{}) *gomock.Call {
+func (mr *MockWebSocketDialerMockRecorder) DialContext(ctx, url, requestHeader interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DialContext", reflect.TypeOf((*MockWebSocketDialerInterface)(nil).DialContext), ctx, url, requestHeader)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DialContext", reflect.TypeOf((*MockWebSocketDialer)(nil).DialContext), ctx, url, requestHeader)
 }
 
-// MockWebSocketConn is a mock of WebSocketConnInterface interface.
+// MockWebSocketConn is a mock of WebSocketConn interface.
 type MockWebSocketConn struct {
 	ctrl     *gomock.Controller
 	recorder *MockWebSocketConnMockRecorder

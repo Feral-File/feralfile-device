@@ -131,8 +131,8 @@ var notificationPersistConfig = map[NotificationType]int{
 	NOTIFICATION_TYPE_DEVICE_STATUS: 1,
 }
 
-//go:generate mockgen -source=relayer.go -destination=../mocks/relayer.go -package=mocks -mock_names=ClientInterface=MockRelayerClient
-type ClientInterface interface {
+//go:generate mockgen -source=relayer.go -destination=../mocks/relayer.go -package=mocks -mock_names=Relayer=MockRelayer
+type Relayer interface {
 	IsConnected() bool
 	Connect(ctx context.Context) error
 	RetryableConnect(ctx context.Context) error
@@ -143,18 +143,18 @@ type ClientInterface interface {
 	SendNotification(ctx context.Context, notificationType NotificationType, message interface{}) error
 }
 
-// Client handles Relayer connection to relay server
-type Client struct {
+// relayer handles connection to relay server
+type relayer struct {
 	sync.Mutex
 
 	// Wrappers to be injected
-	dialer     wrapper.WebSocketDialerInterface
+	dialer     wrapper.WebSocketDialer
 	randomizer wrapper.Randomizer
-	clock      wrapper.ClockInterface
+	clock      wrapper.Clock
 
 	// Internal state
 	config       *Config
-	conn         wrapper.WebSocketConnInterface
+	conn         wrapper.WebSocketConn
 	done         chan struct{}
 	pingDoneChan chan struct{}
 	handlers     []Handler
@@ -164,7 +164,7 @@ type Client struct {
 }
 
 // NewDefault creates a new Relayer client with the default wrappers
-func NewDefault(config *Config, logger *zap.Logger) *Client {
+func NewDefault(config *Config, logger *zap.Logger) Relayer {
 	d := websocket.DefaultDialer
 	d.HandshakeTimeout = 5 * time.Second
 	return NewClient(
@@ -180,11 +180,11 @@ func NewDefault(config *Config, logger *zap.Logger) *Client {
 func NewClient(
 	config *Config,
 	logger *zap.Logger,
-	dialer wrapper.WebSocketDialerInterface,
+	dialer wrapper.WebSocketDialer,
 	randomizer wrapper.Randomizer,
-	clock wrapper.ClockInterface,
-) *Client {
-	return &Client{
+	clock wrapper.Clock,
+) Relayer {
+	return &relayer{
 		config:     config,
 		dialer:     dialer,
 		randomizer: randomizer,
@@ -195,7 +195,7 @@ func NewClient(
 	}
 }
 
-func (r *Client) IsConnected() bool {
+func (r *relayer) IsConnected() bool {
 	r.Lock()
 	defer r.Unlock()
 	return r.conn != nil
@@ -203,7 +203,7 @@ func (r *Client) IsConnected() bool {
 
 // RetryableConnect attempts to connect to the Relayer server and listens for messages indefinitely
 // This function blocks the current thread and should be called in a separate goroutine unless otherwise specified
-func (r *Client) RetryableConnect(ctx context.Context) error {
+func (r *relayer) RetryableConnect(ctx context.Context) error {
 	var attempts int
 	for {
 		attempts++
@@ -241,7 +241,7 @@ func (r *Client) RetryableConnect(ctx context.Context) error {
 }
 
 // Connect connects to the Relayer server and listens for messages
-func (r *Client) Connect(ctx context.Context) error {
+func (r *relayer) Connect(ctx context.Context) error {
 	// Ensure the relayer is not connected
 	r.Lock()
 	if r.conn != nil {
@@ -318,7 +318,7 @@ func (r *Client) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (r *Client) reconnect(ctx context.Context) error {
+func (r *relayer) reconnect(ctx context.Context) error {
 	r.logger.Info("Reconnecting to Relayer")
 
 	// Close the connection
@@ -335,13 +335,13 @@ func (r *Client) reconnect(ctx context.Context) error {
 	return r.RetryableConnect(ctx)
 }
 
-func (r *Client) OnRelayerMessage(f Handler) {
+func (r *relayer) OnRelayerMessage(f Handler) {
 	r.Lock()
 	defer r.Unlock()
 	r.handlers = append(r.handlers, f)
 }
 
-func (r *Client) RemoveRelayerMessage(f Handler) {
+func (r *relayer) RemoveRelayerMessage(f Handler) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -353,7 +353,7 @@ func (r *Client) RemoveRelayerMessage(f Handler) {
 	}
 }
 
-func (r *Client) background(ctx context.Context) {
+func (r *relayer) background(ctx context.Context) {
 	go func() {
 		r.logger.Info("Relayer background goroutine started")
 		for {
@@ -420,7 +420,7 @@ func (r *Client) background(ctx context.Context) {
 }
 
 // Send sends a message to the Relayer server
-func (r *Client) Send(ctx context.Context, data interface{}) error {
+func (r *relayer) Send(ctx context.Context, data interface{}) error {
 	r.Lock()
 	defer r.Unlock()
 
@@ -434,7 +434,7 @@ func (r *Client) Send(ctx context.Context, data interface{}) error {
 }
 
 // ping sends a ping to keep the connection alive
-func (r *Client) ping() {
+func (r *relayer) ping() {
 	r.Lock()
 	defer r.Unlock()
 	if r.conn == nil {
@@ -454,7 +454,7 @@ func (r *Client) ping() {
 }
 
 // Close closes the Relayer connection
-func (r *Client) Close() {
+func (r *relayer) Close() {
 	r.Lock()
 	defer r.Unlock()
 
@@ -480,7 +480,7 @@ func (r *Client) Close() {
 	r.closeConn()
 }
 
-func (r *Client) closeConn() {
+func (r *relayer) closeConn() {
 	if r.conn == nil {
 		return
 	}
@@ -504,7 +504,7 @@ func (r *Client) closeConn() {
 	r.logger.Info("Relayer connection closed")
 }
 
-func (r *Client) SendNotification(ctx context.Context, notificationType NotificationType, message interface{}) error {
+func (r *relayer) SendNotification(ctx context.Context, notificationType NotificationType, message interface{}) error {
 	r.logger.Debug("Attempting to send notification",
 		zap.String("type", string(notificationType)),
 		zap.Bool("relayer_connected", r.IsConnected()))
@@ -537,7 +537,7 @@ func (r *Client) SendNotification(ctx context.Context, notificationType Notifica
 	return r.conn.WriteJSON(notification)
 }
 
-func (r *Client) categorizeWebsocketError(err error, resp *http.Response) error {
+func (r *relayer) categorizeWebsocketError(err error, resp *http.Response) error {
 	// Handshake errors
 	if errors.Is(err, websocket.ErrBadHandshake) {
 		statusCode := resp.StatusCode

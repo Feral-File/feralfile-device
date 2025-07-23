@@ -11,7 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockMediator is a mock of Interface interface.
+// MockMediator is a mock of Mediator interface.
 type MockMediator struct {
 	ctrl     *gomock.Controller
 	recorder *MockMediatorMockRecorder
@@ -35,7 +35,7 @@ func (m *MockMediator) EXPECT() *MockMediatorMockRecorder {
 }
 
 // SetStatusPoller mocks base method.
-func (m *MockMediator) SetStatusPoller(statusPoller status.PollerInterface) {
+func (m *MockMediator) SetStatusPoller(statusPoller status.Poller) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetStatusPoller", statusPoller)
 }

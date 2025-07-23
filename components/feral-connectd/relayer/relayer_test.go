@@ -25,11 +25,11 @@ import (
 type testSetup struct {
 	ctrl           *gomock.Controller
 	ctx            context.Context
-	mockDialer     *mocks.MockWebSocketDialerInterface
+	mockDialer     *mocks.MockWebSocketDialer
 	mockConn       *mocks.MockWebSocketConn
 	mockRandomizer *mocks.MockRandomizer
 	mockClock      *mocks.MockClock
-	client         relayer.ClientInterface
+	client         relayer.Relayer
 }
 
 func setup(t *testing.T) *testSetup {
@@ -38,7 +38,7 @@ func setup(t *testing.T) *testSetup {
 	ctx := context.Background()
 
 	// Dependencies
-	mockDialer := mocks.NewMockWebSocketDialerInterface(ctrl)
+	mockDialer := mocks.NewMockWebSocketDialer(ctrl)
 	mockConn := mocks.NewMockWebSocketConn(ctrl)
 	mockRandomizer := mocks.NewMockRandomizer(ctrl)
 	mockClock := mocks.NewMockClock(ctrl)
@@ -458,7 +458,7 @@ func TestClient_RetryableConnect_ContextCanceled(t *testing.T) {
 	callCount := 0
 	ts.mockDialer.EXPECT().
 		DialContext(gomock.Any(), gomock.Any(), nil).
-		DoAndReturn(func(dialCtx context.Context, url string, headers http.Header) (wrapper.WebSocketConnInterface, *http.Response, error) {
+		DoAndReturn(func(dialCtx context.Context, url string, headers http.Header) (wrapper.WebSocketConn, *http.Response, error) {
 			callCount++
 
 			if callCount == 1 {

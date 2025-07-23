@@ -20,9 +20,9 @@ import (
 type testSetup struct {
 	ctrl        *gomock.Controller
 	ctx         context.Context
-	mockRelayer *mocks.MockRelayerClient
+	mockRelayer *mocks.MockRelayer
 	mockState   *mocks.MockStateManager
-	client      *dbus.Client
+	client      dbus.DBusHandler
 }
 
 func setup(t *testing.T) *testSetup {
@@ -30,13 +30,13 @@ func setup(t *testing.T) *testSetup {
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.FatalLevel))
 	ctx := context.Background()
 
-	mockRelayer := mocks.NewMockRelayerClient(ctrl)
+	mockRelayer := mocks.NewMockRelayer(ctrl)
 	mockState := mocks.NewMockStateManager(ctrl)
 
 	// Inject the mock state manager for testing
 	state.InjectStateManagerForTesting(mockState)
 
-	client := dbus.NewClient(ctx, mockRelayer, logger)
+	client := dbus.NewHandler(ctx, mockRelayer, logger)
 
 	return &testSetup{
 		ctrl:        ctrl,
@@ -526,7 +526,7 @@ func TestClient_GetRelayerTopicID_ContextTimeout(t *testing.T) {
 
 	// Create a new client with the short timeout context
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.FatalLevel))
-	client := dbus.NewClient(ctx, ts.mockRelayer, logger)
+	client := dbus.NewHandler(ctx, ts.mockRelayer, logger)
 
 	result, dbusErr := client.GetRelayerTopicID()
 

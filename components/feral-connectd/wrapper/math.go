@@ -1,29 +1,29 @@
 //nolint:gosec
 package wrapper
 
-import "math"
+import go_math "math"
 
-//go:generate mockgen -source=math.go -destination=../mocks/math.go -package=mocks -mock_names=MathInterface=MockMath
-type MathInterface interface {
+//go:generate mockgen -source=math.go -destination=../mocks/math.go -package=mocks -mock_names=Math=MockMath
+type Math interface {
 	Sqrt(x float64) float64
 	Max(x, y float64) float64
 	Min(x, y float64) float64
 }
 
-type Math struct{}
+type math struct{}
 
-func NewMath() MathInterface {
-	return &Math{}
+func NewMath() Math {
+	return &math{}
 }
 
-func (m Math) Sqrt(x float64) float64 {
-	return math.Sqrt(x)
+func (m math) Sqrt(x float64) float64 {
+	return go_math.Sqrt(x)
 }
 
-func (m Math) Max(x, y float64) float64 {
-	return math.Max(x, y)
+func (m math) Max(x, y float64) float64 {
+	return go_math.Max(x, y)
 }
 
-func (m Math) Min(x, y float64) float64 {
-	return math.Min(x, y)
+func (m math) Min(x, y float64) float64 {
+	return go_math.Min(x, y)
 }

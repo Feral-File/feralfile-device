@@ -31,8 +31,8 @@ type ConfigManager interface {
 type defaultConfigManager struct {
 	configLock sync.Mutex
 	config     *Config
-	os         wrapper.OSInterface
-	json       wrapper.JSONInterface
+	os         wrapper.OS
+	json       wrapper.JSON
 }
 
 func NewConfigManager() ConfigManager {
@@ -43,7 +43,7 @@ func NewConfigManager() ConfigManager {
 }
 
 // NewConfigManagerWithDeps creates a ConfigManager with custom dependencies (for testing)
-func NewConfigManagerWithDeps(osWrapper wrapper.OSInterface, jsonWrapper wrapper.JSONInterface) ConfigManager {
+func NewConfigManagerWithDeps(osWrapper wrapper.OS, jsonWrapper wrapper.JSON) ConfigManager {
 	return &defaultConfigManager{
 		os:   osWrapper,
 		json: jsonWrapper,

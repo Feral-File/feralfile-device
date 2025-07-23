@@ -23,13 +23,13 @@ import (
 type testSetup struct {
 	ctrl             *gomock.Controller
 	ctx              context.Context
-	handler          command.HandlerInterface
-	mockCDP          *mocks.MockCDPClient
-	mockDBus         *mocks.MockDBusClient
+	handler          command.CommandHandler
+	mockCDP          *mocks.MockCDP
+	mockDBus         *mocks.MockDBus
 	mockStatus       *mocks.MockStatusPoller
 	mockJSON         *mocks.MockJSON
-	mockOS           *mocks.MockOSInterface
-	mockExec         *mocks.MockExecInterface
+	mockOS           *mocks.MockOS
+	mockExec         *mocks.MockExec
 	mockExecCmd      *mocks.MockExecCmd
 	mockDeviceStatus *mocks.MockDeviceStatus
 	mockMath         *mocks.MockMath
@@ -43,12 +43,12 @@ func setup(t *testing.T) *testSetup {
 	ctx := context.Background()
 
 	// Create mocks
-	mockCDP := mocks.NewMockCDPClient(ctrl)
-	mockDBus := mocks.NewMockDBusClient(ctrl)
+	mockCDP := mocks.NewMockCDP(ctrl)
+	mockDBus := mocks.NewMockDBus(ctrl)
 	mockStatus := mocks.NewMockStatusPoller(ctrl)
 	mockJSON := mocks.NewMockJSON(ctrl)
-	mockOS := mocks.NewMockOSInterface(ctrl)
-	mockExec := mocks.NewMockExecInterface(ctrl)
+	mockOS := mocks.NewMockOS(ctrl)
+	mockExec := mocks.NewMockExec(ctrl)
 	mockExecCmd := mocks.NewMockExecCmd(ctrl)
 	mockDeviceStatus := mocks.NewMockDeviceStatus(ctrl)
 	mockMath := mocks.NewMockMath(ctrl)
@@ -56,7 +56,7 @@ func setup(t *testing.T) *testSetup {
 	state.InjectStateManagerForTesting(mockStateManager)
 
 	// Create handler with mocks
-	handler := command.NewHandler(mockCDP, mockDBus, mockDeviceStatus, logger, mockJSON, mockOS, mockExec, mockMath)
+	handler := command.New(mockCDP, mockDBus, mockDeviceStatus, logger, mockJSON, mockOS, mockExec, mockMath)
 	handler.SetStatusPoller(mockStatus)
 
 	return &testSetup{
@@ -2633,11 +2633,11 @@ func TestHandler_NewDefaultHandler(t *testing.T) {
 	defer ctrl.Finish()
 
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.FatalLevel))
-	mockCDP := mocks.NewMockCDPClient(ctrl)
-	mockDBus := mocks.NewMockDBusClient(ctrl)
+	mockCDP := mocks.NewMockCDP(ctrl)
+	mockDBus := mocks.NewMockDBus(ctrl)
 	mockDeviceStatus := mocks.NewMockDeviceStatus(ctrl)
 
-	handler := command.NewDefaultHandler(mockCDP, mockDBus, mockDeviceStatus, logger)
+	handler := command.NewDefault(mockCDP, mockDBus, mockDeviceStatus, logger)
 	assert.NotNil(t, handler)
 }
 
@@ -2646,14 +2646,14 @@ func TestHandler_NewHandler(t *testing.T) {
 	defer ctrl.Finish()
 
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.FatalLevel))
-	mockCDP := mocks.NewMockCDPClient(ctrl)
-	mockDBus := mocks.NewMockDBusClient(ctrl)
+	mockCDP := mocks.NewMockCDP(ctrl)
+	mockDBus := mocks.NewMockDBus(ctrl)
 	mockDeviceStatus := mocks.NewMockDeviceStatus(ctrl)
 	mockJSON := mocks.NewMockJSON(ctrl)
-	mockOS := mocks.NewMockOSInterface(ctrl)
-	mockExec := mocks.NewMockExecInterface(ctrl)
+	mockOS := mocks.NewMockOS(ctrl)
+	mockExec := mocks.NewMockExec(ctrl)
 	mockMath := mocks.NewMockMath(ctrl)
 
-	handler := command.NewHandler(mockCDP, mockDBus, mockDeviceStatus, logger, mockJSON, mockOS, mockExec, mockMath)
+	handler := command.New(mockCDP, mockDBus, mockDeviceStatus, logger, mockJSON, mockOS, mockExec, mockMath)
 	assert.NotNil(t, handler)
 }

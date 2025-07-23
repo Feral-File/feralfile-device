@@ -11,7 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockIO is a mock of IOInterface interface.
+// MockIO is a mock of IO interface.
 type MockIO struct {
 	ctrl     *gomock.Controller
 	recorder *MockIOMockRecorder

@@ -42,8 +42,8 @@ type StateManager interface {
 type defaultStateManager struct {
 	stateLock sync.Mutex
 	state     *State
-	os        wrapper.OSInterface
-	json      wrapper.JSONInterface
+	os        wrapper.OS
+	json      wrapper.JSON
 }
 
 func NewStateManager() StateManager {
@@ -54,7 +54,7 @@ func NewStateManager() StateManager {
 }
 
 // NewStateManagerWithDeps creates a StateManager with custom dependencies (for testing)
-func NewStateManagerWithDeps(osWrapper wrapper.OSInterface, jsonWrapper wrapper.JSONInterface) StateManager {
+func NewStateManagerWithDeps(osWrapper wrapper.OS, jsonWrapper wrapper.JSON) StateManager {
 	return &defaultStateManager{
 		os:   osWrapper,
 		json: jsonWrapper,

@@ -12,16 +12,16 @@ type Randomizer interface {
 	Duration(min, max time.Duration) time.Duration
 }
 
-type DefaultRandomizer struct{}
+type randomizer struct{}
 
 func NewRandomizer() Randomizer {
-	return &DefaultRandomizer{}
+	return &randomizer{}
 }
 
-func (r *DefaultRandomizer) Intn(n int) int {
+func (r *randomizer) Intn(n int) int {
 	return rand.Intn(n)
 }
 
-func (r *DefaultRandomizer) Duration(min, max time.Duration) time.Duration {
+func (r *randomizer) Duration(min, max time.Duration) time.Duration {
 	return time.Duration(rand.Intn(int(max-min))) + min
 }

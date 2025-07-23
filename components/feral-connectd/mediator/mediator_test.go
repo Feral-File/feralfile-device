@@ -23,13 +23,13 @@ import (
 type testSetup struct {
 	ctrl             *gomock.Controller
 	ctx              context.Context
-	mockRelayer      *mocks.MockRelayerClient
-	mockDbus         *mocks.MockDBusClient
-	mockCDP          *mocks.MockCDPClient
+	mockRelayer      *mocks.MockRelayer
+	mockDbus         *mocks.MockDBus
+	mockCDP          *mocks.MockCDP
 	mockCmd          *mocks.MockCommandHandler
 	mockStatusPoller *mocks.MockStatusPoller
 	mockClock        *mocks.MockClock
-	mediator         mediator.Interface
+	mediator         mediator.Mediator
 	logger           *zap.Logger
 }
 
@@ -38,9 +38,9 @@ func setup(t *testing.T) *testSetup {
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.FatalLevel))
 	ctx := context.Background()
 
-	mockRelayer := mocks.NewMockRelayerClient(ctrl)
-	mockDbus := mocks.NewMockDBusClient(ctrl)
-	mockCDP := mocks.NewMockCDPClient(ctrl)
+	mockRelayer := mocks.NewMockRelayer(ctrl)
+	mockDbus := mocks.NewMockDBus(ctrl)
+	mockCDP := mocks.NewMockCDP(ctrl)
 	mockCmd := mocks.NewMockCommandHandler(ctrl)
 	mockStatusPoller := mocks.NewMockStatusPoller(ctrl)
 	mockClock := mocks.NewMockClock(ctrl)

@@ -1,19 +1,19 @@
 //nolint:gosec
 package wrapper
 
-import "net/http"
+import go_http "net/http"
 
-//go:generate mockgen -source=http.go -destination=../mocks/http.go -package=mocks -mock_names=HTTPInterface=MockHTTP
-type HTTPInterface interface {
-	Get(url string) (*http.Response, error)
+//go:generate mockgen -source=http.go -destination=../mocks/http.go -package=mocks -mock_names=HTTP=MockHTTP
+type HTTP interface {
+	Get(url string) (*go_http.Response, error)
 }
 
-type HTTP struct{}
+type http struct{}
 
-func NewHTTP() HTTPInterface {
-	return HTTP{}
+func NewHTTP() HTTP {
+	return http{}
 }
 
-func (h HTTP) Get(url string) (*http.Response, error) {
-	return http.Get(url)
+func (h http) Get(url string) (*go_http.Response, error) {
+	return go_http.Get(url)
 }

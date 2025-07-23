@@ -11,43 +11,43 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockCDPClient is a mock of ClientInterface interface.
-type MockCDPClient struct {
+// MockCDP is a mock of CDP interface.
+type MockCDP struct {
 	ctrl     *gomock.Controller
-	recorder *MockCDPClientMockRecorder
+	recorder *MockCDPMockRecorder
 }
 
-// MockCDPClientMockRecorder is the mock recorder for MockCDPClient.
-type MockCDPClientMockRecorder struct {
-	mock *MockCDPClient
+// MockCDPMockRecorder is the mock recorder for MockCDP.
+type MockCDPMockRecorder struct {
+	mock *MockCDP
 }
 
-// NewMockCDPClient creates a new mock instance.
-func NewMockCDPClient(ctrl *gomock.Controller) *MockCDPClient {
-	mock := &MockCDPClient{ctrl: ctrl}
-	mock.recorder = &MockCDPClientMockRecorder{mock}
+// NewMockCDP creates a new mock instance.
+func NewMockCDP(ctrl *gomock.Controller) *MockCDP {
+	mock := &MockCDP{ctrl: ctrl}
+	mock.recorder = &MockCDPMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockCDPClient) EXPECT() *MockCDPClientMockRecorder {
+func (m *MockCDP) EXPECT() *MockCDPMockRecorder {
 	return m.recorder
 }
 
 // Close mocks base method.
-func (m *MockCDPClient) Close() {
+func (m *MockCDP) Close() {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Close")
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockCDPClientMockRecorder) Close() *gomock.Call {
+func (mr *MockCDPMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockCDPClient)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockCDP)(nil).Close))
 }
 
 // Init mocks base method.
-func (m *MockCDPClient) Init(ctx context.Context) error {
+func (m *MockCDP) Init(ctx context.Context) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Init", ctx)
 	ret0, _ := ret[0].(error)
@@ -55,13 +55,13 @@ func (m *MockCDPClient) Init(ctx context.Context) error {
 }
 
 // Init indicates an expected call of Init.
-func (mr *MockCDPClientMockRecorder) Init(ctx interface{}) *gomock.Call {
+func (mr *MockCDPMockRecorder) Init(ctx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockCDPClient)(nil).Init), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockCDP)(nil).Init), ctx)
 }
 
 // Initialized mocks base method.
-func (m *MockCDPClient) Initialized() bool {
+func (m *MockCDP) Initialized() bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Initialized")
 	ret0, _ := ret[0].(bool)
@@ -69,13 +69,13 @@ func (m *MockCDPClient) Initialized() bool {
 }
 
 // Initialized indicates an expected call of Initialized.
-func (mr *MockCDPClientMockRecorder) Initialized() *gomock.Call {
+func (mr *MockCDPMockRecorder) Initialized() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialized", reflect.TypeOf((*MockCDPClient)(nil).Initialized))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialized", reflect.TypeOf((*MockCDP)(nil).Initialized))
 }
 
 // Send mocks base method.
-func (m *MockCDPClient) Send(method string, params map[string]interface{}) (interface{}, error) {
+func (m *MockCDP) Send(method string, params map[string]interface{}) (interface{}, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Send", method, params)
 	ret0, _ := ret[0].(interface{})
@@ -84,7 +84,7 @@ func (m *MockCDPClient) Send(method string, params map[string]interface{}) (inte
 }
 
 // Send indicates an expected call of Send.
-func (mr *MockCDPClientMockRecorder) Send(method, params interface{}) *gomock.Call {
+func (mr *MockCDPMockRecorder) Send(method, params interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockCDPClient)(nil).Send), method, params)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockCDP)(nil).Send), method, params)
 }

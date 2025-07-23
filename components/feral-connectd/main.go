@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	go_os "os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -89,8 +90,8 @@ func main() {
 	defer cancel()
 
 	// Handle signals for graceful shutdown
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	sigCh := make(chan go_os.Signal, 1)
+	signal.Notify(sigCh, go_os.Interrupt, syscall.SIGTERM)
 	go func() {
 		sig := <-sigCh
 		l.Info("Received signal, initiating shutdown...",
@@ -147,14 +148,14 @@ func main() {
 		_ = dbusClient.Stop()
 	}()
 
-	err = dbusClient.Export(dbus.NewClient(ctx, relayerClient, l), dbus.PATH, dbus.INTERFACE)
+	err = dbusClient.Export(dbus.NewHandler(ctx, relayerClient, l), dbus.PATH, dbus.INTERFACE)
 	if err != nil {
 		l.Fatal("Failed to export DBus interface", zap.Error(err))
 	}
 
 	// Initialize command handler
 	ds := status.NewDefaultDeviceStatus()
-	cmd := command.NewDefaultHandler(cdpClient, dbusClient, ds, l)
+	cmd := command.NewDefault(cdpClient, dbusClient, ds, l)
 
 	// Initialize Mediator
 	mediator := mediator.New(relayerClient, dbusClient, cdpClient, cmd, wrapper.NewClock(), l)
@@ -176,7 +177,7 @@ func main() {
 	}
 
 	// Initialize StatusPoller
-	statusPoller := status.NewPoller(
+	statusPoller := status.New(
 		cdpClient,
 		relayerClient,
 		ds,

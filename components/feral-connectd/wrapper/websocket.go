@@ -3,19 +3,19 @@ package wrapper
 
 import (
 	"context"
-	"net/http"
+	go_http "net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-//go:generate mockgen -source=websocket.go -destination=../mocks/websocket.go -package=mocks -mock_names=WebSocketDialerInterface=MockWebSocketDialer
-type WebSocketDialerInterface interface {
-	DialContext(ctx context.Context, url string, requestHeader http.Header) (WebSocketConnInterface, *http.Response, error)
+//go:generate mockgen -source=websocket.go -destination=../mocks/websocket.go -package=mocks -mock_names=WebSocketDialer=MockWebSocketDialer
+type WebSocketDialer interface {
+	DialContext(ctx context.Context, url string, requestHeader go_http.Header) (WebSocketConn, *go_http.Response, error)
 }
 
-//go:generate mockgen -source=websocket.go -destination=../mocks/websocket.go -package=mocks -mock_names=WebSocketConnInterface=MockWebSocketConn
-type WebSocketConnInterface interface {
+//go:generate mockgen -source=websocket.go -destination=../mocks/websocket.go -package=mocks -mock_names=WebSocketConn=MockWebSocketConn
+type WebSocketConn interface {
 	WriteJSON(v interface{}) error
 	ReadMessage() (messageType int, p []byte, err error)
 	WriteMessage(messageType int, data []byte) error
@@ -25,50 +25,50 @@ type WebSocketConnInterface interface {
 	Close() error
 }
 
-type WebSocketDialer struct {
+type webSocketDialer struct {
 	dialer *websocket.Dialer
 }
 
-func NewWebSocketDialer(dialer *websocket.Dialer) WebSocketDialerInterface {
-	return &WebSocketDialer{dialer: dialer}
+func NewWebSocketDialer(dialer *websocket.Dialer) WebSocketDialer {
+	return &webSocketDialer{dialer: dialer}
 }
 
-func (d *WebSocketDialer) DialContext(ctx context.Context, url string, requestHeader http.Header) (WebSocketConnInterface, *http.Response, error) {
+func (d *webSocketDialer) DialContext(ctx context.Context, url string, requestHeader go_http.Header) (WebSocketConn, *go_http.Response, error) {
 	conn, resp, err := d.dialer.DialContext(ctx, url, requestHeader)
 	if err != nil {
 		return nil, resp, err
 	}
-	return &WebSocketConn{conn: conn}, resp, nil
+	return &webSocketConn{conn: conn}, resp, nil
 }
 
-type WebSocketConn struct {
+type webSocketConn struct {
 	conn *websocket.Conn
 }
 
-func (c *WebSocketConn) WriteJSON(v interface{}) error {
+func (c *webSocketConn) WriteJSON(v interface{}) error {
 	return c.conn.WriteJSON(v)
 }
 
-func (c *WebSocketConn) ReadMessage() (int, []byte, error) {
+func (c *webSocketConn) ReadMessage() (int, []byte, error) {
 	return c.conn.ReadMessage()
 }
 
-func (c *WebSocketConn) WriteMessage(messageType int, data []byte) error {
+func (c *webSocketConn) WriteMessage(messageType int, data []byte) error {
 	return c.conn.WriteMessage(messageType, data)
 }
 
-func (c *WebSocketConn) WriteControl(messageType int, data []byte, deadline time.Time) error {
+func (c *webSocketConn) WriteControl(messageType int, data []byte, deadline time.Time) error {
 	return c.conn.WriteControl(messageType, data, deadline)
 }
 
-func (c *WebSocketConn) SetPongHandler(h func(appData string) error) {
+func (c *webSocketConn) SetPongHandler(h func(appData string) error) {
 	c.conn.SetPongHandler(h)
 }
 
-func (c *WebSocketConn) SetReadDeadline(t time.Time) error {
+func (c *webSocketConn) SetReadDeadline(t time.Time) error {
 	return c.conn.SetReadDeadline(t)
 }
 
-func (c *WebSocketConn) Close() error {
+func (c *webSocketConn) Close() error {
 	return c.conn.Close()
 }

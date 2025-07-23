@@ -12,43 +12,43 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockRelayerClient is a mock of ClientInterface interface.
-type MockRelayerClient struct {
+// MockRelayer is a mock of Relayer interface.
+type MockRelayer struct {
 	ctrl     *gomock.Controller
-	recorder *MockRelayerClientMockRecorder
+	recorder *MockRelayerMockRecorder
 }
 
-// MockRelayerClientMockRecorder is the mock recorder for MockRelayerClient.
-type MockRelayerClientMockRecorder struct {
-	mock *MockRelayerClient
+// MockRelayerMockRecorder is the mock recorder for MockRelayer.
+type MockRelayerMockRecorder struct {
+	mock *MockRelayer
 }
 
-// NewMockRelayerClient creates a new mock instance.
-func NewMockRelayerClient(ctrl *gomock.Controller) *MockRelayerClient {
-	mock := &MockRelayerClient{ctrl: ctrl}
-	mock.recorder = &MockRelayerClientMockRecorder{mock}
+// NewMockRelayer creates a new mock instance.
+func NewMockRelayer(ctrl *gomock.Controller) *MockRelayer {
+	mock := &MockRelayer{ctrl: ctrl}
+	mock.recorder = &MockRelayerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockRelayerClient) EXPECT() *MockRelayerClientMockRecorder {
+func (m *MockRelayer) EXPECT() *MockRelayerMockRecorder {
 	return m.recorder
 }
 
 // Close mocks base method.
-func (m *MockRelayerClient) Close() {
+func (m *MockRelayer) Close() {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Close")
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockRelayerClientMockRecorder) Close() *gomock.Call {
+func (mr *MockRelayerMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockRelayerClient)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockRelayer)(nil).Close))
 }
 
 // Connect mocks base method.
-func (m *MockRelayerClient) Connect(ctx context.Context) error {
+func (m *MockRelayer) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Connect", ctx)
 	ret0, _ := ret[0].(error)
@@ -56,13 +56,13 @@ func (m *MockRelayerClient) Connect(ctx context.Context) error {
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockRelayerClientMockRecorder) Connect(ctx interface{}) *gomock.Call {
+func (mr *MockRelayerMockRecorder) Connect(ctx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockRelayerClient)(nil).Connect), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockRelayer)(nil).Connect), ctx)
 }
 
 // IsConnected mocks base method.
-func (m *MockRelayerClient) IsConnected() bool {
+func (m *MockRelayer) IsConnected() bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsConnected")
 	ret0, _ := ret[0].(bool)
@@ -70,37 +70,37 @@ func (m *MockRelayerClient) IsConnected() bool {
 }
 
 // IsConnected indicates an expected call of IsConnected.
-func (mr *MockRelayerClientMockRecorder) IsConnected() *gomock.Call {
+func (mr *MockRelayerMockRecorder) IsConnected() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockRelayerClient)(nil).IsConnected))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockRelayer)(nil).IsConnected))
 }
 
 // OnRelayerMessage mocks base method.
-func (m *MockRelayerClient) OnRelayerMessage(handler relayer.Handler) {
+func (m *MockRelayer) OnRelayerMessage(handler relayer.Handler) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "OnRelayerMessage", handler)
 }
 
 // OnRelayerMessage indicates an expected call of OnRelayerMessage.
-func (mr *MockRelayerClientMockRecorder) OnRelayerMessage(handler interface{}) *gomock.Call {
+func (mr *MockRelayerMockRecorder) OnRelayerMessage(handler interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnRelayerMessage", reflect.TypeOf((*MockRelayerClient)(nil).OnRelayerMessage), handler)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnRelayerMessage", reflect.TypeOf((*MockRelayer)(nil).OnRelayerMessage), handler)
 }
 
 // RemoveRelayerMessage mocks base method.
-func (m *MockRelayerClient) RemoveRelayerMessage(handler relayer.Handler) {
+func (m *MockRelayer) RemoveRelayerMessage(handler relayer.Handler) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RemoveRelayerMessage", handler)
 }
 
 // RemoveRelayerMessage indicates an expected call of RemoveRelayerMessage.
-func (mr *MockRelayerClientMockRecorder) RemoveRelayerMessage(handler interface{}) *gomock.Call {
+func (mr *MockRelayerMockRecorder) RemoveRelayerMessage(handler interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveRelayerMessage", reflect.TypeOf((*MockRelayerClient)(nil).RemoveRelayerMessage), handler)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveRelayerMessage", reflect.TypeOf((*MockRelayer)(nil).RemoveRelayerMessage), handler)
 }
 
 // RetryableConnect mocks base method.
-func (m *MockRelayerClient) RetryableConnect(ctx context.Context) error {
+func (m *MockRelayer) RetryableConnect(ctx context.Context) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RetryableConnect", ctx)
 	ret0, _ := ret[0].(error)
@@ -108,13 +108,13 @@ func (m *MockRelayerClient) RetryableConnect(ctx context.Context) error {
 }
 
 // RetryableConnect indicates an expected call of RetryableConnect.
-func (mr *MockRelayerClientMockRecorder) RetryableConnect(ctx interface{}) *gomock.Call {
+func (mr *MockRelayerMockRecorder) RetryableConnect(ctx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetryableConnect", reflect.TypeOf((*MockRelayerClient)(nil).RetryableConnect), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetryableConnect", reflect.TypeOf((*MockRelayer)(nil).RetryableConnect), ctx)
 }
 
 // Send mocks base method.
-func (m *MockRelayerClient) Send(ctx context.Context, data interface{}) error {
+func (m *MockRelayer) Send(ctx context.Context, data interface{}) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Send", ctx, data)
 	ret0, _ := ret[0].(error)
@@ -122,13 +122,13 @@ func (m *MockRelayerClient) Send(ctx context.Context, data interface{}) error {
 }
 
 // Send indicates an expected call of Send.
-func (mr *MockRelayerClientMockRecorder) Send(ctx, data interface{}) *gomock.Call {
+func (mr *MockRelayerMockRecorder) Send(ctx, data interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockRelayerClient)(nil).Send), ctx, data)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockRelayer)(nil).Send), ctx, data)
 }
 
 // SendNotification mocks base method.
-func (m *MockRelayerClient) SendNotification(ctx context.Context, notificationType relayer.NotificationType, message interface{}) error {
+func (m *MockRelayer) SendNotification(ctx context.Context, notificationType relayer.NotificationType, message interface{}) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendNotification", ctx, notificationType, message)
 	ret0, _ := ret[0].(error)
@@ -136,7 +136,7 @@ func (m *MockRelayerClient) SendNotification(ctx context.Context, notificationTy
 }
 
 // SendNotification indicates an expected call of SendNotification.
-func (mr *MockRelayerClientMockRecorder) SendNotification(ctx, notificationType, message interface{}) *gomock.Call {
+func (mr *MockRelayerMockRecorder) SendNotification(ctx, notificationType, message interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendNotification", reflect.TypeOf((*MockRelayerClient)(nil).SendNotification), ctx, notificationType, message)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendNotification", reflect.TypeOf((*MockRelayer)(nil).SendNotification), ctx, notificationType, message)
 }

@@ -9,34 +9,35 @@ import (
 	reflect "reflect"
 
 	godbus "github.com/feral-file/godbus"
+	dbus "github.com/godbus/dbus/v5"
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockDBusClient is a mock of ClientInterface interface.
-type MockDBusClient struct {
+// MockDBus is a mock of DBus interface.
+type MockDBus struct {
 	ctrl     *gomock.Controller
-	recorder *MockDBusClientMockRecorder
+	recorder *MockDBusMockRecorder
 }
 
-// MockDBusClientMockRecorder is the mock recorder for MockDBusClient.
-type MockDBusClientMockRecorder struct {
-	mock *MockDBusClient
+// MockDBusMockRecorder is the mock recorder for MockDBus.
+type MockDBusMockRecorder struct {
+	mock *MockDBus
 }
 
-// NewMockDBusClient creates a new mock instance.
-func NewMockDBusClient(ctrl *gomock.Controller) *MockDBusClient {
-	mock := &MockDBusClient{ctrl: ctrl}
-	mock.recorder = &MockDBusClientMockRecorder{mock}
+// NewMockDBus creates a new mock instance.
+func NewMockDBus(ctrl *gomock.Controller) *MockDBus {
+	mock := &MockDBus{ctrl: ctrl}
+	mock.recorder = &MockDBusMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockDBusClient) EXPECT() *MockDBusClientMockRecorder {
+func (m *MockDBus) EXPECT() *MockDBusMockRecorder {
 	return m.recorder
 }
 
 // Call mocks base method.
-func (m *MockDBusClient) Call(ctx context.Context, name string, path godbus.Path, iface godbus.Interface, method godbus.Member, args ...any) ([]any, error) {
+func (m *MockDBus) Call(ctx context.Context, name string, path godbus.Path, iface godbus.Interface, method godbus.Member, args ...any) ([]any, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, name, path, iface, method}
 	for _, a := range args {
@@ -49,14 +50,14 @@ func (m *MockDBusClient) Call(ctx context.Context, name string, path godbus.Path
 }
 
 // Call indicates an expected call of Call.
-func (mr *MockDBusClientMockRecorder) Call(ctx, name, path, iface, method interface{}, args ...interface{}) *gomock.Call {
+func (mr *MockDBusMockRecorder) Call(ctx, name, path, iface, method interface{}, args ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{ctx, name, path, iface, method}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockDBusClient)(nil).Call), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockDBus)(nil).Call), varargs...)
 }
 
 // Export mocks base method.
-func (m *MockDBusClient) Export(obj interface{}, path godbus.Path, iface godbus.Interface) error {
+func (m *MockDBus) Export(obj interface{}, path godbus.Path, iface godbus.Interface) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Export", obj, path, iface)
 	ret0, _ := ret[0].(error)
@@ -64,37 +65,37 @@ func (m *MockDBusClient) Export(obj interface{}, path godbus.Path, iface godbus.
 }
 
 // Export indicates an expected call of Export.
-func (mr *MockDBusClientMockRecorder) Export(obj, path, iface interface{}) *gomock.Call {
+func (mr *MockDBusMockRecorder) Export(obj, path, iface interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Export", reflect.TypeOf((*MockDBusClient)(nil).Export), obj, path, iface)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Export", reflect.TypeOf((*MockDBus)(nil).Export), obj, path, iface)
 }
 
 // OnBusSignal mocks base method.
-func (m *MockDBusClient) OnBusSignal(handler godbus.BusSignalHandler) {
+func (m *MockDBus) OnBusSignal(handler godbus.BusSignalHandler) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "OnBusSignal", handler)
 }
 
 // OnBusSignal indicates an expected call of OnBusSignal.
-func (mr *MockDBusClientMockRecorder) OnBusSignal(handler interface{}) *gomock.Call {
+func (mr *MockDBusMockRecorder) OnBusSignal(handler interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnBusSignal", reflect.TypeOf((*MockDBusClient)(nil).OnBusSignal), handler)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnBusSignal", reflect.TypeOf((*MockDBus)(nil).OnBusSignal), handler)
 }
 
 // RemoveBusSignal mocks base method.
-func (m *MockDBusClient) RemoveBusSignal(handler godbus.BusSignalHandler) {
+func (m *MockDBus) RemoveBusSignal(handler godbus.BusSignalHandler) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RemoveBusSignal", handler)
 }
 
 // RemoveBusSignal indicates an expected call of RemoveBusSignal.
-func (mr *MockDBusClientMockRecorder) RemoveBusSignal(handler interface{}) *gomock.Call {
+func (mr *MockDBusMockRecorder) RemoveBusSignal(handler interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveBusSignal", reflect.TypeOf((*MockDBusClient)(nil).RemoveBusSignal), handler)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveBusSignal", reflect.TypeOf((*MockDBus)(nil).RemoveBusSignal), handler)
 }
 
 // RetryableSend mocks base method.
-func (m *MockDBusClient) RetryableSend(ctx context.Context, payload godbus.DBusPayload) error {
+func (m *MockDBus) RetryableSend(ctx context.Context, payload godbus.DBusPayload) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RetryableSend", ctx, payload)
 	ret0, _ := ret[0].(error)
@@ -102,13 +103,13 @@ func (m *MockDBusClient) RetryableSend(ctx context.Context, payload godbus.DBusP
 }
 
 // RetryableSend indicates an expected call of RetryableSend.
-func (mr *MockDBusClientMockRecorder) RetryableSend(ctx, payload interface{}) *gomock.Call {
+func (mr *MockDBusMockRecorder) RetryableSend(ctx, payload interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetryableSend", reflect.TypeOf((*MockDBusClient)(nil).RetryableSend), ctx, payload)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetryableSend", reflect.TypeOf((*MockDBus)(nil).RetryableSend), ctx, payload)
 }
 
 // Start mocks base method.
-func (m *MockDBusClient) Start() error {
+func (m *MockDBus) Start() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Start")
 	ret0, _ := ret[0].(error)
@@ -116,13 +117,13 @@ func (m *MockDBusClient) Start() error {
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockDBusClientMockRecorder) Start() *gomock.Call {
+func (mr *MockDBusMockRecorder) Start() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockDBusClient)(nil).Start))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockDBus)(nil).Start))
 }
 
 // Stop mocks base method.
-func (m *MockDBusClient) Stop() error {
+func (m *MockDBus) Stop() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Stop")
 	ret0, _ := ret[0].(error)
@@ -130,7 +131,45 @@ func (m *MockDBusClient) Stop() error {
 }
 
 // Stop indicates an expected call of Stop.
-func (mr *MockDBusClientMockRecorder) Stop() *gomock.Call {
+func (mr *MockDBusMockRecorder) Stop() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockDBusClient)(nil).Stop))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockDBus)(nil).Stop))
+}
+
+// MockDBusHandler is a mock of DBusHandler interface.
+type MockDBusHandler struct {
+	ctrl     *gomock.Controller
+	recorder *MockDBusHandlerMockRecorder
+}
+
+// MockDBusHandlerMockRecorder is the mock recorder for MockDBusHandler.
+type MockDBusHandlerMockRecorder struct {
+	mock *MockDBusHandler
+}
+
+// NewMockDBusHandler creates a new mock instance.
+func NewMockDBusHandler(ctrl *gomock.Controller) *MockDBusHandler {
+	mock := &MockDBusHandler{ctrl: ctrl}
+	mock.recorder = &MockDBusHandlerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDBusHandler) EXPECT() *MockDBusHandlerMockRecorder {
+	return m.recorder
+}
+
+// GetRelayerTopicID mocks base method.
+func (m *MockDBusHandler) GetRelayerTopicID() (string, *dbus.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRelayerTopicID")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(*dbus.Error)
+	return ret0, ret1
+}
+
+// GetRelayerTopicID indicates an expected call of GetRelayerTopicID.
+func (mr *MockDBusHandlerMockRecorder) GetRelayerTopicID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRelayerTopicID", reflect.TypeOf((*MockDBusHandler)(nil).GetRelayerTopicID))
 }

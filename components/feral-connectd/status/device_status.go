@@ -11,17 +11,17 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-//go:generate mockgen -source=device_status.go -destination=../mocks/device_status.go -package=mocks -mock_names=DeviceStatusInterface=MockDeviceStatus
-type DeviceStatusInterface interface {
+//go:generate mockgen -source=device_status.go -destination=../mocks/device_status.go -package=mocks -mock_names=DeviceStatus=MockDeviceStatus
+type DeviceStatus interface {
 	GetStatus(ctx context.Context) (*DeviceStatusResponse, error)
 }
 
-type DeviceStatus struct {
-	json wrapper.JSONInterface
-	os   wrapper.OSInterface
-	exec wrapper.ExecInterface
-	http wrapper.HTTPInterface
-	io   wrapper.IOInterface
+type deviceStatus struct {
+	json wrapper.JSON
+	os   wrapper.OS
+	exec wrapper.Exec
+	http wrapper.HTTP
+	io   wrapper.IO
 }
 
 func NewDefaultDeviceStatus() DeviceStatus {
@@ -35,13 +35,13 @@ func NewDefaultDeviceStatus() DeviceStatus {
 }
 
 func NewDeviceStatus(
-	json wrapper.JSONInterface,
-	os wrapper.OSInterface,
-	exec wrapper.ExecInterface,
-	http wrapper.HTTPInterface,
-	io wrapper.IOInterface,
+	json wrapper.JSON,
+	os wrapper.OS,
+	exec wrapper.Exec,
+	http wrapper.HTTP,
+	io wrapper.IO,
 ) DeviceStatus {
-	return DeviceStatus{
+	return &deviceStatus{
 		json: json,
 		os:   os,
 		exec: exec,
@@ -60,7 +60,7 @@ type DeviceStatusResponse struct {
 
 // GetStatus retrieves comprehensive device status information
 // This function can be used by both command handlers and status polling
-func (d DeviceStatus) GetStatus(ctx context.Context) (*DeviceStatusResponse, error) {
+func (d deviceStatus) GetStatus(ctx context.Context) (*DeviceStatusResponse, error) {
 	response := &DeviceStatusResponse{}
 
 	// Use errgroup for parallel execution
@@ -167,7 +167,7 @@ func (d DeviceStatus) GetStatus(ctx context.Context) (*DeviceStatusResponse, err
 }
 
 // fetchLatestVersion retrieves the latest version from the distribution API
-func (d DeviceStatus) fetchLatestVersion(ctx context.Context, endpoint, branch, account, pass string) (string, error) {
+func (d deviceStatus) fetchLatestVersion(ctx context.Context, endpoint, branch, account, pass string) (string, error) {
 	apiURL := fmt.Sprintf("%s/api/latest/%s", endpoint, branch)
 
 	// Create HTTP client with 2-second timeout

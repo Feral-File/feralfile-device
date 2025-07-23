@@ -13,7 +13,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockCommandHandler is a mock of HandlerInterface interface.
+// MockCommandHandler is a mock of CommandHandler interface.
 type MockCommandHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockCommandHandlerMockRecorder
@@ -64,7 +64,7 @@ func (mr *MockCommandHandlerMockRecorder) SaveLastSysMetrics(metrics interface{}
 }
 
 // SetStatusPoller mocks base method.
-func (m *MockCommandHandler) SetStatusPoller(statusPoller status.PollerInterface) {
+func (m *MockCommandHandler) SetStatusPoller(statusPoller status.Poller) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetStatusPoller", statusPoller)
 }

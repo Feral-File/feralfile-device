@@ -24,12 +24,12 @@ import (
 type testSetup struct {
 	ctrl       *gomock.Controller
 	ctx        context.Context
-	mockDialer *mocks.MockWebSocketDialerInterface
+	mockDialer *mocks.MockWebSocketDialer
 	mockConn   *mocks.MockWebSocketConn
 	mockIO     *mocks.MockIO
 	mockJSON   *mocks.MockJSON
 	mockHTTP   *mocks.MockHTTP
-	client     cdp.ClientInterface
+	client     cdp.CDP
 }
 
 func setup(t *testing.T) *testSetup {
@@ -38,13 +38,13 @@ func setup(t *testing.T) *testSetup {
 	ctx := context.Background()
 
 	// Dependencies
-	mockDialer := mocks.NewMockWebSocketDialerInterface(ctrl)
+	mockDialer := mocks.NewMockWebSocketDialer(ctrl)
 	mockConn := mocks.NewMockWebSocketConn(ctrl)
 	mockIO := mocks.NewMockIO(ctrl)
 	mockJSON := mocks.NewMockJSON(ctrl)
 	mockHTTP := mocks.NewMockHTTP(ctrl)
 
-	client := cdp.NewClient(
+	client := cdp.New(
 		&cdp.Config{
 			Endpoint: "http://localhost:9222",
 		},
@@ -603,7 +603,7 @@ func TestClient_Init_ContextCanceled(t *testing.T) {
 	dialCalled := make(chan struct{})
 	ts.mockDialer.EXPECT().
 		DialContext(gomock.Any(), gomock.Any(), nil).
-		DoAndReturn(func(dialCtx context.Context, url string, headers http.Header) (wrapper.WebSocketConnInterface, *http.Response, error) {
+		DoAndReturn(func(dialCtx context.Context, url string, headers http.Header) (wrapper.WebSocketConn, *http.Response, error) {
 			close(dialCalled)
 			return ts.mockConn, nil, nil
 		}).

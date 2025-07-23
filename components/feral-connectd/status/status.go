@@ -18,20 +18,20 @@ const (
 	POLL_INTERVAL = 5 * time.Second
 )
 
-//go:generate mockgen -source=status.go -destination=../mocks/status.go -package=mocks -mock_names=PollerInterface=MockStatusPoller
+//go:generate mockgen -source=status.go -destination=../mocks/status.go -package=mocks -mock_names=Poller=MockStatusPoller
 
-type PollerInterface interface {
+type Poller interface {
 	Start(ctx context.Context)
 	Stop()
 	ForceRefresh()
 }
 
-// Poller handles periodic polling of both player status via CDP and device status
-type Poller struct {
+// poller handles periodic polling of both player status via CDP and device status
+type poller struct {
 	sync.RWMutex
-	cdp          cdp.ClientInterface
-	relayer      relayer.ClientInterface
-	deviceStatus DeviceStatusInterface
+	cdp          cdp.CDP
+	relayer      relayer.Relayer
+	deviceStatus DeviceStatus
 	logger       *zap.Logger
 	stopChan     chan struct{}
 	refreshChan  chan struct{}
@@ -40,13 +40,13 @@ type Poller struct {
 	lastStatusHashes map[relayer.NotificationType]string
 }
 
-func NewPoller(
-	cdp cdp.ClientInterface,
-	relay relayer.ClientInterface,
-	deviceStatus DeviceStatusInterface,
+func New(
+	cdp cdp.CDP,
+	relay relayer.Relayer,
+	deviceStatus DeviceStatus,
 	logger *zap.Logger,
-) *Poller {
-	return &Poller{
+) Poller {
+	return &poller{
 		cdp:              cdp,
 		relayer:          relay,
 		deviceStatus:     deviceStatus,
@@ -58,7 +58,7 @@ func NewPoller(
 }
 
 // computeStatusHash computes a fast MD5 hash of the status data for comparison
-func (s *Poller) computeStatusHash(data interface{}) (string, error) {
+func (s *poller) computeStatusHash(data interface{}) (string, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return "", err
@@ -71,7 +71,7 @@ func (s *Poller) computeStatusHash(data interface{}) (string, error) {
 
 // shouldSendNotification checks if the status has changed since last notification
 // Returns true if status changed or if this is the first time checking this status type
-func (s *Poller) shouldSendNotification(notificationType relayer.NotificationType, data interface{}) bool {
+func (s *poller) shouldSendNotification(notificationType relayer.NotificationType, data interface{}) bool {
 	if data == nil {
 		return false
 	}
@@ -100,7 +100,7 @@ func (s *Poller) shouldSendNotification(notificationType relayer.NotificationTyp
 	return false
 }
 
-func (s *Poller) Start(ctx context.Context) {
+func (s *poller) Start(ctx context.Context) {
 	s.logger.Info("Starting status polling (player and device)")
 
 	// Ticker for player and device status (every 10 seconds)
@@ -130,13 +130,13 @@ func (s *Poller) Start(ctx context.Context) {
 	}
 }
 
-func (s *Poller) Stop() {
+func (s *poller) Stop() {
 	s.logger.Info("Stopping status polling")
 	close(s.stopChan)
 }
 
 // ForceRefresh triggers an immediate status poll
-func (s *Poller) ForceRefresh() {
+func (s *poller) ForceRefresh() {
 	select {
 	case s.refreshChan <- struct{}{}:
 		// Successfully queued refresh
@@ -146,7 +146,7 @@ func (s *Poller) ForceRefresh() {
 	}
 }
 
-func (s *Poller) pollPlayerStatus(ctx context.Context) {
+func (s *poller) pollPlayerStatus(ctx context.Context) {
 	// Check if relayer is connected before polling
 	if !s.relayer.IsConnected() {
 		s.logger.Debug("Relayer not connected, skipping player status poll")
@@ -206,7 +206,7 @@ func (s *Poller) pollPlayerStatus(ctx context.Context) {
 	}
 }
 
-func (s *Poller) pollDeviceStatus(ctx context.Context) {
+func (s *poller) pollDeviceStatus(ctx context.Context) {
 	// Check if relayer is connected before polling
 	if !s.relayer.IsConnected() {
 		s.logger.Debug("Relayer not connected, skipping device status poll")

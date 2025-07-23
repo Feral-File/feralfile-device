@@ -11,7 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockWatchdog is a mock of Interface interface.
+// MockWatchdog is a mock of Watchdog interface.
 type MockWatchdog struct {
 	ctrl     *gomock.Controller
 	recorder *MockWatchdogMockRecorder

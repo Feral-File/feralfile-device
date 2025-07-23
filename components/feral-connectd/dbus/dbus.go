@@ -28,8 +28,8 @@ const (
 	SETUPD_EVENT_SHOW_PAIRING_QR_CODE godbus.Member = "show_pairing_qr_code"
 )
 
-//go:generate mockgen -source=dbus.go -destination=../mocks/dbus.go -package=mocks -mock_names=ClientInterface=MockDBusClient
-type ClientInterface interface {
+//go:generate mockgen -source=dbus.go -destination=../mocks/dbus.go -package=mocks -mock_names=DBus=MockDBus
+type DBus interface {
 	Start() error
 	Stop() error
 	Export(obj interface{}, path godbus.Path, iface godbus.Interface) error
@@ -39,21 +39,29 @@ type ClientInterface interface {
 	RemoveBusSignal(handler godbus.BusSignalHandler)
 }
 
-type Client struct {
+//go:generate mockgen -source=dbus.go -destination=../mocks/dbus.go -package=mocks -mock_names=DBusHandler=MockDBusHandler
+type DBusHandler interface {
+	GetRelayerTopicID() (string, *dbus.Error)
+}
+
+type handler struct {
 	ctx     context.Context
-	relayer relayer.ClientInterface
+	relayer relayer.Relayer
 	logger  *zap.Logger
 }
 
-func NewClient(ctx context.Context, relayer relayer.ClientInterface, logger *zap.Logger) *Client {
-	return &Client{
+func NewHandler(
+	ctx context.Context,
+	relayer relayer.Relayer,
+	logger *zap.Logger) DBusHandler {
+	return &handler{
 		ctx:     ctx,
 		relayer: relayer,
 		logger:  logger,
 	}
 }
 
-func (c *Client) GetRelayerTopicID() (string, *dbus.Error) {
+func (c *handler) GetRelayerTopicID() (string, *dbus.Error) {
 	c.logger.Info("DBus RPC called: GetRelayerTopicID")
 
 	topicID := state.GetState().Relayer.TopicID

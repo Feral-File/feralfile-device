@@ -3,62 +3,68 @@ package wrapper
 
 import (
 	"context"
-	"os"
-	"os/exec"
+	go_os "os"
+	go_exec "os/exec"
+	go_signal "os/signal"
 )
 
-//go:generate mockgen -source=os.go -destination=../mocks/os.go -package=mocks -mock_names=OSInterface=MockOS
-type OSInterface interface {
+//go:generate mockgen -source=os.go -destination=../mocks/os.go -package=mocks -mock_names=OS=MockOS
+type OS interface {
 	ReadFile(path string) ([]byte, error)
-	WriteFile(path string, data []byte, perm os.FileMode) error
+	WriteFile(path string, data []byte, perm go_os.FileMode) error
 	IsNotExist(err error) bool
-	MkdirAll(path string, perm os.FileMode) error
+	MkdirAll(path string, perm go_os.FileMode) error
 	Rename(oldpath, newpath string) error
+	Exit(code int)
 }
 
-type OS struct{}
+type os struct{}
 
-func NewOS() OSInterface {
-	return OS{}
+func NewOS() OS {
+	return os{}
 }
 
-func (o OS) ReadFile(path string) ([]byte, error) {
-	return os.ReadFile(path)
+func (o os) ReadFile(path string) ([]byte, error) {
+	return go_os.ReadFile(path)
 }
 
-func (o OS) WriteFile(path string, data []byte, perm os.FileMode) error {
-	return os.WriteFile(path, data, perm)
+func (o os) WriteFile(path string, data []byte, perm go_os.FileMode) error {
+	return go_os.WriteFile(path, data, perm)
 }
 
-func (o OS) IsNotExist(err error) bool {
-	return os.IsNotExist(err)
+func (o os) IsNotExist(err error) bool {
+	return go_os.IsNotExist(err)
 }
 
-func (o OS) MkdirAll(path string, perm os.FileMode) error {
-	return os.MkdirAll(path, perm)
+func (o os) MkdirAll(path string, perm go_os.FileMode) error {
+	return go_os.MkdirAll(path, perm)
 }
 
-func (o OS) Rename(oldpath, newpath string) error {
-	return os.Rename(oldpath, newpath)
+func (o os) Rename(oldpath, newpath string) error {
+	return go_os.Rename(oldpath, newpath)
 }
 
-//go:generate mockgen -source=os.go -destination=../mocks/os.go -package=mocks -mock_names=ExecInterface=MockExec
-type ExecInterface interface {
-	CommandContext(ctx context.Context, name string, arg ...string) ExecCmdInterface
+func (o os) Exit(code int) {
+	go_os.Exit(code)
 }
 
-type Exec struct{}
-
-func NewExec() ExecInterface {
-	return &Exec{}
+//go:generate mockgen -source=os.go -destination=../mocks/os.go -package=mocks -mock_names=Exec=MockExec
+type Exec interface {
+	CommandContext(ctx context.Context, name string, arg ...string) ExecCmd
 }
 
-func (e *Exec) CommandContext(ctx context.Context, name string, arg ...string) ExecCmdInterface {
-	return ExecCmd{cmd: exec.CommandContext(ctx, name, arg...)}
+type exec struct{}
+
+func NewExec() Exec {
+	return &exec{}
 }
 
-//go:generate mockgen -source=os.go -destination=../mocks/os.go -package=mocks -mock_names=ExecCmdInterface=MockExecCmd
-type ExecCmdInterface interface {
+func (e *exec) CommandContext(ctx context.Context, name string, arg ...string) ExecCmd {
+	return execCmd{cmd: go_exec.CommandContext(ctx, name, arg...)}
+}
+
+//go:generate mockgen -source=os.go -destination=../mocks/os.go -package=mocks -mock_names=ExecCmd=MockExecCmd
+type ExecCmd interface {
 	String() string
 	Run() error
 	Start() error
@@ -67,30 +73,45 @@ type ExecCmdInterface interface {
 	CombinedOutput() ([]byte, error)
 }
 
-type ExecCmd struct {
-	cmd *exec.Cmd
+type execCmd struct {
+	cmd *go_exec.Cmd
 }
 
-func (e ExecCmd) String() string {
+func (e execCmd) String() string {
 	return e.cmd.String()
 }
 
-func (e ExecCmd) Run() error {
+func (e execCmd) Run() error {
 	return e.cmd.Run()
 }
 
-func (e ExecCmd) Start() error {
+func (e execCmd) Start() error {
 	return e.cmd.Start()
 }
 
-func (e ExecCmd) Wait() error {
+func (e execCmd) Wait() error {
 	return e.cmd.Wait()
 }
 
-func (e ExecCmd) Output() ([]byte, error) {
+func (e execCmd) Output() ([]byte, error) {
 	return e.cmd.Output()
 }
 
-func (e ExecCmd) CombinedOutput() ([]byte, error) {
+func (e execCmd) CombinedOutput() ([]byte, error) {
 	return e.cmd.CombinedOutput()
+}
+
+//go:generate mockgen -source=os.go -destination=../mocks/os.go -package=mocks -mock_names=Signal=MockSignal
+type Signal interface {
+	Notify(c chan<- go_os.Signal, sig ...go_os.Signal)
+}
+
+type signal struct{}
+
+func NewSignal() Signal {
+	return &signal{}
+}
+
+func (s *signal) Notify(c chan<- go_os.Signal, sig ...go_os.Signal) {
+	go_signal.Notify(c, sig...)
 }

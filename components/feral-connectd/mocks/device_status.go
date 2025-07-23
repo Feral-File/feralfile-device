@@ -12,7 +12,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockDeviceStatus is a mock of DeviceStatusInterface interface.
+// MockDeviceStatus is a mock of DeviceStatus interface.
 type MockDeviceStatus struct {
 	ctrl     *gomock.Controller
 	recorder *MockDeviceStatusMockRecorder

@@ -13,31 +13,43 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockOSInterface is a mock of OSInterface interface.
-type MockOSInterface struct {
+// MockOS is a mock of OS interface.
+type MockOS struct {
 	ctrl     *gomock.Controller
-	recorder *MockOSInterfaceMockRecorder
+	recorder *MockOSMockRecorder
 }
 
-// MockOSInterfaceMockRecorder is the mock recorder for MockOSInterface.
-type MockOSInterfaceMockRecorder struct {
-	mock *MockOSInterface
+// MockOSMockRecorder is the mock recorder for MockOS.
+type MockOSMockRecorder struct {
+	mock *MockOS
 }
 
-// NewMockOSInterface creates a new mock instance.
-func NewMockOSInterface(ctrl *gomock.Controller) *MockOSInterface {
-	mock := &MockOSInterface{ctrl: ctrl}
-	mock.recorder = &MockOSInterfaceMockRecorder{mock}
+// NewMockOS creates a new mock instance.
+func NewMockOS(ctrl *gomock.Controller) *MockOS {
+	mock := &MockOS{ctrl: ctrl}
+	mock.recorder = &MockOSMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockOSInterface) EXPECT() *MockOSInterfaceMockRecorder {
+func (m *MockOS) EXPECT() *MockOSMockRecorder {
 	return m.recorder
 }
 
+// Exit mocks base method.
+func (m *MockOS) Exit(code int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Exit", code)
+}
+
+// Exit indicates an expected call of Exit.
+func (mr *MockOSMockRecorder) Exit(code interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exit", reflect.TypeOf((*MockOS)(nil).Exit), code)
+}
+
 // IsNotExist mocks base method.
-func (m *MockOSInterface) IsNotExist(err error) bool {
+func (m *MockOS) IsNotExist(err error) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsNotExist", err)
 	ret0, _ := ret[0].(bool)
@@ -45,13 +57,13 @@ func (m *MockOSInterface) IsNotExist(err error) bool {
 }
 
 // IsNotExist indicates an expected call of IsNotExist.
-func (mr *MockOSInterfaceMockRecorder) IsNotExist(err interface{}) *gomock.Call {
+func (mr *MockOSMockRecorder) IsNotExist(err interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsNotExist", reflect.TypeOf((*MockOSInterface)(nil).IsNotExist), err)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsNotExist", reflect.TypeOf((*MockOS)(nil).IsNotExist), err)
 }
 
 // MkdirAll mocks base method.
-func (m *MockOSInterface) MkdirAll(path string, perm os.FileMode) error {
+func (m *MockOS) MkdirAll(path string, perm os.FileMode) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MkdirAll", path, perm)
 	ret0, _ := ret[0].(error)
@@ -59,13 +71,13 @@ func (m *MockOSInterface) MkdirAll(path string, perm os.FileMode) error {
 }
 
 // MkdirAll indicates an expected call of MkdirAll.
-func (mr *MockOSInterfaceMockRecorder) MkdirAll(path, perm interface{}) *gomock.Call {
+func (mr *MockOSMockRecorder) MkdirAll(path, perm interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MkdirAll", reflect.TypeOf((*MockOSInterface)(nil).MkdirAll), path, perm)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MkdirAll", reflect.TypeOf((*MockOS)(nil).MkdirAll), path, perm)
 }
 
 // ReadFile mocks base method.
-func (m *MockOSInterface) ReadFile(path string) ([]byte, error) {
+func (m *MockOS) ReadFile(path string) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadFile", path)
 	ret0, _ := ret[0].([]byte)
@@ -74,13 +86,13 @@ func (m *MockOSInterface) ReadFile(path string) ([]byte, error) {
 }
 
 // ReadFile indicates an expected call of ReadFile.
-func (mr *MockOSInterfaceMockRecorder) ReadFile(path interface{}) *gomock.Call {
+func (mr *MockOSMockRecorder) ReadFile(path interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockOSInterface)(nil).ReadFile), path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockOS)(nil).ReadFile), path)
 }
 
 // Rename mocks base method.
-func (m *MockOSInterface) Rename(oldpath, newpath string) error {
+func (m *MockOS) Rename(oldpath, newpath string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Rename", oldpath, newpath)
 	ret0, _ := ret[0].(error)
@@ -88,13 +100,13 @@ func (m *MockOSInterface) Rename(oldpath, newpath string) error {
 }
 
 // Rename indicates an expected call of Rename.
-func (mr *MockOSInterfaceMockRecorder) Rename(oldpath, newpath interface{}) *gomock.Call {
+func (mr *MockOSMockRecorder) Rename(oldpath, newpath interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rename", reflect.TypeOf((*MockOSInterface)(nil).Rename), oldpath, newpath)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rename", reflect.TypeOf((*MockOS)(nil).Rename), oldpath, newpath)
 }
 
 // WriteFile mocks base method.
-func (m *MockOSInterface) WriteFile(path string, data []byte, perm os.FileMode) error {
+func (m *MockOS) WriteFile(path string, data []byte, perm os.FileMode) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WriteFile", path, data, perm)
 	ret0, _ := ret[0].(error)
@@ -102,54 +114,54 @@ func (m *MockOSInterface) WriteFile(path string, data []byte, perm os.FileMode) 
 }
 
 // WriteFile indicates an expected call of WriteFile.
-func (mr *MockOSInterfaceMockRecorder) WriteFile(path, data, perm interface{}) *gomock.Call {
+func (mr *MockOSMockRecorder) WriteFile(path, data, perm interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteFile", reflect.TypeOf((*MockOSInterface)(nil).WriteFile), path, data, perm)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteFile", reflect.TypeOf((*MockOS)(nil).WriteFile), path, data, perm)
 }
 
-// MockExecInterface is a mock of ExecInterface interface.
-type MockExecInterface struct {
+// MockExec is a mock of Exec interface.
+type MockExec struct {
 	ctrl     *gomock.Controller
-	recorder *MockExecInterfaceMockRecorder
+	recorder *MockExecMockRecorder
 }
 
-// MockExecInterfaceMockRecorder is the mock recorder for MockExecInterface.
-type MockExecInterfaceMockRecorder struct {
-	mock *MockExecInterface
+// MockExecMockRecorder is the mock recorder for MockExec.
+type MockExecMockRecorder struct {
+	mock *MockExec
 }
 
-// NewMockExecInterface creates a new mock instance.
-func NewMockExecInterface(ctrl *gomock.Controller) *MockExecInterface {
-	mock := &MockExecInterface{ctrl: ctrl}
-	mock.recorder = &MockExecInterfaceMockRecorder{mock}
+// NewMockExec creates a new mock instance.
+func NewMockExec(ctrl *gomock.Controller) *MockExec {
+	mock := &MockExec{ctrl: ctrl}
+	mock.recorder = &MockExecMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockExecInterface) EXPECT() *MockExecInterfaceMockRecorder {
+func (m *MockExec) EXPECT() *MockExecMockRecorder {
 	return m.recorder
 }
 
 // CommandContext mocks base method.
-func (m *MockExecInterface) CommandContext(ctx context.Context, name string, arg ...string) wrapper.ExecCmdInterface {
+func (m *MockExec) CommandContext(ctx context.Context, name string, arg ...string) wrapper.ExecCmd {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, name}
 	for _, a := range arg {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CommandContext", varargs...)
-	ret0, _ := ret[0].(wrapper.ExecCmdInterface)
+	ret0, _ := ret[0].(wrapper.ExecCmd)
 	return ret0
 }
 
 // CommandContext indicates an expected call of CommandContext.
-func (mr *MockExecInterfaceMockRecorder) CommandContext(ctx, name interface{}, arg ...interface{}) *gomock.Call {
+func (mr *MockExecMockRecorder) CommandContext(ctx, name interface{}, arg ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{ctx, name}, arg...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommandContext", reflect.TypeOf((*MockExecInterface)(nil).CommandContext), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommandContext", reflect.TypeOf((*MockExec)(nil).CommandContext), varargs...)
 }
 
-// MockExecCmd is a mock of ExecCmdInterface interface.
+// MockExecCmd is a mock of ExecCmd interface.
 type MockExecCmd struct {
 	ctrl     *gomock.Controller
 	recorder *MockExecCmdMockRecorder
@@ -256,4 +268,44 @@ func (m *MockExecCmd) Wait() error {
 func (mr *MockExecCmdMockRecorder) Wait() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Wait", reflect.TypeOf((*MockExecCmd)(nil).Wait))
+}
+
+// MockSignal is a mock of Signal interface.
+type MockSignal struct {
+	ctrl     *gomock.Controller
+	recorder *MockSignalMockRecorder
+}
+
+// MockSignalMockRecorder is the mock recorder for MockSignal.
+type MockSignalMockRecorder struct {
+	mock *MockSignal
+}
+
+// NewMockSignal creates a new mock instance.
+func NewMockSignal(ctrl *gomock.Controller) *MockSignal {
+	mock := &MockSignal{ctrl: ctrl}
+	mock.recorder = &MockSignalMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSignal) EXPECT() *MockSignalMockRecorder {
+	return m.recorder
+}
+
+// Notify mocks base method.
+func (m *MockSignal) Notify(c chan<- os.Signal, sig ...os.Signal) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{c}
+	for _, a := range sig {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Notify", varargs...)
+}
+
+// Notify indicates an expected call of Notify.
+func (mr *MockSignalMockRecorder) Notify(c interface{}, sig ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{c}, sig...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Notify", reflect.TypeOf((*MockSignal)(nil).Notify), varargs...)
 }

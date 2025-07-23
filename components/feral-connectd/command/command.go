@@ -33,25 +33,25 @@ type Device struct {
 	Platform int    `json:"platform"`
 }
 
-//go:generate mockgen -source=command.go -destination=../mocks/command.go -package=mocks -mock_names=HandlerInterface=MockCommandHandler
-type HandlerInterface interface {
+//go:generate mockgen -source=command.go -destination=../mocks/command.go -package=mocks -mock_names=CommandHandler=MockCommandHandler
+type CommandHandler interface {
 	SaveLastSysMetrics(metrics []byte)
 	Execute(ctx context.Context, cmd Command) (interface{}, error)
-	SetStatusPoller(statusPoller status.PollerInterface)
+	SetStatusPoller(statusPoller status.Poller)
 }
 
-type Handler struct {
+type handler struct {
 	sync.Mutex
-	cdp          cdp.ClientInterface
-	dbus         dbus.ClientInterface
-	deviceStatus status.DeviceStatusInterface
+	cdp          cdp.CDP
+	dbus         dbus.DBus
+	deviceStatus status.DeviceStatus
 	logger       *zap.Logger
 
 	// State
 	lastSysMetrics []byte
 
 	// Add reference to StatusPoller to get metrics
-	statusPoller status.PollerInterface
+	statusPoller status.Poller
 
 	// Mouse position tracking
 	cursorPositionX   float64
@@ -62,19 +62,19 @@ type Handler struct {
 	movingScaleFactor float64
 
 	// Deps
-	json wrapper.JSONInterface
-	os   wrapper.OSInterface
-	exec wrapper.ExecInterface
-	math wrapper.MathInterface
+	json wrapper.JSON
+	os   wrapper.OS
+	exec wrapper.Exec
+	math wrapper.Math
 }
 
-func NewDefaultHandler(
-	cdp cdp.ClientInterface,
-	dbus dbus.ClientInterface,
-	deviceStatus status.DeviceStatusInterface,
+func NewDefault(
+	cdp cdp.CDP,
+	dbus dbus.DBus,
+	deviceStatus status.DeviceStatus,
 	logger *zap.Logger,
-) *Handler {
-	return NewHandler(
+) CommandHandler {
+	return New(
 		cdp,
 		dbus,
 		deviceStatus,
@@ -86,17 +86,17 @@ func NewDefaultHandler(
 	)
 }
 
-func NewHandler(
-	cdp cdp.ClientInterface,
-	dbus dbus.ClientInterface,
-	deviceStatus status.DeviceStatusInterface,
+func New(
+	cdp cdp.CDP,
+	dbus dbus.DBus,
+	deviceStatus status.DeviceStatus,
 	logger *zap.Logger,
-	json wrapper.JSONInterface,
-	os wrapper.OSInterface,
-	exec wrapper.ExecInterface,
-	math wrapper.MathInterface,
-) *Handler {
-	return &Handler{
+	json wrapper.JSON,
+	os wrapper.OS,
+	exec wrapper.Exec,
+	math wrapper.Math,
+) CommandHandler {
+	return &handler{
 		cdp:          cdp,
 		dbus:         dbus,
 		deviceStatus: deviceStatus,
@@ -108,18 +108,18 @@ func NewHandler(
 	}
 }
 
-func (c *Handler) SaveLastSysMetrics(metrics []byte) {
+func (c *handler) SaveLastSysMetrics(metrics []byte) {
 	c.Lock()
 	defer c.Unlock()
 	c.lastSysMetrics = metrics
 }
 
 // SetStatusPoller sets the StatusPoller reference after initialization
-func (c *Handler) SetStatusPoller(statusPoller status.PollerInterface) {
+func (c *handler) SetStatusPoller(statusPoller status.Poller) {
 	c.statusPoller = statusPoller
 }
 
-func (c *Handler) Execute(ctx context.Context, cmd Command) (interface{}, error) {
+func (c *handler) Execute(ctx context.Context, cmd Command) (interface{}, error) {
 	c.logger.Info("Executing command", zap.String("command", string(cmd.Command)))
 
 	var err error
@@ -159,7 +159,7 @@ func (c *Handler) Execute(ctx context.Context, cmd Command) (interface{}, error)
 	return result, err
 }
 
-func (c *Handler) connect(args []byte) (interface{}, error) {
+func (c *handler) connect(args []byte) (interface{}, error) {
 	var cmdArgs struct {
 		Device         Device `json:"clientDevice"`
 		PrimaryAddress string `json:"primaryAddress"`
@@ -183,7 +183,7 @@ func (c *Handler) connect(args []byte) (interface{}, error) {
 	return CmdOK, nil
 }
 
-func (c *Handler) showPairingQRCode(ctx context.Context, args []byte) (interface{}, error) {
+func (c *handler) showPairingQRCode(ctx context.Context, args []byte) (interface{}, error) {
 	var cmdArgs struct {
 		Show bool `json:"show"`
 	}
@@ -206,11 +206,11 @@ func (c *Handler) showPairingQRCode(ctx context.Context, args []byte) (interface
 	return CmdOK, nil
 }
 
-func (c *Handler) getDeviceStatus(ctx context.Context) (interface{}, error) {
+func (c *handler) getDeviceStatus(ctx context.Context) (interface{}, error) {
 	return c.deviceStatus.GetStatus(ctx)
 }
 
-func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interface{}, error) {
+func (c *handler) handleScreenRotation(ctx context.Context, args []byte) (interface{}, error) {
 	var cmdArgs struct {
 		Clockwise bool `json:"clockwise"`
 	}
@@ -326,7 +326,7 @@ func (c *Handler) handleScreenRotation(ctx context.Context, args []byte) (interf
 	return map[string]string{"orientation": orientationReplyMsg}, nil
 }
 
-func (c *Handler) handleKeyboardEvent(args []byte) (interface{}, error) {
+func (c *handler) handleKeyboardEvent(args []byte) (interface{}, error) {
 	var cmdArgs struct {
 		Code int `json:"code"`
 	}
@@ -375,7 +375,7 @@ func (c *Handler) handleKeyboardEvent(args []byte) (interface{}, error) {
 	return CmdOK, nil
 }
 
-func (c *Handler) initializeScreenDimensions() {
+func (c *handler) initializeScreenDimensions() {
 	if c.screenInitialized {
 		return
 	}
@@ -420,7 +420,7 @@ func (c *Handler) initializeScreenDimensions() {
 		zap.Float64("cursorY", c.cursorPositionY))
 }
 
-func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
+func (c *handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 	// Initialize screen dimensions if not done already
 	c.initializeScreenDimensions()
 
@@ -536,7 +536,7 @@ func (c *Handler) handleMouseMoveEvent(args []byte) (interface{}, error) {
 	return CmdOK, nil
 }
 
-func (c *Handler) handleMouseTapEvent() (interface{}, error) {
+func (c *handler) handleMouseTapEvent() (interface{}, error) {
 	// Initialize screen dimensions if not done already
 	c.initializeScreenDimensions()
 
@@ -579,7 +579,7 @@ func (c *Handler) handleMouseTapEvent() (interface{}, error) {
 	return CmdOK, nil
 }
 
-func (c *Handler) mapToYdoKey(keyCode int) string {
+func (c *handler) mapToYdoKey(keyCode int) string {
 	switch keyCode {
 	case 32:
 		return "space"
@@ -605,7 +605,7 @@ func (c *Handler) mapToYdoKey(keyCode int) string {
 	}
 }
 
-func (c *Handler) shutdown(ctx context.Context) (interface{}, error) {
+func (c *handler) shutdown(ctx context.Context) (interface{}, error) {
 	c.logger.Info("Executing shutdown command")
 
 	cmd := c.exec.CommandContext(ctx, "sudo", "shutdown", "-h", "now")
@@ -617,7 +617,7 @@ func (c *Handler) shutdown(ctx context.Context) (interface{}, error) {
 	return CmdOK, nil
 }
 
-func (c *Handler) getSysMetrics() (interface{}, error) {
+func (c *handler) getSysMetrics() (interface{}, error) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -632,7 +632,7 @@ func (c *Handler) getSysMetrics() (interface{}, error) {
 	return sysMetrics, nil
 }
 
-func (c *Handler) updateToLatest(ctx context.Context) (interface{}, error) {
+func (c *handler) updateToLatest(ctx context.Context) (interface{}, error) {
 	c.logger.Info("Executing update to latest version command")
 
 	// execute command systemctl start feral-updater@00:00.service
