@@ -76,7 +76,7 @@ impl PageStateDto {
         let page = *state.page.blocking_lock();
         let ts = state.page_changed_unix.load(Ordering::Relaxed);
         Self {
-            page: format!("{:?}", page),
+            page: format!("{page:?}"),
             page_changed_unix: ts,
         }
     }

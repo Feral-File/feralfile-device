@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // CheckConnectivity pings a reliable host to verify internet access.
@@ -14,7 +16,9 @@ func CheckConnectivity() bool {
 	if err != nil {
 		return false
 	}
-	conn.Close()
+	if err := conn.Close(); err != nil {
+		logger.Warn("Failed to close conn", zap.Error(err))
+	}
 	return true
 }
 
@@ -31,7 +35,12 @@ func SendPayload(payload []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Error("Error closing resp.Body", zap.Error(err))
+		}
+	}()
 
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("server responded with non-success status: %s", resp.Status)

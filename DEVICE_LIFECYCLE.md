@@ -65,17 +65,17 @@ All the events should only consider network connected scenario otherwise it can'
 | `Status` | String | **(Calculated)** "✅ Online" or "❌ Offline". Derived in the spreadsheet, not sent by device. |
 | `Public Key` | String | The device's public key for signature verification. |
 | `Signature` | String | The payload's cryptographic signature for data integrity. |
-| `Setupd State` | String | The setupd's state. |
-| `Setupd State Uptime` | String | The duration the setupd has been staying under this state, in "D H:M:S" format. |
+| `Page` | String | The setupd page state. |
+| `Page Uptime` | String | The duration the setupd has been staying under this state page, in "D H:M:S" format. |
 
-### Setupd states
+### Setupd pages
 
 | Name | Notes |
 | :- | :- |
-| `qr_code_pairing` | QR code displayed for pairing setup. Network already connected. |
-| `rolling_back_factory_version` | Device initiated rollback to factory version. |
-| `force_updating` | Force firmware update initiated |
-| `artwork_displaying` | Artwork playback has begun. |
+| `QRCode` | QR code displayed for pairing setup. Network already connected. |
+| `FactoryReset` | Device initiated rollback to factory version. |
+| `SystemUpgrade` | Force firmware update initiated |
+| `WebApp` | Artwork playback has begun. |
 
 ## Version control
 

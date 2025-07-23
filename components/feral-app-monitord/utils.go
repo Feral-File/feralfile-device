@@ -1,9 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+
+	"go.uber.org/zap"
+)
 
 func humanizeDuration(seconds int64) string {
-	// 定義每個單位的秒數
 	const (
 		year  = 365 * 24 * 60 * 60
 		month = 30 * 24 * 60 * 60
@@ -44,4 +48,10 @@ func humanizeDuration(seconds int64) string {
 	}
 
 	return result
+}
+
+func closeFile(f *os.File) {
+	if err := f.Close(); err != nil {
+		logger.Error("Error closing file", zap.Error(err))
+	}
 }

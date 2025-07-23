@@ -74,7 +74,7 @@ func SendHeartbeat() {
 		Uptime:      humanizeDuration(int64(sysMetric.Uptime)),
 
 		Page:       string(pageState.Page),
-		PageUptime: humanizeDuration(int64(time.Now().Sub(time.Unix(pageState.PageChangedUnix, 0)).Seconds())),
+		PageUptime: humanizeDuration(int64(time.Since(time.Unix(pageState.PageChangedUnix, 0)).Seconds())),
 	}
 	messageJSON, err := json.Marshal(message)
 	if err != nil {

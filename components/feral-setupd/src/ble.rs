@@ -260,7 +260,8 @@ impl Ble {
                                 handle_set_time(notifier, reply_id, params).await
                             }
                             constant::CMD_FACTORY_RESET => {
-                                handle_factory_reset(notifier, reply_id, factory_reset_callback).await
+                                handle_factory_reset(notifier, reply_id, factory_reset_callback)
+                                    .await
                             }
                             _ => {
                                 eprintln!("BLE: Unknown command: {cmd}");
