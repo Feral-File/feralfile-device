@@ -1,10 +1,13 @@
-package main
+package disk
 
 import (
 	"context"
 	"sync"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/commands"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/types"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/wrapper"
 	"go.uber.org/zap"
 )
 
@@ -19,29 +22,44 @@ const (
 	TEMP_FOLDER_PATH  = "/tmp/"
 )
 
+//go:generate mockgen -source=disk.go -destination=../mocks/mock_disk.go -package=mocks -mock_names=HandlerInterface=MockDiskHandler
+type HandlerInterface interface {
+	CheckDiskUsage(ctx context.Context, metrics *types.SysMetrics)
+}
+
 type DiskHandler struct {
 	mu                  sync.Mutex
 	logger              *zap.Logger
-	commandHandler      *CommandHandler
+	commandHandler      commands.HandlerInterface
+	clock               wrapper.ClockInterface
 	diskCleanupCooldown time.Time
 	isCleaned           bool
 }
 
-func NewDiskHandler(logger *zap.Logger, commandHandler *CommandHandler) *DiskHandler {
+func NewDiskHandler(
+	logger *zap.Logger,
+	commandHandler commands.HandlerInterface,
+	clock wrapper.ClockInterface,
+) HandlerInterface {
 	return &DiskHandler{
 		logger:              logger,
+		commandHandler:      commandHandler,
+		clock:               clock,
 		diskCleanupCooldown: time.Time{},
 		isCleaned:           false,
-		commandHandler:      commandHandler,
 	}
 }
 
-func (c *DiskHandler) checkDiskUsage(ctx context.Context, metrics *SysMetrics) {
+func NewDefaultDiskHandler(logger *zap.Logger, commandHandler commands.HandlerInterface) HandlerInterface {
+	return NewDiskHandler(logger, commandHandler, wrapper.NewClock())
+}
+
+func (c *DiskHandler) CheckDiskUsage(ctx context.Context, metrics *types.SysMetrics) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	// Skip if we're in cooldown period after cleanup
-	if !c.diskCleanupCooldown.IsZero() && time.Now().Before(c.diskCleanupCooldown) {
+	if !c.diskCleanupCooldown.IsZero() && c.clock.Now().Before(c.diskCleanupCooldown) {
 		return
 	}
 
@@ -57,7 +75,7 @@ func (c *DiskHandler) checkDiskUsage(ctx context.Context, metrics *SysMetrics) {
 	if diskUsage > DISK_CRITICAL_THRESHOLD {
 		if c.isCleaned {
 			c.logger.Error("DISK: Rebooting, usage remains critical after cleanup.", zap.Float64("usage_percent", diskUsage))
-			c.commandHandler.rebootSystem(ctx)
+			c.commandHandler.RebootSystem(ctx)
 		} else {
 			c.logger.Warn("DISK: Critical usage high, cleaning disk", zap.Float64("usage_percent", diskUsage))
 			c.cleanupDiskSpace(ctx, diskUsage)
@@ -81,7 +99,7 @@ func (c *DiskHandler) cleanupDiskSpace(ctx context.Context, diskUsage float64) {
 	c.logger.Warn("DISK: usage high",
 		zap.Float64("usage_percent", diskUsage),
 		zap.Float64("threshold", DISK_WARNING_THRESHOLD))
-	c.commandHandler.cleanupPacmanCache(ctx)
+	c.commandHandler.CleanupPacmanCache(ctx)
 	c.isCleaned = true
-	c.diskCleanupCooldown = time.Now().Add(DISK_MONITOR_COOLDOWN)
+	c.diskCleanupCooldown = c.clock.Now().Add(DISK_MONITOR_COOLDOWN)
 }

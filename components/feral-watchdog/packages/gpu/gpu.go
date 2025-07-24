@@ -1,10 +1,12 @@
-package main
+package gpu
 
 import (
 	"context"
 	"sync"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/commands"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/wrapper"
 	"go.uber.org/zap"
 )
 
@@ -12,27 +14,44 @@ const (
 	REBOOT_DELAY = 15 * time.Second
 )
 
+//go:generate mockgen -source=gpu.go -destination=../mocks/mock_gpu.go -package=mocks -mock_names=HandlerInterface=MockGPUHandler
+type HandlerInterface interface {
+	GracefulShutdown(ctx context.Context)
+	ScheduleGPUReboot(ctx context.Context)
+	HandleGPURecovery(ctx context.Context)
+}
+
 type GPUHandler struct {
 	mu              sync.Mutex
 	logger          *zap.Logger
-	commandHandler  *CommandHandler
+	commandHandler  commands.HandlerInterface
+	clock           wrapper.ClockInterface
 	rebootTimer     *time.Timer
 	rebootScheduled bool
 }
 
-func NewGPUHandler(logger *zap.Logger, commandHandler *CommandHandler) *GPUHandler {
+func NewGPUHandler(
+	logger *zap.Logger,
+	commandHandler commands.HandlerInterface,
+	clock wrapper.ClockInterface,
+) HandlerInterface {
 	return &GPUHandler{
 		logger:          logger,
 		commandHandler:  commandHandler,
+		clock:           clock,
 		rebootScheduled: false,
 	}
+}
+
+func NewDefaultGPUHandler(logger *zap.Logger, commandHandler commands.HandlerInterface) HandlerInterface {
+	return NewGPUHandler(logger, commandHandler, wrapper.NewClock())
 }
 
 func (g *GPUHandler) GracefulShutdown(ctx context.Context) {
 	g.cancelReboot()
 }
 
-func (g *GPUHandler) scheduleGPUReboot(ctx context.Context) {
+func (g *GPUHandler) ScheduleGPUReboot(ctx context.Context) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -56,12 +75,12 @@ func (g *GPUHandler) scheduleGPUReboot(ctx context.Context) {
 			g.rebootTimer = nil
 			g.mu.Unlock()
 			g.logger.Info("GPU: executing reboot")
-			g.commandHandler.rebootSystem(ctx)
+			g.commandHandler.RebootSystem(ctx)
 		}
 	})
 }
 
-func (g *GPUHandler) handleGPURecovery(ctx context.Context) {
+func (g *GPUHandler) HandleGPURecovery(ctx context.Context) {
 	g.mu.Lock()
 	isRebootScheduled := g.rebootScheduled
 	g.mu.Unlock()
@@ -99,5 +118,5 @@ func (g *GPUHandler) cancelReboot() {
 
 func (g *GPUHandler) restartKiosk(ctx context.Context) {
 	g.logger.Info("GPU: restarting kiosk")
-	g.commandHandler.restartKiosk(ctx)
+	g.commandHandler.RestartKiosk(ctx)
 }
