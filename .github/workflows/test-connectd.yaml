@@ -41,8 +41,11 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./components/feral-connectd/coverage.out
+          directory: ./components/feral-connectd
           slug: feral-file/feralfile-device
-          flags: feral-connectd
+          flags: feral-connectd,components
           name: feral-connectd-coverage
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+          override_branch: ${{ github.ref_name }}
+          override_build: ${{ github.run_id }}-connectd

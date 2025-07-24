@@ -56,8 +56,11 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./components/feral-setupd/coverage/cobertura.xml
-          flags: feral-setupd
+          directory: ./components/feral-setupd
+          flags: feral-setupd,components
           name: feral-setupd-coverage
           slug: feral-file/feralfile-device
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+          override_branch: ${{ github.ref_name }}
+          override_build: ${{ github.run_id }}-setupd

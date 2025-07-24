@@ -41,8 +41,11 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./components/feral-watchdog/coverage.out
+          directory: ./components/feral-watchdog
           slug: feral-file/feralfile-device
-          flags: feral-watchdog
+          flags: feral-watchdog,components
           name: feral-watchdog-coverage
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+          override_branch: ${{ github.ref_name }}
+          override_build: ${{ github.run_id }}-watchdog
