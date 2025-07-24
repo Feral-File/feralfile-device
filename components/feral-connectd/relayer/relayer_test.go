@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Feral-File/feralfile-device/components/feral-connectd/config"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/mocks"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
@@ -43,14 +42,7 @@ func setup(t *testing.T) *testSetup {
 	mockRandomizer := mocks.NewMockRandomizer(ctrl)
 	mockClock := mocks.NewMockClock(ctrl)
 
-	cfg := &config.Config{
-		RelayerConfig: &relayer.Config{
-			Endpoint: "ws://localhost:8080",
-			APIKey:   "test-api-key",
-		},
-	}
-
-	client := relayer.NewClient(cfg.RelayerConfig, logger, mockDialer, mockRandomizer, mockClock)
+	client := relayer.New("ws://localhost:8080", "test-api-key", mockDialer, mockRandomizer, mockClock, logger)
 
 	return &testSetup{
 		ctrl:           ctrl,

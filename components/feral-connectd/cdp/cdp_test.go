@@ -44,16 +44,7 @@ func setup(t *testing.T) *testSetup {
 	mockJSON := mocks.NewMockJSON(ctrl)
 	mockHTTP := mocks.NewMockHTTP(ctrl)
 
-	client := cdp.New(
-		&cdp.Config{
-			Endpoint: "http://localhost:9222",
-		},
-		logger,
-		mockDialer,
-		mockIO,
-		mockJSON,
-		mockHTTP,
-	)
+	client := cdp.New("http://localhost:9222", mockDialer, mockIO, mockJSON, mockHTTP, logger)
 
 	return &testSetup{
 		ctrl:       ctrl,

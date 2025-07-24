@@ -45,7 +45,14 @@ func setup(t *testing.T) *testSetup {
 	mockStatusPoller := mocks.NewMockStatusPoller(ctrl)
 	mockClock := mocks.NewMockClock(ctrl)
 
-	med := mediator.New(mockRelayer, mockDbus, mockCDP, mockCmd, mockClock, logger)
+	med := mediator.New(
+		mockRelayer,
+		mockDbus,
+		mockCDP,
+		mockCmd,
+		mockClock,
+		logger,
+	)
 
 	return &testSetup{
 		ctrl:             ctrl,

@@ -4,8 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
-	"os/signal"
+	go_os "os"
 	"syscall"
 	"time"
 
@@ -20,10 +19,11 @@ import (
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/status"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/watchdog"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
-	"github.com/coreos/go-systemd/v22/daemon"
+	go_daemon "github.com/coreos/go-systemd/v22/daemon"
 	"github.com/feral-file/godbus"
 	"github.com/getsentry/sentry-go"
 	dbus_v5 "github.com/godbus/dbus/v5"
+	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
 
@@ -31,17 +31,44 @@ const (
 	SHUTDOWN_TIMEOUT = 2 * time.Second
 )
 
-var debug = false
+var (
+	debug = false
+)
 
-// Note: Sentry integration is now handled automatically by the logger
-// Warn/Error logs send Sentry events, Fatal logs send crash events, Info logs add breadcrumbs
+type app struct {
+	// Basic components
+	Ctx    context.Context
+	Logger *zap.Logger
+
+	// Wrappers
+	Clock  wrapper.Clock
+	OS     wrapper.OS
+	Signal wrapper.Signal
+	Daemon wrapper.Daemon
+	HTTP   wrapper.HTTP
+	IO     wrapper.IO
+	JSON   wrapper.JSON
+	Random wrapper.Randomizer
+	Exec   wrapper.Exec
+	Math   wrapper.Math
+
+	// Components
+	CDP          cdp.CDP
+	Relayer      relayer.Relayer
+	DBus         dbus.DBus
+	Mediator     mediator.Mediator
+	Command      command.CommandHandler
+	DeviceStatus status.DeviceStatus
+	StatusPoller status.Poller
+	Watchdog     watchdog.Watchdog
+}
 
 func main() {
 	// Read from options
 	flag.BoolVar(&debug, "debug", false, "Enable debug mode")
 	flag.Parse()
 
-	// Initialize basic logger first
+	// Initialize basic logger first for config loading
 	basicLogger, err := logger.New(debug)
 	if err != nil {
 		panic("Failed to initialize logger: " + err.Error())
@@ -56,160 +83,167 @@ func main() {
 		basicLogger.Fatal("Failed to load configuration", zap.Error(err))
 	}
 
-	// Initialize Sentry
+	// Initialize Sentry if needed
 	err = logger.InitSentry(config.SentryConfig)
 	if err != nil {
 		basicLogger.Error("Failed to initialize Sentry", zap.Error(err))
 		// Don't fail the application if Sentry initialization fails
 	}
 
-	// Create Sentry-integrated l
-	var l *zap.Logger
+	// Create the final logger (with Sentry if configured)
+	var finalLogger *zap.Logger
 	if config.SentryConfig.IsEnabled() {
-		l, err = logger.NewWithSentry(debug, config.SentryConfig)
+		finalLogger, err = logger.NewWithSentry(debug, config.SentryConfig)
 		if err != nil {
 			basicLogger.Error("Failed to create Sentry-integrated logger, falling back to basic logger", zap.Error(err))
-			l = basicLogger
+			finalLogger = basicLogger
 		} else {
-			l.Info("Sentry initialized successfully",
+			finalLogger.Info("Sentry initialized successfully",
 				zap.String("environment", config.SentryConfig.Environment),
 				zap.String("release", config.SentryConfig.Release))
 			defer logger.FlushSentry(2 * time.Second)
 		}
 	} else {
-		l = basicLogger
-		l.Info("Sentry not configured, using basic logger")
+		finalLogger = basicLogger
+		finalLogger.Info("Sentry not configured, using basic logger")
 	}
 	defer func() {
-		_ = l.Sync()
+		_ = finalLogger.Sync()
 	}()
 
+	// Initialize app
+	app := initializeApp(
+		finalLogger,
+		config.CDPConfig.Endpoint,
+		config.RelayerConfig.Endpoint,
+		config.RelayerConfig.APIKey,
+		dbus.NAME,
+		[]dbus_v5.MatchOption{
+			dbus_v5.WithMatchPathNamespace(dbus_v5.ObjectPath("/com/feralfile")),
+		})
+
 	// Create context for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(app.Ctx)
 	defer cancel()
 
 	// Handle signals for graceful shutdown
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	sigCh := make(chan go_os.Signal, 1)
+	app.Signal.Notify(sigCh, go_os.Interrupt, syscall.SIGTERM)
 	go func() {
 		sig := <-sigCh
-		l.Info("Received signal, initiating shutdown...",
+		app.Logger.Info("Received signal, initiating shutdown...",
 			zap.String("signal", sig.String()))
 		cancel()
 
-		time.Sleep(SHUTDOWN_TIMEOUT)
-		l.Error("Shutdown timed out, forcing exit...",
+		app.Clock.Sleep(SHUTDOWN_TIMEOUT)
+		app.Logger.Error("Shutdown timed out, forcing exit...",
 			zap.Duration("timeout", SHUTDOWN_TIMEOUT))
 
 		if config.SentryConfig.IsEnabled() {
 			sentry.Flush(1 * time.Second)
 		}
 
-		os.Exit(1)
+		app.OS.Exit(1)
 	}()
 
-	// Load state
-	s, err := state.Load(l)
+	// Run the app
+	err = app.run(ctx, config)
 	if err != nil {
-		l.Fatal("Failed to load state", zap.Error(err))
+		app.Logger.Fatal("Failed to run app", zap.Error(err))
+	}
+}
+
+func (app *app) run(ctx context.Context, conf *config.Config) error {
+	// Load state
+	s, err := state.Load(app.Logger)
+	if err != nil {
+		return err
 	}
 
 	// Set global topic ID in Sentry if available
-	if config.SentryConfig.IsEnabled() && s.Relayer.TopicID != "" {
+	if conf.SentryConfig.IsEnabled() && s.Relayer.TopicID != "" {
 		logger.SetGlobalTopicID(s.Relayer.TopicID)
 	}
 
 	// Initialize CDP client
-	cdpClient := cdp.NewDefault(config.CDPConfig, l)
-	err = cdpClient.Init(ctx)
+	err = app.CDP.Init(ctx)
 	if err != nil {
-		l.Fatal("CDP init failed", zap.Error(err))
+		return err
 	}
-	defer cdpClient.Close()
+	defer app.CDP.Close()
 
-	// Start watchdog in a goroutine
-	watchdog := watchdog.New(l)
-	go watchdog.Start(ctx)
-	defer watchdog.Stop()
+	// Start watchdog
+	app.Watchdog.Start(ctx)
+	defer app.Watchdog.Stop()
 
 	// Initialize Relayer client
-	relayerClient := relayer.NewDefault(config.RelayerConfig, l)
-	defer relayerClient.Close()
+	err = app.Relayer.Connect(ctx)
+	if err != nil {
+		return err
+	}
+	defer app.Relayer.Close()
 
 	// Initialize DBus client
-	mo := dbus_v5.WithMatchPathNamespace(dbus_v5.ObjectPath("/com/feralfile"))
-	dbusClient := godbus.NewDBusClient(ctx, l, dbus.NAME, mo)
-	err = dbusClient.Start()
+	err = app.DBus.Start()
 	if err != nil {
-		l.Fatal("DBus init failed", zap.Error(err))
+		return err
 	}
 	defer func() {
-		_ = dbusClient.Stop()
+		_ = app.DBus.Stop()
 	}()
 
-	err = dbusClient.Export(dbus.NewHandler(ctx, relayerClient, l), dbus.PATH, dbus.INTERFACE)
+	dbusHandler := dbus.NewHandler(ctx, app.Relayer, app.Logger)
+	err = app.DBus.Export(dbusHandler, dbus.PATH, dbus.INTERFACE)
 	if err != nil {
-		l.Fatal("Failed to export DBus interface", zap.Error(err))
+		return err
 	}
-
-	// Initialize command handler
-	ds := status.NewDefaultDeviceStatus()
-	cmd := command.NewDefault(cdpClient, dbusClient, ds, l)
 
 	// Initialize Mediator
-	mediator := mediator.New(relayerClient, dbusClient, cdpClient, cmd, wrapper.NewClock(), l)
-	mediator.Start()
-	defer mediator.Stop()
+	app.Mediator.Start()
+	defer app.Mediator.Stop()
 
 	// Get connectivity status and connect to relayer if ready
-	connected, err := getConnectivityStatus(ctx, dbusClient, l)
+	connected, err := getConnectivityStatus(ctx, app.DBus, app.Logger)
 	if err != nil {
-		l.Warn("Failed to get connectivity status", zap.Error(err))
+		app.Logger.Warn("Failed to get connectivity status", zap.Error(err))
 	} else {
-		l.Info("Connectivity status", zap.Bool("connected", connected))
+		app.Logger.Info("Connectivity status", zap.Bool("connected", connected))
 	}
 	if connected && s.Relayer.IsReady() {
-		err = relayerClient.Connect(ctx)
+		err = app.Relayer.Connect(ctx)
 		if err != nil {
-			l.Fatal("Failed to connect to relayer", zap.Error(err))
+			return err
 		}
 	}
 
-	// Initialize StatusPoller
-	statusPoller := status.New(
-		cdpClient,
-		relayerClient,
-		ds,
-		l,
-	)
-
 	// Set the StatusPoller reference in mediator for force refresh
-	mediator.SetStatusPoller(statusPoller)
+	app.Mediator.SetStatusPoller(app.StatusPoller)
 
 	// Set the StatusPoller reference in command handler for force refresh
-	cmd.SetStatusPoller(statusPoller)
+	app.Command.SetStatusPoller(app.StatusPoller)
 
 	// Start StatusPoller - it will handle relayer connection status internally
-	go statusPoller.Start(ctx)
-	defer statusPoller.Stop()
+	go app.StatusPoller.Start(ctx)
+	defer app.StatusPoller.Stop()
 
 	// send ready notification to systemd
-	sent, err := daemon.SdNotify(false, daemon.SdNotifyReady)
+	sent, err := app.Daemon.SdNotify(false, go_daemon.SdNotifyReady)
 	if err != nil {
-		l.Error("Failed to notify systemd", zap.Error(err))
+		app.Logger.Error("Failed to notify systemd", zap.Error(err))
 	}
 	if !sent {
-		l.Warn("Failed to notify systemd, notification not supported. It could because NOTIFY_SOCKET is unset")
+		app.Logger.Warn("Failed to notify systemd, notification not supported. It could because NOTIFY_SOCKET is unset")
 	}
 
-	l.Info("connectd started successfully")
+	app.Logger.Info("connectd started successfully")
 
 	<-ctx.Done()
 
-	l.Info("connectd shutdown completed")
+	app.Logger.Info("connectd shutdown completed")
+	return nil
 }
 
-func getConnectivityStatus(ctx context.Context, dc *godbus.DBusClient, logger *zap.Logger) (bool, error) {
+func getConnectivityStatus(ctx context.Context, dc dbus.DBus, logger *zap.Logger) (bool, error) {
 	logger.Info("Getting connectivity status")
 
 	deadlineCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -238,4 +272,127 @@ func getConnectivityStatus(ctx context.Context, dc *godbus.DBusClient, logger *z
 	}
 
 	return connected, nil
+}
+
+// initializeApp initializes the app with real dependencies
+func initializeApp(
+	logger *zap.Logger,
+	cdpEndpoint string,
+	relayerEndpoint string,
+	relayerAPIKey string,
+	dbusName string,
+	dbusOpts []dbus_v5.MatchOption,
+) *app {
+	// Basic components
+	context := context.Background()
+
+	// Wrappers
+	clock := wrapper.NewClock()
+	os := wrapper.NewOS()
+	signal := wrapper.NewSignal()
+	daemon := wrapper.NewDaemon()
+	http := wrapper.NewHTTP()
+	io := wrapper.NewIO()
+	json := wrapper.NewJSON()
+	randomizer := wrapper.NewRandomizer()
+	exec := wrapper.NewExec()
+	math := wrapper.NewMath()
+	d := &websocket.Dialer{
+		HandshakeTimeout: 5 * time.Second,
+	}
+	webSocketDialer := wrapper.NewWebSocketDialer(d)
+
+	// Components
+	// CDP
+	cdp := cdp.New(cdpEndpoint, webSocketDialer, io, json, http, logger)
+
+	// Relayer
+	relayer := relayer.New(relayerEndpoint, relayerAPIKey, webSocketDialer, randomizer, clock, logger)
+
+	// DBus
+	dbusClient := godbus.NewDBusClient(context, logger, dbusName, dbusOpts...)
+
+	// DeviceStatus
+	deviceStatus := status.NewDeviceStatus(json, os, exec, http, io)
+
+	// StatusPoller
+	poller := status.NewPoller(cdp, relayer, deviceStatus, logger)
+
+	// Watchdog
+	watchdog := watchdog.New(logger)
+
+	// CommandHandler
+	commandHandler := command.New(cdp, dbusClient, deviceStatus, json, os, exec, math, logger)
+
+	// Mediator
+	mediator := mediator.New(relayer, dbusClient, cdp, commandHandler, clock, logger)
+
+	return &app{
+		Ctx:          context,
+		Logger:       logger,
+		Clock:        clock,
+		OS:           os,
+		Signal:       signal,
+		Daemon:       daemon,
+		HTTP:         http,
+		IO:           io,
+		JSON:         json,
+		Random:       randomizer,
+		Exec:         exec,
+		Math:         math,
+		CDP:          cdp,
+		Relayer:      relayer,
+		DBus:         dbusClient,
+		Mediator:     mediator,
+		Command:      commandHandler,
+		DeviceStatus: deviceStatus,
+		StatusPoller: poller,
+		Watchdog:     watchdog,
+	}
+}
+
+// initializeTestApp initializes the app with mock dependencies
+func initializeTestApp(
+	ctx context.Context,
+	logger *zap.Logger,
+	clock wrapper.Clock,
+	os wrapper.OS,
+	signal wrapper.Signal,
+	daemon wrapper.Daemon,
+	http wrapper.HTTP,
+	io wrapper.IO,
+	json wrapper.JSON,
+	random wrapper.Randomizer,
+	exec wrapper.Exec,
+	math wrapper.Math,
+	cdp cdp.CDP,
+	relayer relayer.Relayer,
+	dbus dbus.DBus,
+	deviceStatus status.DeviceStatus,
+	statusPoller status.Poller,
+	watchdog watchdog.Watchdog,
+	mediator mediator.Mediator,
+	command command.CommandHandler) *app {
+	return &app{
+		Ctx:          ctx,
+		Logger:       logger,
+		Clock:        clock,
+		OS:           os,
+		Signal:       signal,
+		Daemon:       daemon,
+		HTTP:         http,
+		IO:           io,
+		JSON:         json,
+		Random:       random,
+		Exec:         exec,
+		Math:         math,
+		CDP:          cdp,
+		Relayer:      relayer,
+		DBus:         dbus,
+		Mediator:     mediator,
+		Command:      command,
+		DeviceStatus: deviceStatus,
+		StatusPoller: statusPoller,
+		Watchdog:     watchdog,
+	}
 }

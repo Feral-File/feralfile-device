@@ -24,16 +24,6 @@ type deviceStatus struct {
 	io   wrapper.IO
 }
 
-func NewDefaultDeviceStatus() DeviceStatus {
-	return NewDeviceStatus(
-		wrapper.NewJSON(),
-		wrapper.NewOS(),
-		wrapper.NewExec(),
-		wrapper.NewHTTP(),
-		wrapper.NewIO(),
-	)
-}
-
 func NewDeviceStatus(
 	json wrapper.JSON,
 	os wrapper.OS,
