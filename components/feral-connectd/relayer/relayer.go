@@ -85,14 +85,6 @@ func (p Payload) Arguments(key string) (interface{}, error) {
 	return v, nil
 }
 
-type Config struct {
-	Endpoint   string
-	APIKey     string
-	Dialer     wrapper.WebSocketDialer
-	Randomizer wrapper.Randomizer
-	Clock      wrapper.Clock
-}
-
 type Handler func(ctx context.Context, payload Payload) error
 
 // Custom websocket error types
@@ -168,13 +160,20 @@ type relayer struct {
 }
 
 // New creates a new Relayer client
-func New(conf *Config, logger *zap.Logger) Relayer {
+func New(
+	endpoint string,
+	apiKey string,
+	dialer wrapper.WebSocketDialer,
+	randomizer wrapper.Randomizer,
+	clock wrapper.Clock,
+	logger *zap.Logger,
+) Relayer {
 	return &relayer{
-		endpoint:   conf.Endpoint,
-		apiKey:     conf.APIKey,
-		dialer:     conf.Dialer,
-		randomizer: conf.Randomizer,
-		clock:      conf.Clock,
+		endpoint:   endpoint,
+		apiKey:     apiKey,
+		dialer:     dialer,
+		randomizer: randomizer,
+		clock:      clock,
 		done:       make(chan struct{}),
 		logger:     logger,
 		handlers:   []Handler{},

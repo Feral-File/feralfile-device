@@ -56,16 +56,7 @@ func setup(t *testing.T) *testSetup {
 	state.InjectStateManagerForTesting(mockStateManager)
 
 	// Create handler with mocks
-	handler := command.New(
-		&command.Config{
-			CDP:          mockCDP,
-			DBus:         mockDBus,
-			DeviceStatus: mockDeviceStatus,
-			JSON:         mockJSON,
-			OS:           mockOS,
-			Exec:         mockExec,
-			Math:         mockMath,
-		}, logger)
+	handler := command.New(mockCDP, mockDBus, mockDeviceStatus, mockJSON, mockOS, mockExec, mockMath, logger)
 	handler.SetStatusPoller(mockStatus)
 
 	return &testSetup{
@@ -2650,15 +2641,6 @@ func TestHandler_NewHandler(t *testing.T) {
 	mockExec := mocks.NewMockExec(ctrl)
 	mockMath := mocks.NewMockMath(ctrl)
 
-	handler := command.New(
-		&command.Config{
-			CDP:          mockCDP,
-			DBus:         mockDBus,
-			DeviceStatus: mockDeviceStatus,
-			JSON:         mockJSON,
-			OS:           mockOS,
-			Exec:         mockExec,
-			Math:         mockMath,
-		}, logger)
+	handler := command.New(mockCDP, mockDBus, mockDeviceStatus, mockJSON, mockOS, mockExec, mockMath, logger)
 	assert.NotNil(t, handler)
 }

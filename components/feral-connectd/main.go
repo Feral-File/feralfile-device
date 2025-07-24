@@ -303,76 +303,29 @@ func initializeApp(
 	webSocketDialer := wrapper.NewWebSocketDialer(d)
 
 	// Components
-
 	// CDP
-	cdp := cdp.New(
-		&cdp.Config{
-			Endpoint: cdpEndpoint,
-			Dialer:   webSocketDialer,
-			IO:       io,
-			JSON:     json,
-			HTTP:     http,
-		}, logger)
+	cdp := cdp.New(cdpEndpoint, webSocketDialer, io, json, http, logger)
 
 	// Relayer
-	relayer := relayer.New(
-		&relayer.Config{
-			Endpoint:   relayerEndpoint,
-			APIKey:     relayerAPIKey,
-			Dialer:     webSocketDialer,
-			Randomizer: randomizer,
-			Clock:      clock,
-		},
-		logger)
+	relayer := relayer.New(relayerEndpoint, relayerAPIKey, webSocketDialer, randomizer, clock, logger)
 
 	// DBus
 	dbusClient := godbus.NewDBusClient(context, logger, dbusName, dbusOpts...)
 
 	// DeviceStatus
-	deviceStatus := status.NewDeviceStatus(
-		&status.DeviceStatusConfig{
-			JSON: json,
-			OS:   os,
-			Exec: exec,
-			HTTP: http,
-			IO:   io,
-		})
+	deviceStatus := status.NewDeviceStatus(json, os, exec, http, io)
 
 	// StatusPoller
-	poller := status.NewPoller(
-		&status.PollerConfig{
-			CDP:          cdp,
-			Relayer:      relayer,
-			DeviceStatus: deviceStatus,
-		},
-		logger)
+	poller := status.NewPoller(cdp, relayer, deviceStatus, logger)
 
 	// Watchdog
 	watchdog := watchdog.New(logger)
 
 	// CommandHandler
-	commandHandler := command.New(
-		&command.Config{
-			CDP:          cdp,
-			DBus:         dbusClient,
-			DeviceStatus: deviceStatus,
-			JSON:         json,
-			OS:           os,
-			Exec:         exec,
-			Math:         math,
-		},
-		logger)
+	commandHandler := command.New(cdp, dbusClient, deviceStatus, json, os, exec, math, logger)
 
 	// Mediator
-	mediator := mediator.New(
-		&mediator.Config{
-			Relayer: relayer,
-			DBus:    dbusClient,
-			CDP:     cdp,
-			Command: commandHandler,
-			Clock:   clock,
-		},
-		logger)
+	mediator := mediator.New(relayer, dbusClient, cdp, commandHandler, clock, logger)
 
 	return &app{
 		Ctx:          context,

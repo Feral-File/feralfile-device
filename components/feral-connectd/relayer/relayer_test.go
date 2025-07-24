@@ -42,15 +42,7 @@ func setup(t *testing.T) *testSetup {
 	mockRandomizer := mocks.NewMockRandomizer(ctrl)
 	mockClock := mocks.NewMockClock(ctrl)
 
-	cfg := &relayer.Config{
-		Endpoint:   "ws://localhost:8080",
-		APIKey:     "test-api-key",
-		Dialer:     mockDialer,
-		Randomizer: mockRandomizer,
-		Clock:      mockClock,
-	}
-
-	client := relayer.New(cfg, logger)
+	client := relayer.New("ws://localhost:8080", "test-api-key", mockDialer, mockRandomizer, mockClock, logger)
 
 	return &testSetup{
 		ctrl:           ctrl,

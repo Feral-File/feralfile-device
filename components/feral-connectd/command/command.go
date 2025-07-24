@@ -68,26 +68,25 @@ type handler struct {
 	math wrapper.Math
 }
 
-type Config struct {
-	CDP          cdp.CDP
-	DBus         dbus.DBus
-	DeviceStatus status.DeviceStatus
-	JSON         wrapper.JSON
-	OS           wrapper.OS
-	Exec         wrapper.Exec
-	Math         wrapper.Math
-}
-
-func New(conf *Config, l *zap.Logger) CommandHandler {
+func New(
+	cdp cdp.CDP,
+	dbus dbus.DBus,
+	deviceStatus status.DeviceStatus,
+	json wrapper.JSON,
+	os wrapper.OS,
+	exec wrapper.Exec,
+	math wrapper.Math,
+	l *zap.Logger,
+) CommandHandler {
 	return &handler{
-		cdp:          conf.CDP,
-		dbus:         conf.DBus,
-		deviceStatus: conf.DeviceStatus,
+		cdp:          cdp,
+		dbus:         dbus,
+		deviceStatus: deviceStatus,
 		logger:       l,
-		json:         conf.JSON,
-		os:           conf.OS,
-		exec:         conf.Exec,
-		math:         conf.Math,
+		json:         json,
+		os:           os,
+		exec:         exec,
+		math:         math,
 	}
 }
 
