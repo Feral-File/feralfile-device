@@ -10,13 +10,15 @@ use tokio::task;
 
 use anyhow::{Result, anyhow};
 
-use crate::{AppState, PageStateDto, constant};
+use crate::constant;
 
 pub type ListenCallback = Box<dyn Fn(Message) + Send + Sync>;
 
-/// Starts a D-Bus service that listens for incoming requests and provides the current page state.
-/// The service runs in a separate thread and can be stopped by setting the `stop` atomic boolean to `true`.
-pub fn start_dbus_service(app_state: Arc<AppState>) {
+pub trait PageStateProvider: Send + Sync {
+    fn get_page_state(&self) -> (String, i64);
+}
+
+pub fn start_dbus_service<T: PageStateProvider + 'static>(state_provider: Arc<T>) {
     std::thread::spawn(move || {
         println!("DBUS: start_dbus_service started");
 
@@ -26,17 +28,20 @@ pub fn start_dbus_service(app_state: Arc<AppState>) {
 
         let mut cr = Crossroads::new();
 
-        let s = app_state.clone();
+        let provider = state_provider.clone();
         let iface = cr.register(constant::DBUS_SETUPD_INTERFACE, move |b| {
-            let state = s.clone();
+            let p = provider.clone();
             b.method(
                 constant::DBUS_GET_PAGE_STATE,
                 (),
                 ("page", "page_changed_unix"),
                 move |_, (), ()| {
-                    let dto = PageStateDto::from_state(&state);
-                    println!("DBUS: debug dto: {dto:?}");
-                    Ok((dto.page, dto.page_changed_unix))
+                    let (page, timestamp) = p.get_page_state();
+                    println!(
+                        "DBUS: debug page state: page={}, timestamp={}",
+                        page, timestamp
+                    );
+                    Ok((page, timestamp))
                 },
             );
         });
