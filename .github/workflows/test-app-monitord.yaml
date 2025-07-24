@@ -41,8 +41,11 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./components/feral-app-monitord/coverage.out
+          directory: ./components/feral-app-monitord
           slug: feral-file/feralfile-device
           flags: feral-app-monitord
           name: feral-app-monitord-coverage
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+          override_branch: ${{ github.ref_name }}
+          override_build: ${{ github.run_id }}-app-monitord
