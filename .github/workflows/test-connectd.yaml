@@ -43,7 +43,7 @@ jobs:
           files: ./components/feral-connectd/coverage.out
           directory: ./components/feral-connectd
           slug: feral-file/feralfile-device
-          flags: feral-connectd,components
+          flags: feral-connectd
           name: feral-connectd-coverage
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true

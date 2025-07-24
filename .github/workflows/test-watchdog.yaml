@@ -43,7 +43,7 @@ jobs:
           files: ./components/feral-watchdog/coverage.out
           directory: ./components/feral-watchdog
           slug: feral-file/feralfile-device
-          flags: feral-watchdog,components
+          flags: feral-watchdog
           name: feral-watchdog-coverage
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
