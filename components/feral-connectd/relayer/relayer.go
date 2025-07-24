@@ -86,8 +86,11 @@ func (p Payload) Arguments(key string) (interface{}, error) {
 }
 
 type Config struct {
-	Endpoint string `json:"endpoint"`
-	APIKey   string `json:"apiKey"`
+	Endpoint   string
+	APIKey     string
+	Dialer     wrapper.WebSocketDialer
+	Randomizer wrapper.Randomizer
+	Clock      wrapper.Clock
 }
 
 type Handler func(ctx context.Context, payload Payload) error
@@ -153,7 +156,8 @@ type relayer struct {
 	clock      wrapper.Clock
 
 	// Internal state
-	config       *Config
+	endpoint     string
+	apiKey       string
 	conn         wrapper.WebSocketConn
 	done         chan struct{}
 	pingDoneChan chan struct{}
@@ -163,32 +167,14 @@ type relayer struct {
 	logger *zap.Logger
 }
 
-// NewDefault creates a new Relayer client with the default wrappers
-func NewDefault(config *Config, logger *zap.Logger) Relayer {
-	d := websocket.DefaultDialer
-	d.HandshakeTimeout = 5 * time.Second
-	return NewClient(
-		config,
-		logger,
-		wrapper.NewWebSocketDialer(d),
-		wrapper.NewRandomizer(),
-		wrapper.NewClock(),
-	)
-}
-
-// NewClient creates a new Relayer client with custom injected wrappers
-func NewClient(
-	config *Config,
-	logger *zap.Logger,
-	dialer wrapper.WebSocketDialer,
-	randomizer wrapper.Randomizer,
-	clock wrapper.Clock,
-) Relayer {
+// New creates a new Relayer client
+func New(conf *Config, logger *zap.Logger) Relayer {
 	return &relayer{
-		config:     config,
-		dialer:     dialer,
-		randomizer: randomizer,
-		clock:      clock,
+		endpoint:   conf.Endpoint,
+		apiKey:     conf.APIKey,
+		dialer:     conf.Dialer,
+		randomizer: conf.Randomizer,
+		clock:      conf.Clock,
 		done:       make(chan struct{}),
 		logger:     logger,
 		handlers:   []Handler{},
@@ -207,7 +193,7 @@ func (r *relayer) RetryableConnect(ctx context.Context) error {
 	var attempts int
 	for {
 		attempts++
-		r.logger.Info("Connecting to Relayer", zap.String("endpoint", r.config.Endpoint), zap.Int("attempts", attempts))
+		r.logger.Info("Connecting to Relayer", zap.String("endpoint", r.endpoint), zap.Int("attempts", attempts))
 
 		err := r.Connect(ctx)
 		if err == nil {
@@ -250,10 +236,10 @@ func (r *relayer) Connect(ctx context.Context) error {
 	}
 
 	// Create URL with topicID if available
-	connectURL := r.config.Endpoint
+	connectURL := r.endpoint
 
-	if r.config.APIKey != "" {
-		connectURL += fmt.Sprintf("/api/connection?apiKey=%s", r.config.APIKey)
+	if r.apiKey != "" {
+		connectURL += fmt.Sprintf("/api/connection?apiKey=%s", r.apiKey)
 	}
 
 	topicID := state.GetState().Relayer.TopicID

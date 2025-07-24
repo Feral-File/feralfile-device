@@ -31,7 +31,11 @@ const (
 )
 
 type Config struct {
-	Endpoint string `json:"endpoint"`
+	Endpoint string
+	Dialer   wrapper.WebSocketDialer
+	IO       wrapper.IO
+	JSON     wrapper.JSON
+	HTTP     wrapper.HTTP
 }
 
 //go:generate mockgen -source=cdp.go -destination=../mocks/cdp.go -package=mocks -mock_names=CDP=MockCDP
@@ -61,37 +65,18 @@ type cdp struct {
 	logger *zap.Logger
 }
 
-// New creates a new CDP client with custom injected wrappers
-func New(
-	config *Config,
-	logger *zap.Logger,
-	dialer wrapper.WebSocketDialer,
-	io wrapper.IO,
-	json wrapper.JSON,
-	http wrapper.HTTP,
-) CDP {
+// New creates a new CDP client
+func New(conf *Config, logger *zap.Logger) CDP {
 	return &cdp{
-		dialer:   dialer,
-		io:       io,
-		json:     json,
-		http:     http,
-		endpoint: config.Endpoint,
+		dialer:   conf.Dialer,
+		io:       conf.IO,
+		json:     conf.JSON,
+		http:     conf.HTTP,
+		endpoint: conf.Endpoint,
 		reqID:    0,
 		doneChan: make(chan struct{}),
 		logger:   logger,
 	}
-}
-
-// NewDefault creates a new CDP client with the default wrappers
-func NewDefault(config *Config, logger *zap.Logger) CDP {
-	return New(
-		config,
-		logger,
-		wrapper.NewWebSocketDialer(websocket.DefaultDialer),
-		wrapper.NewIO(),
-		wrapper.NewJSON(),
-		wrapper.NewHTTP(),
-	)
 }
 
 // Initialized returns true if the CDP connection is initialized

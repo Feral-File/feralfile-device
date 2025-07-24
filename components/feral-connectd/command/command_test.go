@@ -56,7 +56,16 @@ func setup(t *testing.T) *testSetup {
 	state.InjectStateManagerForTesting(mockStateManager)
 
 	// Create handler with mocks
-	handler := command.New(mockCDP, mockDBus, mockDeviceStatus, logger, mockJSON, mockOS, mockExec, mockMath)
+	handler := command.New(
+		&command.Config{
+			CDP:          mockCDP,
+			DBus:         mockDBus,
+			DeviceStatus: mockDeviceStatus,
+			JSON:         mockJSON,
+			OS:           mockOS,
+			Exec:         mockExec,
+			Math:         mockMath,
+		}, logger)
 	handler.SetStatusPoller(mockStatus)
 
 	return &testSetup{
@@ -2628,19 +2637,6 @@ func TestHandler_UpdateToLatest_CommandError(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to execute update to latest command")
 }
 
-func TestHandler_NewDefaultHandler(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	logger := zaptest.NewLogger(t, zaptest.Level(zap.FatalLevel))
-	mockCDP := mocks.NewMockCDP(ctrl)
-	mockDBus := mocks.NewMockDBus(ctrl)
-	mockDeviceStatus := mocks.NewMockDeviceStatus(ctrl)
-
-	handler := command.NewDefault(mockCDP, mockDBus, mockDeviceStatus, logger)
-	assert.NotNil(t, handler)
-}
-
 func TestHandler_NewHandler(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -2654,6 +2650,15 @@ func TestHandler_NewHandler(t *testing.T) {
 	mockExec := mocks.NewMockExec(ctrl)
 	mockMath := mocks.NewMockMath(ctrl)
 
-	handler := command.New(mockCDP, mockDBus, mockDeviceStatus, logger, mockJSON, mockOS, mockExec, mockMath)
+	handler := command.New(
+		&command.Config{
+			CDP:          mockCDP,
+			DBus:         mockDBus,
+			DeviceStatus: mockDeviceStatus,
+			JSON:         mockJSON,
+			OS:           mockOS,
+			Exec:         mockExec,
+			Math:         mockMath,
+		}, logger)
 	assert.NotNil(t, handler)
 }

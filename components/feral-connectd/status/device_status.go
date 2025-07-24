@@ -24,29 +24,21 @@ type deviceStatus struct {
 	io   wrapper.IO
 }
 
-func NewDefaultDeviceStatus() DeviceStatus {
-	return NewDeviceStatus(
-		wrapper.NewJSON(),
-		wrapper.NewOS(),
-		wrapper.NewExec(),
-		wrapper.NewHTTP(),
-		wrapper.NewIO(),
-	)
+type DeviceStatusConfig struct {
+	JSON wrapper.JSON
+	OS   wrapper.OS
+	Exec wrapper.Exec
+	HTTP wrapper.HTTP
+	IO   wrapper.IO
 }
 
-func NewDeviceStatus(
-	json wrapper.JSON,
-	os wrapper.OS,
-	exec wrapper.Exec,
-	http wrapper.HTTP,
-	io wrapper.IO,
-) DeviceStatus {
+func NewDeviceStatus(conf *DeviceStatusConfig) DeviceStatus {
 	return &deviceStatus{
-		json: json,
-		os:   os,
-		exec: exec,
-		http: http,
-		io:   io,
+		json: conf.JSON,
+		os:   conf.OS,
+		exec: conf.Exec,
+		http: conf.HTTP,
+		io:   conf.IO,
 	}
 }
 

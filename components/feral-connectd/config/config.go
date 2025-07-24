@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Feral-File/feralfile-device/components/feral-connectd/cdp"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/logger"
-	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
 	"go.uber.org/zap"
 )
@@ -15,10 +13,19 @@ const (
 	CONFIG_FILE = "/home/feralfile/.config/connectd.json"
 )
 
+type CDPConfig struct {
+	Endpoint string `json:"endpoint"`
+}
+
+type RelayerConfig struct {
+	Endpoint string `json:"endpoint"`
+	APIKey   string `json:"apiKey"`
+}
+
 // Configuration for all components
 type Config struct {
-	CDPConfig     *cdp.Config          `json:"cdp"`
-	RelayerConfig *relayer.Config      `json:"relayer"`
+	CDPConfig     *CDPConfig           `json:"cdp"`
+	RelayerConfig *RelayerConfig       `json:"relayer"`
 	SentryConfig  *logger.SentryConfig `json:"sentry"`
 }
 
@@ -85,8 +92,8 @@ func (m *defaultConfigManager) Get() *Config {
 
 	if m.config == nil {
 		m.config = &Config{
-			CDPConfig:     &cdp.Config{},
-			RelayerConfig: &relayer.Config{},
+			CDPConfig:     &CDPConfig{},
+			RelayerConfig: &RelayerConfig{},
 			SentryConfig:  &logger.SentryConfig{},
 		}
 	}

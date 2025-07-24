@@ -6,11 +6,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Feral-File/feralfile-device/components/feral-connectd/cdp"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/config"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/logger"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/mocks"
-	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -86,10 +84,10 @@ func TestConfigManager_Load_Success_ExistingFile(t *testing.T) {
 		Unmarshal([]byte(configData), gomock.Any()).
 		DoAndReturn(func(data []byte, v interface{}) error {
 			cfg := v.(*config.Config)
-			cfg.CDPConfig = &cdp.Config{
+			cfg.CDPConfig = &config.CDPConfig{
 				Endpoint: "http://localhost:9222",
 			}
-			cfg.RelayerConfig = &relayer.Config{
+			cfg.RelayerConfig = &config.RelayerConfig{
 				Endpoint: "wss://relay.feralfile.com",
 				APIKey:   "test-api-key",
 			}
@@ -140,10 +138,10 @@ func TestConfigManager_Load_Success_AlreadyLoaded(t *testing.T) {
 		Unmarshal([]byte(configData), gomock.Any()).
 		DoAndReturn(func(data []byte, v interface{}) error {
 			cfg := v.(*config.Config)
-			cfg.CDPConfig = &cdp.Config{
+			cfg.CDPConfig = &config.CDPConfig{
 				Endpoint: "http://localhost:9222",
 			}
-			cfg.RelayerConfig = &relayer.Config{}
+			cfg.RelayerConfig = &config.RelayerConfig{}
 			cfg.SentryConfig = &logger.SentryConfig{}
 			return nil
 		}).
@@ -286,10 +284,10 @@ func TestConfigManager_Get_AfterLoad(t *testing.T) {
 		Unmarshal([]byte(configData), gomock.Any()).
 		DoAndReturn(func(data []byte, v interface{}) error {
 			cfg := v.(*config.Config)
-			cfg.CDPConfig = &cdp.Config{
+			cfg.CDPConfig = &config.CDPConfig{
 				Endpoint: "http://localhost:9222",
 			}
-			cfg.RelayerConfig = &relayer.Config{
+			cfg.RelayerConfig = &config.RelayerConfig{
 				Endpoint: "wss://relay.feralfile.com",
 			}
 			cfg.SentryConfig = &logger.SentryConfig{}
@@ -379,10 +377,10 @@ func TestConfigManager_ConcurrentLoad(t *testing.T) {
 		Unmarshal([]byte(configData), gomock.Any()).
 		DoAndReturn(func(data []byte, v interface{}) error {
 			cfg := v.(*config.Config)
-			cfg.CDPConfig = &cdp.Config{
+			cfg.CDPConfig = &config.CDPConfig{
 				Endpoint: "http://concurrent-test:9222",
 			}
-			cfg.RelayerConfig = &relayer.Config{
+			cfg.RelayerConfig = &config.RelayerConfig{
 				Endpoint: "wss://concurrent-relay.test.com",
 			}
 			cfg.SentryConfig = &logger.SentryConfig{}
@@ -456,10 +454,10 @@ func TestConfig_Load_Success(t *testing.T) {
 		Unmarshal([]byte(configData), gomock.Any()).
 		DoAndReturn(func(data []byte, v interface{}) error {
 			cfg := v.(*config.Config)
-			cfg.CDPConfig = &cdp.Config{
+			cfg.CDPConfig = &config.CDPConfig{
 				Endpoint: "http://global-test:9222",
 			}
-			cfg.RelayerConfig = &relayer.Config{}
+			cfg.RelayerConfig = &config.RelayerConfig{}
 			cfg.SentryConfig = &logger.SentryConfig{}
 			return nil
 		}).

@@ -40,16 +40,17 @@ type poller struct {
 	lastStatusHashes map[relayer.NotificationType]string
 }
 
-func New(
-	cdp cdp.CDP,
-	relay relayer.Relayer,
-	deviceStatus DeviceStatus,
-	logger *zap.Logger,
-) Poller {
+type PollerConfig struct {
+	CDP          cdp.CDP
+	Relayer      relayer.Relayer
+	DeviceStatus DeviceStatus
+}
+
+func NewPoller(conf *PollerConfig, logger *zap.Logger) Poller {
 	return &poller{
-		cdp:              cdp,
-		relayer:          relay,
-		deviceStatus:     deviceStatus,
+		cdp:              conf.CDP,
+		relayer:          conf.Relayer,
+		deviceStatus:     conf.DeviceStatus,
 		logger:           logger,
 		stopChan:         make(chan struct{}),
 		refreshChan:      make(chan struct{}, 10), // Buffered channel to prevent blocking

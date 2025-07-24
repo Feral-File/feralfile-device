@@ -37,20 +37,21 @@ type mediator struct {
 	tracer       *logger.RelayerMessageTracer
 }
 
-func New(
-	relayer relayer.Relayer,
-	dbus dbus.DBus,
-	cdp cdp.CDP,
-	cmd command.CommandHandler,
-	clock wrapper.Clock,
-	l *zap.Logger,
-) Mediator {
+type Config struct {
+	Relayer relayer.Relayer
+	DBus    dbus.DBus
+	CDP     cdp.CDP
+	Command command.CommandHandler
+	Clock   wrapper.Clock
+}
+
+func New(conf *Config, l *zap.Logger) Mediator {
 	return &mediator{
-		relayer: relayer,
-		dbus:    dbus,
-		cdp:     cdp,
-		cmd:     cmd,
-		clock:   clock,
+		relayer: conf.Relayer,
+		dbus:    conf.DBus,
+		cdp:     conf.CDP,
+		cmd:     conf.Command,
+		clock:   conf.Clock,
 		logger:  l,
 		tracer:  logger.NewRelayerMessageTracer(l),
 	}

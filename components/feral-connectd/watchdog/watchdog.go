@@ -33,29 +33,31 @@ func New(logger *zap.Logger) Watchdog {
 
 // Start starts the watchdog process
 func (w *watchdog) Start(ctx context.Context) {
-	ticker := time.NewTicker(INTERVAL)
-	defer ticker.Stop()
+	go func() {
+		ticker := time.NewTicker(INTERVAL)
+		defer ticker.Stop()
 
-	w.logger.Info("Starting watchdog", zap.Duration("interval", INTERVAL))
+		w.logger.Info("Starting watchdog", zap.Duration("interval", INTERVAL))
 
-	for {
-		select {
-		case <-ticker.C:
-			sent, err := daemon.SdNotify(false, daemon.SdNotifyWatchdog)
-			if err != nil {
-				w.logger.Error("Failed to notify systemd", zap.Error(err))
+		for {
+			select {
+			case <-ticker.C:
+				sent, err := daemon.SdNotify(false, daemon.SdNotifyWatchdog)
+				if err != nil {
+					w.logger.Error("Failed to notify systemd", zap.Error(err))
+				}
+				if !sent {
+					w.logger.Warn("Failed to notify systemd, notification not supported. It could because NOTIFY_SOCKET is unset")
+				}
+			case <-ctx.Done():
+				w.logger.Info("Stopping watchdog due to context cancellation")
+				return
+			case <-w.done:
+				w.logger.Info("Stopping watchdog")
+				return
 			}
-			if !sent {
-				w.logger.Warn("Failed to notify systemd, notification not supported. It could because NOTIFY_SOCKET is unset")
-			}
-		case <-ctx.Done():
-			w.logger.Info("Stopping watchdog due to context cancellation")
-			return
-		case <-w.done:
-			w.logger.Info("Stopping watchdog")
-			return
 		}
-	}
+	}()
 }
 
 // Stop stops the watchdog process
