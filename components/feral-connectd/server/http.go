@@ -118,8 +118,15 @@ func (s *httpServer) Start() error {
 	// Handle context cancellation
 	go func() {
 		<-s.ctx.Done()
-		s.logger.Info("Context canceled, shutting down HTTP server")
-		_ = s.Stop()
+		// Only log and stop if the server is still running
+		s.mu.RLock()
+		if s.running {
+			s.mu.RUnlock()
+			s.logger.Info("Context canceled, shutting down HTTP server")
+			_ = s.Stop()
+		} else {
+			s.mu.RUnlock()
+		}
 	}()
 
 	return nil
