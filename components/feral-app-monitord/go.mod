@@ -7,6 +7,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/feral-file/godbus v0.0.6-0.20250716043107-25b56328d11e
 	github.com/godbus/dbus/v5 v5.1.0
+	github.com/gowebpki/jcs v1.0.1
 	go.uber.org/zap v1.27.0
 )
 
