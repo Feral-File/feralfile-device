@@ -36,6 +36,8 @@ pub type ConnectWifiCallback = Box<
 pub type KeepWifiCallback =
     Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<String, u8>> + Send>> + Send + Sync>;
 pub type GetInfoCallback = Option<Box<dyn Fn() -> Vec<String> + Send + Sync>>;
+pub type FactoryResetCallback =
+    Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>;
 
 #[derive(Default)]
 struct Inner {
@@ -64,6 +66,7 @@ impl Ble {
     pub async fn start(
         &self,
         bt_connected_cb: BTConnectedCallback,
+        factory_reset_cb: FactoryResetCallback,
         connect_wifi_cb: ConnectWifiCallback,
         keep_wifi_cb: KeepWifiCallback,
         get_info_cb: GetInfoCallback,
@@ -101,6 +104,7 @@ impl Ble {
             characteristics: vec![
                 self.create_cmd_char(
                     bt_connected_cb,
+                    factory_reset_cb,
                     connect_wifi_cb,
                     keep_wifi_cb,
                     get_info_cb,
@@ -168,6 +172,7 @@ impl Ble {
     async fn create_cmd_char(
         &self,
         bt_connected_cb: BTConnectedCallback,
+        factory_reset_cb: FactoryResetCallback,
         connect_wifi_cb: ConnectWifiCallback,
         keep_wifi_cb: KeepWifiCallback,
         get_info_cb: GetInfoCallback,
@@ -179,6 +184,7 @@ impl Ble {
         let notifier_for_notify = notifier.clone();
 
         let bt_connected_callback = Arc::new(bt_connected_cb);
+        let factory_reset_callback = Arc::new(factory_reset_cb);
         let connect_wifi_callback = Arc::new(connect_wifi_cb);
         let keep_wifi_callback = Arc::new(keep_wifi_cb);
         let get_info_callback = Arc::new(get_info_cb);
@@ -209,6 +215,7 @@ impl Ble {
                     println!("BLE: Received bluetooth data {data:?}");
                     let notifier = notifier_for_write.clone();
                     let connect_wifi_callback = connect_wifi_callback.clone();
+                    let factory_reset_callback = factory_reset_callback.clone();
                     let keep_wifi_callback = keep_wifi_callback.clone();
                     let get_info_callback = get_info_callback.clone();
                     let ssids_cacher = ssids_cacher.clone();
@@ -253,7 +260,8 @@ impl Ble {
                                 handle_set_time(notifier, reply_id, params).await
                             }
                             constant::CMD_FACTORY_RESET => {
-                                handle_factory_reset(notifier, reply_id).await
+                                handle_factory_reset(notifier, reply_id, factory_reset_callback)
+                                    .await
                             }
                             _ => {
                                 eprintln!("BLE: Unknown command: {cmd}");
@@ -403,8 +411,12 @@ async fn handle_set_time(
 async fn handle_factory_reset(
     notifier: Arc<Mutex<Option<CharacteristicNotifier>>>,
     reply_id: String,
+    cb: Arc<FactoryResetCallback>,
 ) -> Result<(), ReqError> {
     println!("BLE: Factory resetting");
+    if let Some(cb) = cb.as_ref() {
+        cb().await;
+    }
     let status_code = if let Err(e) = system::factory_reset().await {
         eprintln!("BLE: Failed to factory reset: {e:#?}");
         [constant::BLE_ERR_CODE_UNKNOWN_ERROR]

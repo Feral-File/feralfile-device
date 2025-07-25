@@ -1,13 +1,12 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"net"
-	"os/exec"
-	"strconv"
-	"strings"
+	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-sys-monitord/metric"
 	"go.uber.org/zap"
 )
 
@@ -26,42 +25,99 @@ func GetMacAddress() (string, error) {
 	return "", fmt.Errorf("no suitable network interface found")
 }
 
-// GetCpuTemp reads the CPU temperature.
-func GetCpuTemp() float64 {
-	cmd := exec.Command("sensors", "-u")
-	output, err := cmd.Output()
+func GetConnectivityStatus() (bool, error) {
+	logger.Info("Getting connectivity status")
+
+	deadlineCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp, err := dbusClient.Call(
+		deadlineCtx,
+		MONITORD_DBUS_NAME,
+		MONITORD_DBUS_PATH,
+		MONITORD_DBUS_INTERFACE,
+		MONITORD_METHOD_GET_CONNECTIVITY_STATUS,
+		true,
+	)
+	logger.Debug("Connectivity status", zap.Any("resp", resp), zap.Error(err))
 	if err != nil {
-		logger.Error("Failed to execute sensors -u", zap.Error(err))
-		return 0.0
+		return false, err
 	}
 
-	lines := bytes.Split(output, []byte("\n"))
-	inPkg := false
-
-	for _, line := range lines {
-		strLine := strings.TrimSpace(string(line))
-
-		if strLine == "" {
-			inPkg = false
-			continue
-		}
-
-		if strings.HasPrefix(strLine, "Package id 0:") {
-			inPkg = true
-			continue
-		}
-
-		if inPkg && strings.HasPrefix(strLine, "temp1_input:") {
-			parts := strings.Fields(strLine)
-			if len(parts) == 2 {
-				temp, err := strconv.ParseFloat(parts[1], 64)
-				if err == nil {
-					return temp
-				}
-			}
-		}
+	if len(resp) != 1 {
+		return false, fmt.Errorf("expected 1 response, got %d", len(resp))
 	}
 
-	logger.Warn("Warning: Could not find temp1_input for Package id 0")
-	return 0.0
+	connected, ok := resp[0].(bool)
+	if !ok {
+		return false, fmt.Errorf("expected bool, got %T", resp[0])
+	}
+
+	return connected, nil
+}
+
+// GetSysMetrics retrieves system metrics from the sysmonitord service.
+func GetSysMetrics() (*metric.SysDBusMetrics, error) {
+	logger.Info("Getting system metrics")
+
+	deadlineCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var metrics metric.SysDBusMetrics
+
+	err := dbusClient.Query(
+		deadlineCtx,
+		&metrics,
+		MONITORD_DBUS_NAME,
+		MONITORD_DBUS_PATH,
+		MONITORD_DBUS_INTERFACE,
+		MONITORD_METHOD_GET_SYSMETRICS,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &metrics, nil
+}
+
+type Page string
+
+const (
+	PageNone          Page = "None"
+	PageQRCode        Page = "QRCode"
+	PageMessage       Page = "Message"
+	PageSystemUpgrade Page = "SystemUpgrade"
+	PageFactoryReset  Page = "FactoryReset"
+	PageWebApp        Page = "WebApp"
+)
+
+type PageState struct {
+	Page            Page  `json:"page"`
+	PageChangedUnix int64 `json:"page_changed_unix"`
+}
+
+// GetSysMetrics retrieves system metrics from the sysmonitord service.
+func GetPageState() (*PageState, error) {
+	logger.Info("Getting page state")
+
+	deadlineCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var pg PageState
+
+	err := dbusClient.Scan(
+		deadlineCtx,
+		[]interface{}{&pg.Page, &pg.PageChangedUnix},
+		SETUPD_DBUS_NAME,
+		SETUPD_DBUS_PATH,
+		SETUPD_DBUS_INTERFACE,
+		SETUPD_METHOD_GET_PAGE_STATE,
+	)
+	if err != nil {
+		logger.Error("Getting page state error", zap.Error(err))
+		return nil, err
+	}
+	logger.Info("Getting page state:", zap.Any("pg", pg))
+
+	return &pg, nil
 }

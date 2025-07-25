@@ -43,11 +43,12 @@ func savePrivateKey(privateKey ed25519.PrivateKey, path string) error {
 		return fmt.Errorf("failed to marshal private key: %w", err)
 	}
 	privateKeyPEM := &pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes}
+	// #nosec G304 -- path is constructed from constants
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create private key file: %w", err)
 	}
-	defer file.Close()
+	defer closeFile(file)
 	return pem.Encode(file, privateKeyPEM)
 }
 
@@ -58,11 +59,12 @@ func savePublicKey(publicKey ed25519.PublicKey, path string) error {
 		return fmt.Errorf("failed to marshal public key: %w", err)
 	}
 	publicKeyPEM := &pem.Block{Type: "PUBLIC KEY", Bytes: pkixBytes}
+	// #nosec G304 -- path is constructed from constants
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create public key file: %w", err)
 	}
-	defer file.Close()
+	defer closeFile(file)
 	return pem.Encode(file, publicKeyPEM)
 }
 

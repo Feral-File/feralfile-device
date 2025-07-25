@@ -36,11 +36,12 @@ type Config struct {
 
 // LoadConfig reads and parses the JSON configuration file from the given path.
 func LoadConfig() error {
+	// #nosec G304 -- path is constructed from constants
 	file, err := os.Open(configFile)
 	if err != nil {
 		return fmt.Errorf("failed to open config file %s: %w", configFile, err)
 	}
-	defer file.Close()
+	defer closeFile(file)
 
 	bytes, err := io.ReadAll(file)
 	if err != nil {

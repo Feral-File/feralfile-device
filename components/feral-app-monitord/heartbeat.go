@@ -10,10 +10,20 @@ import (
 
 // HeartbeatData represents the data part of the payload.
 type HeartbeatData struct {
-	MACAddress     string  `json:"mac"`
-	Timestamp      int64   `json:"ts"`
-	Build          string  `json:"build"`
-	CPUTemperature float64 `json:"cpu_temp"`
+	MACAddress string `json:"mac"`
+	Timestamp  int64  `json:"ts"`
+	Build      string `json:"build"`
+
+	ScreenInfo  string  `json:"screen_info"`
+	CPUTemp     float64 `json:"cpu_temp"`
+	CPUUsage    float64 `json:"cpu_usage"`
+	GPUUsage    float64 `json:"gpu_usage"`
+	MemoryUsage float64 `json:"memory_usage"`
+	DiskUsage   float64 `json:"disk_usage"`
+	Uptime      string  `json:"uptime"`
+
+	Page       string `json:"page"`
+	PageUptime string `json:"page_uptime"`
 }
 
 // HeartbeatPayload is the structure for the final JSON object.
@@ -25,14 +35,46 @@ type HeartbeatPayload struct {
 
 // SendHeartbeat orchestrates the process of sending a heartbeat.
 func SendHeartbeat() {
-	cpuTemp := GetCpuTemp()
-	logger.Info("Gathered data", zap.Float64("Temp", cpuTemp))
+	sysMetric, err := GetSysMetrics()
+	if err != nil {
+		logger.Error("Failed to get sysMetric: %v", zap.Error(err))
+		return
+	}
+	if sysMetric == nil {
+		logger.Error("SysMetric is nil, cannot send heartbeat")
+		return
+	}
+	logger.Info("Gathered sysMetric data", zap.Any("sysMetric", sysMetric))
+
+	pageState, err := GetPageState()
+	if err != nil {
+		logger.Error("Failed to get pageState: %v", zap.Error(err))
+		return
+	}
+	if pageState == nil {
+		logger.Error("pageState is nil, cannot send heartbeat")
+		return
+	}
+	logger.Info("Gathered pageState data", zap.Any("pageState", pageState))
 
 	message := &HeartbeatData{
-		MACAddress:     config.MAC,
-		Timestamp:      time.Now().UnixMilli(),
-		Build:          fmt.Sprintf("%s-%s", config.Branch, config.Version),
-		CPUTemperature: cpuTemp,
+		MACAddress: config.MAC,
+		Timestamp:  time.Now().UnixMilli(),
+		Build:      fmt.Sprintf("%s-%s", config.Branch, config.Version),
+
+		ScreenInfo: fmt.Sprintf(
+			"%dx%d@%.0fHz",
+			sysMetric.Screen.Width, sysMetric.Screen.Height, sysMetric.Screen.RefreshRate,
+		),
+		CPUTemp:     sysMetric.CPU.CurrentTemperature,
+		CPUUsage:    sysMetric.CPU.CurrentFrequency / sysMetric.CPU.MaxFrequency,
+		GPUUsage:    sysMetric.GPU.CurrentFrequency / sysMetric.GPU.MaxFrequency,
+		MemoryUsage: sysMetric.Memory.UsedCapacity / sysMetric.Memory.MaxCapacity,
+		DiskUsage:   sysMetric.Disk.UsedCapacity / sysMetric.Disk.TotalCapacity,
+		Uptime:      humanizeDuration(int64(sysMetric.Uptime)),
+
+		Page:       string(pageState.Page),
+		PageUptime: humanizeDuration(int64(time.Since(time.Unix(pageState.PageChangedUnix, 0)).Seconds())),
 	}
 	messageJSON, err := json.Marshal(message)
 	if err != nil {

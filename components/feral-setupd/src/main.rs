@@ -9,6 +9,7 @@ mod system;
 mod updater;
 mod wifi_utils;
 
+use crate::dbus_utils::PageStateProvider;
 use crate::wifi_utils::{Error as WifiError, SSIDsCacher};
 use anyhow::Context;
 use anyhow::Result;
@@ -19,6 +20,7 @@ use connectivity::Connectivity;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::signal::unix::{SignalKind, signal as unix_signal};
 use tokio::{
     sync::Mutex,
@@ -26,11 +28,46 @@ use tokio::{
     time::{self, Duration},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[inline]
+fn unix_s() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Page {
-    None,
-    QRCode,
-    WebApp,
+    None(i64),
+    QRCode(i64),
+    Message(i64, String),
+    SystemUpgrade(i64),
+    FactoryReset(i64),
+    WebApp(i64),
+}
+
+impl Page {
+    fn timestamp(&self) -> i64 {
+        match self {
+            Page::None(ts) => *ts,
+            Page::QRCode(ts) => *ts,
+            Page::Message(ts, _) => *ts,
+            Page::SystemUpgrade(ts) => *ts,
+            Page::FactoryReset(ts) => *ts,
+            Page::WebApp(ts) => *ts,
+        }
+    }
+
+    fn page_type(&self) -> &str {
+        match self {
+            Page::None(_) => "None",
+            Page::QRCode(_) => "QRCode",
+            Page::Message(_, _) => "Message",
+            Page::SystemUpgrade(_) => "SystemUpgrade",
+            Page::FactoryReset(_) => "FactoryReset",
+            Page::WebApp(_) => "WebApp",
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -51,6 +88,13 @@ struct AppState {
     auto_proceed: AtomicBool,
 }
 
+impl PageStateProvider for AppState {
+    fn get_page_state(&self) -> (String, i64) {
+        let page = self.page.blocking_lock();
+        (page.page_type().to_string(), page.timestamp())
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize dependencies
@@ -64,20 +108,17 @@ async fn main() -> Result<()> {
         current_version: updater::current_version().await.unwrap_or_default(),
         app_cache: Cache::new(constant::CACHE_FILEPATH)?,
         internet: Connectivity::spawn().await,
-        page: Mutex::new(Page::None),
+        page: Mutex::new(Page::None(unix_s())),
         auto_proceed: AtomicBool::new(false),
     });
     println!("MAIN: App state initialized: {app_state:?}");
 
     // Start bluetooth advertising with callbacks
-    // let bt_connected_cb = create_bt_connected_cb(chrome.clone());
-    // let connect_wifi_cb = create_connect_wifi_cb(app_state.clone(), chrome.clone());
-    // let keep_wifi_cb = create_keep_wifi_cb(app_state.clone(), chrome.clone());
-    // let get_info_cb = create_get_info_cb(app_state.clone());
     let ssids_cacher = Arc::new(SSIDsCacher::new());
     ble_service
         .start(
             create_bt_connected_cb(app_state.clone(), chrome.clone()),
+            create_factory_reset_cb(app_state.clone(), chrome.clone()),
             create_connect_wifi_cb(app_state.clone(), chrome.clone()),
             create_keep_wifi_cb(app_state.clone(), chrome.clone()),
             create_get_info_cb(app_state.clone()),
@@ -135,6 +176,9 @@ async fn main() -> Result<()> {
         qrcode_switch_cb,
     );
 
+    // Start the D-Bus service
+    dbus_utils::start_dbus_service(app_state.clone());
+
     // Wait for Ctrl+C or shutdown event
     wait_for_shutdown().await; // Ignore any errors
     println!("MAIN: Shutting down...");
@@ -174,12 +218,8 @@ fn create_connect_wifi_cb(
         Box::pin(async move {
             let start_time = Instant::now();
             // Show message
-            let _ = show_message(
-                &chromium,
-                &app_state,
-                &format!("{}{}", constant::WIFI_CONNECTING_MSG_PREFIX, ssid),
-            )
-            .await;
+            let connecting_msg = format!("{}{}", constant::WIFI_CONNECTING_MSG_PREFIX, ssid);
+            let _ = show_message(&chromium, &app_state, &connecting_msg).await;
 
             // Disable auto proceed since users want to setup another wifi
             // Instead of fixing the current internet (if there is any)
@@ -326,6 +366,19 @@ fn create_qrcode_switch_cb(
     })
 }
 
+fn create_factory_reset_cb(
+    app_state: Arc<AppState>,
+    chromium: Arc<Cdp>,
+) -> ble::FactoryResetCallback {
+    Some(Box::new(move || {
+        let chromium = chromium.clone();
+        let app_state = app_state.clone();
+        Box::pin(async move {
+            let _ = show_factory_reset(&chromium, &app_state).await;
+        })
+    }))
+}
+
 // The url format is like this
 // url?step=qr&device_id=<device_id>|<topic_id>|<internet>
 async fn build_qrcode_url(app_state: &Arc<AppState>) -> String {
@@ -343,7 +396,7 @@ async fn build_qrcode_url(app_state: &Arc<AppState>) -> String {
 
 async fn wait_for_shutdown() {
     // SIGINT  = Ctrl-C on the terminal
-    // SIGTERM = “polite” kill sent by most service managers / docker / k8s
+    // SIGTERM = "polite" kill sent by most service managers / docker / k8s
     // (add more signals if you need them)
     let mut sigint = unix_signal(SignalKind::interrupt()).expect("SIGINT handler");
     let mut sigterm = unix_signal(SignalKind::terminate()).expect("SIGTERM handler");
@@ -364,7 +417,7 @@ async fn show_qrcode(app_state: &Arc<AppState>, chrome: &Arc<Cdp>) -> Result<()>
         .await
         .with_context(|| format!("navigating to {qrcode_url}"))?;
     println!("MAIN: Navigated to {qrcode_url}");
-    *page = Page::QRCode;
+    *page = Page::QRCode(unix_s());
     Ok(())
 }
 
@@ -404,7 +457,7 @@ async fn update(app_state: Arc<AppState>, chrome: Arc<Cdp>) -> Result<()> {
     let latest_version = updater::latest_version().await.unwrap_or_default();
     let base_msg = format!("{} {}", &constant::UPDATING_MSG_PREFIX, latest_version);
     let default_subtext = constant::UPDATING_MSG_SUBTEXT;
-    let _ = show_message(
+    let _ = show_system_upgrade(
         &chrome,
         &app_state,
         &format!("{base_msg}&subtext={default_subtext}"),
@@ -415,7 +468,8 @@ async fn update(app_state: Arc<AppState>, chrome: Arc<Cdp>) -> Result<()> {
         match res {
             Ok(msg) => {
                 let _ =
-                    show_message(&chrome, &app_state, &format!("{base_msg}&subtext={msg}")).await;
+                    show_system_upgrade(&chrome, &app_state, &format!("{base_msg}&subtext={msg}"))
+                        .await;
             }
             Err(e) => {
                 eprintln!("MAIN: Update process failed: {e:#}");
@@ -428,7 +482,7 @@ async fn update(app_state: Arc<AppState>, chrome: Arc<Cdp>) -> Result<()> {
 async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<Cdp>) -> Result<()> {
     let mut page = app_state.page.lock().await;
     // For webapp, we only navigate if the page is not it already
-    if *page == Page::WebApp {
+    if matches!(*page, Page::WebApp(_)) {
         return Ok(());
     }
 
@@ -440,7 +494,7 @@ async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<Cdp>) -> Result<()>
         .await
         .with_context(|| format!("navigating to {}", constant::WEBAPP_URL))?;
     println!("MAIN: Navigated to {}", constant::WEBAPP_URL);
-    *page = Page::WebApp;
+    *page = Page::WebApp(unix_s());
     Ok(())
 }
 
@@ -451,7 +505,42 @@ async fn show_message(chrome: &Arc<Cdp>, app_state: &Arc<AppState>, message: &st
         .await
         .with_context(|| format!("navigating to {message_url}"))?;
     println!("MAIN: Navigated to {message_url}");
+
     let mut page = app_state.page.lock().await;
-    *page = Page::None;
+    *page = Page::Message(unix_s(), message.to_string());
+    Ok(())
+}
+
+async fn show_system_upgrade(
+    chrome: &Arc<Cdp>,
+    app_state: &Arc<AppState>,
+    message: &str,
+) -> Result<()> {
+    let message_url = format!("{}{}", constant::MSG_URL_PREFIX, message);
+    chrome
+        .navigate(&message_url)
+        .await
+        .with_context(|| format!("navigating to {message_url}"))?;
+    println!("MAIN: Navigated to {message_url}");
+
+    let mut page = app_state.page.lock().await;
+    *page = Page::SystemUpgrade(unix_s());
+    Ok(())
+}
+
+async fn show_factory_reset(chrome: &Arc<Cdp>, app_state: &Arc<AppState>) -> Result<()> {
+    let message_url = format!(
+        "{}{}",
+        constant::MSG_URL_PREFIX,
+        constant::FACTORY_RESET_MSG
+    );
+    chrome
+        .navigate(&message_url)
+        .await
+        .with_context(|| format!("navigating to {message_url}"))?;
+    println!("MAIN: Navigated to {message_url}");
+
+    let mut page = app_state.page.lock().await;
+    *page = Page::FactoryReset(unix_s());
     Ok(())
 }

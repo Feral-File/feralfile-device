@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/Feral-File/feralfile-device/components/feral-sys-monitord/metric"
 	"github.com/feral-file/godbus"
 	"github.com/godbus/dbus/v5"
 	"go.uber.org/zap"
@@ -17,14 +18,16 @@ const (
 )
 
 type SysMonitordDBus struct {
-	connectivity *Connectivity
-	logger       *zap.Logger
+	connectivity  *Connectivity
+	sysResMonitor *metric.SysResMonitor
+	logger        *zap.Logger
 }
 
-func NewSysMonitordDBus(connectivity *Connectivity, logger *zap.Logger) *SysMonitordDBus {
+func NewSysMonitordDBus(connectivity *Connectivity, sysResMonitor *metric.SysResMonitor, logger *zap.Logger) *SysMonitordDBus {
 	return &SysMonitordDBus{
-		connectivity: connectivity,
-		logger:       logger,
+		connectivity:  connectivity,
+		sysResMonitor: sysResMonitor,
+		logger:        logger,
 	}
 }
 
@@ -39,4 +42,9 @@ func (s *SysMonitordDBus) GetConnectivityStatus(refresh bool) (bool, *dbus.Error
 	} else {
 		return s.connectivity.GetLastConnected(), nil
 	}
+}
+
+func (s *SysMonitordDBus) GetSysMetrics() (*metric.SysDBusMetrics, *dbus.Error) {
+	s.logger.Info("DBus RPC called: GetSysMetrics")
+	return s.sysResMonitor.LastMetrics().DBus(), nil
 }

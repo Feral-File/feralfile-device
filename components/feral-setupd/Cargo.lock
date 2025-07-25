@@ -311,6 +311,7 @@ dependencies = [
  "anyhow",
  "bluer",
  "dbus",
+ "dbus-crossroads",
  "futures",
  "futures-util",
  "mac_address",
