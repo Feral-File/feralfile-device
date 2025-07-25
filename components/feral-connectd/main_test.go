@@ -163,10 +163,6 @@ func TestApp_Run_Success(t *testing.T) {
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
 
-				// Mock Relayer connect and close
-				ts.mockRelayer.EXPECT().Connect(gomock.Any()).Return(nil)
-				ts.mockRelayer.EXPECT().Close()
-
 				// Mock DBus start and stop
 				ts.mockDBus.EXPECT().Start().Return(nil)
 				ts.mockDBus.EXPECT().Stop().Return(nil)
@@ -217,11 +213,6 @@ func TestApp_Run_Success(t *testing.T) {
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
 
-				// Mock Relayer connect and close
-				ts.mockRelayer.EXPECT().Connect(gomock.Any()).Return(nil)
-				ts.mockRelayer.EXPECT().Close()
-				ts.mockRelayer.EXPECT().Connect(gomock.Any()).Return(nil) // Second connect call
-
 				// Mock DBus start and stop
 				ts.mockDBus.EXPECT().Start().Return(nil)
 				ts.mockDBus.EXPECT().Stop().Return(nil)
@@ -246,6 +237,10 @@ func TestApp_Run_Success(t *testing.T) {
 				ts.mockDBus.EXPECT().
 					Call(gomock.Any(), dbus.MONITORD_NAME, dbus.MONITORD_PATH, dbus.MONITORD_INTERFACE, dbus.MONITORD_METHOD_GET_CONNECTIVITY_STATUS, true).
 					Return([]interface{}{true}, nil)
+
+				// Mock Relayer connect and close
+				ts.mockRelayer.EXPECT().Connect(gomock.Any()).Return(nil)
+				ts.mockRelayer.EXPECT().Close()
 			},
 		},
 	}
@@ -301,31 +296,6 @@ func TestApp_Run_Errors(t *testing.T) {
 			wantErr: "CDP connection failed",
 		},
 		{
-			name: "relayer connect failure",
-			setupFunc: func(ts *testSetup) {
-				// Mock state load ok
-				ts.mockStateManager.EXPECT().
-					Load(ts.logger).
-					Return(&state.State{
-						Relayer: &state.RelayerState{TopicID: ""},
-					}, nil)
-
-				// Mock CDP init ok
-				ts.mockCDP.EXPECT().Init(gomock.Any()).Return(nil)
-				ts.mockCDP.EXPECT().Close()
-
-				// Mock Watchdog start and stop
-				ts.mockWatchdog.EXPECT().Start(gomock.Any())
-				ts.mockWatchdog.EXPECT().Stop()
-
-				// Mock Relayer connect failure
-				ts.mockRelayer.EXPECT().
-					Connect(gomock.Any()).
-					Return(errors.New("relayer connection failed"))
-			},
-			wantErr: "relayer connection failed",
-		},
-		{
 			name: "DBus start failure",
 			setupFunc: func(ts *testSetup) {
 				// Mock state load ok
@@ -342,10 +312,6 @@ func TestApp_Run_Errors(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
-
-				// Mock Relayer connect ok
-				ts.mockRelayer.EXPECT().Connect(gomock.Any()).Return(nil)
-				ts.mockRelayer.EXPECT().Close()
 
 				// Mock DBus start failure
 				ts.mockDBus.EXPECT().
@@ -371,10 +337,6 @@ func TestApp_Run_Errors(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
-
-				// Mock Relayer connect ok
-				ts.mockRelayer.EXPECT().Connect(gomock.Any()).Return(nil)
-				ts.mockRelayer.EXPECT().Close()
 
 				// Mock DBus start ok
 				ts.mockDBus.EXPECT().Start().Return(nil)
@@ -404,10 +366,6 @@ func TestApp_Run_Errors(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
-
-				// Mock Relayer connect ok
-				ts.mockRelayer.EXPECT().Connect(gomock.Any()).Return(nil)
-				ts.mockRelayer.EXPECT().Close()
 
 				// Mock DBus start ok
 				ts.mockDBus.EXPECT().Start().Return(nil)
@@ -447,10 +405,6 @@ func TestApp_Run_Errors(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
-
-				// Mock Relayer connect ok
-				ts.mockRelayer.EXPECT().Connect(gomock.Any()).Return(nil)
-				ts.mockRelayer.EXPECT().Close()
 
 				// Mock DBus start ok
 				ts.mockDBus.EXPECT().Start().Return(nil)
@@ -498,10 +452,6 @@ func TestApp_Run_Errors(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
-
-				// Mock Relayer connect ok
-				ts.mockRelayer.EXPECT().Connect(gomock.Any()).Return(nil)
-				ts.mockRelayer.EXPECT().Close()
 
 				// Mock DBus start ok
 				ts.mockDBus.EXPECT().Start().Return(nil)

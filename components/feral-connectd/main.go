@@ -176,13 +176,6 @@ func (app *app) run(ctx context.Context, conf *config.Config) error {
 	app.Watchdog.Start(ctx)
 	defer app.Watchdog.Stop()
 
-	// Initialize Relayer client
-	err = app.Relayer.Connect(ctx)
-	if err != nil {
-		return err
-	}
-	defer app.Relayer.Close()
-
 	// Initialize DBus client
 	err = app.DBus.Start()
 	if err != nil {
@@ -214,6 +207,7 @@ func (app *app) run(ctx context.Context, conf *config.Config) error {
 		if err != nil {
 			return err
 		}
+		defer app.Relayer.Close()
 	}
 
 	// Set the StatusPoller reference in mediator for force refresh
