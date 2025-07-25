@@ -31,6 +31,7 @@ type testSetup struct {
 	// Mocked components
 	mockCDP          *mocks.MockCDP
 	mockRelayer      *mocks.MockRelayer
+	mockHttpServer   *mocks.MockHttpServer
 	mockDBus         *mocks.MockDBus
 	mockMediator     *mocks.MockMediator
 	mockCommand      *mocks.MockCommandHandler
@@ -66,6 +67,7 @@ func setup(t *testing.T) *testSetup {
 		mockLoggerManager: mocks.NewMockLoggerManager(ctrl),
 		mockCDP:           mocks.NewMockCDP(ctrl),
 		mockRelayer:       mocks.NewMockRelayer(ctrl),
+		mockHttpServer:    mocks.NewMockHttpServer(ctrl),
 		mockDBus:          mocks.NewMockDBus(ctrl),
 		mockMediator:      mocks.NewMockMediator(ctrl),
 		mockCommand:       mocks.NewMockCommandHandler(ctrl),
@@ -115,6 +117,7 @@ func setup(t *testing.T) *testSetup {
 		ts.mockMath,
 		ts.mockCDP,
 		ts.mockRelayer,
+		ts.mockHttpServer,
 		ts.mockDBus,
 		ts.mockDeviceStatus,
 		ts.mockStatusPoller,
@@ -162,6 +165,10 @@ func TestApp_Run_Success(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
+
+				// Mock HttpServer start and stop
+				ts.mockHttpServer.EXPECT().Start().Return(nil)
+				ts.mockHttpServer.EXPECT().Stop().Return(nil)
 
 				// Mock DBus start and stop
 				ts.mockDBus.EXPECT().Start().Return(nil)
@@ -212,6 +219,10 @@ func TestApp_Run_Success(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
+
+				// Mock HttpServer start and stop
+				ts.mockHttpServer.EXPECT().Start().Return(nil)
+				ts.mockHttpServer.EXPECT().Stop().Return(nil)
 
 				// Mock DBus start and stop
 				ts.mockDBus.EXPECT().Start().Return(nil)
@@ -296,6 +307,57 @@ func TestApp_Run_Errors(t *testing.T) {
 			wantErr: "CDP connection failed",
 		},
 		{
+			name: "HttpServer start failure",
+			setupFunc: func(ts *testSetup) {
+				// Mock state load ok
+				ts.mockStateManager.EXPECT().
+					Load(ts.logger).
+					Return(&state.State{
+						Relayer: &state.RelayerState{TopicID: ""},
+					}, nil)
+
+				// Mock CDP init ok
+				ts.mockCDP.EXPECT().Init(gomock.Any()).Return(nil)
+				ts.mockCDP.EXPECT().Close()
+
+				// Mock Watchdog start and stop
+				ts.mockWatchdog.EXPECT().Start(gomock.Any())
+				ts.mockWatchdog.EXPECT().Stop()
+
+				// Mock HttpServer start failure
+				ts.mockHttpServer.EXPECT().Start().Return(errors.New("HttpServer start failed"))
+				ts.mockHttpServer.EXPECT().Stop().Return(nil)
+
+				// Mock DBus start ok
+				ts.mockDBus.EXPECT().Start().Return(nil)
+				ts.mockDBus.EXPECT().Stop().Return(nil)
+				ts.mockDBus.EXPECT().Export(gomock.Any(), dbus.PATH, dbus.INTERFACE).Return(nil)
+
+				// Mock Mediator start and stop
+				ts.mockMediator.EXPECT().Start()
+				ts.mockMediator.EXPECT().Stop()
+
+				// Mock DBus call failure
+				ts.mockDBus.EXPECT().
+					Call(gomock.Any(), dbus.MONITORD_NAME, dbus.MONITORD_PATH, dbus.MONITORD_INTERFACE, dbus.MONITORD_METHOD_GET_CONNECTIVITY_STATUS, true).
+					Return([]interface{}{false}, nil)
+
+				// Mock Mediator set status poller
+				ts.mockMediator.EXPECT().SetStatusPoller(ts.mockStatusPoller)
+
+				// Mock CommandHandler set status poller
+				ts.mockCommand.EXPECT().SetStatusPoller(ts.mockStatusPoller)
+
+				// Mock StatusPoller start and stop
+				ts.mockStatusPoller.EXPECT().Start(gomock.Any())
+				ts.mockStatusPoller.EXPECT().Stop()
+
+				// Mock daemon notify
+				ts.mockDaemon.EXPECT().SdNotify(false, go_daemon.SdNotifyReady).Return(true, nil)
+			},
+			wantErr: "", // No error expected
+		},
+		{
 			name: "DBus start failure",
 			setupFunc: func(ts *testSetup) {
 				// Mock state load ok
@@ -312,6 +374,10 @@ func TestApp_Run_Errors(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
+
+				// Mock HttpServer start and stop
+				ts.mockHttpServer.EXPECT().Start().Return(nil)
+				ts.mockHttpServer.EXPECT().Stop().Return(nil)
 
 				// Mock DBus start failure
 				ts.mockDBus.EXPECT().
@@ -337,6 +403,10 @@ func TestApp_Run_Errors(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
+
+				// Mock HttpServer start and stop
+				ts.mockHttpServer.EXPECT().Start().Return(nil)
+				ts.mockHttpServer.EXPECT().Stop().Return(nil)
 
 				// Mock DBus start ok
 				ts.mockDBus.EXPECT().Start().Return(nil)
@@ -366,6 +436,10 @@ func TestApp_Run_Errors(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
+
+				// Mock HttpServer start and stop
+				ts.mockHttpServer.EXPECT().Start().Return(nil)
+				ts.mockHttpServer.EXPECT().Stop().Return(nil)
 
 				// Mock DBus start ok
 				ts.mockDBus.EXPECT().Start().Return(nil)
@@ -405,6 +479,10 @@ func TestApp_Run_Errors(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
+
+				// Mock HttpServer start and stop
+				ts.mockHttpServer.EXPECT().Start().Return(nil)
+				ts.mockHttpServer.EXPECT().Stop().Return(nil)
 
 				// Mock DBus start ok
 				ts.mockDBus.EXPECT().Start().Return(nil)
@@ -452,6 +530,10 @@ func TestApp_Run_Errors(t *testing.T) {
 				// Mock Watchdog start and stop
 				ts.mockWatchdog.EXPECT().Start(gomock.Any())
 				ts.mockWatchdog.EXPECT().Stop()
+
+				// Mock HttpServer start and stop
+				ts.mockHttpServer.EXPECT().Start().Return(nil)
+				ts.mockHttpServer.EXPECT().Stop().Return(nil)
 
 				// Mock DBus start ok
 				ts.mockDBus.EXPECT().Start().Return(nil)
@@ -635,6 +717,7 @@ func TestInitializeTestApp(t *testing.T) {
 	// Create minimal mocks for testing
 	mockCDP := mocks.NewMockCDP(ctrl)
 	mockRelayer := mocks.NewMockRelayer(ctrl)
+	mockHttpServer := mocks.NewMockHttpServer(ctrl)
 	mockDBus := mocks.NewMockDBus(ctrl)
 	mockMediator := mocks.NewMockMediator(ctrl)
 	mockCommand := mocks.NewMockCommandHandler(ctrl)
@@ -667,6 +750,7 @@ func TestInitializeTestApp(t *testing.T) {
 		mockMath,
 		mockCDP,
 		mockRelayer,
+		mockHttpServer,
 		mockDBus,
 		mockDeviceStatus,
 		mockStatusPoller,
@@ -680,6 +764,7 @@ func TestInitializeTestApp(t *testing.T) {
 	assert.Equal(t, ctx, app.Ctx)
 	assert.Equal(t, mockCDP, app.CDP)
 	assert.Equal(t, mockRelayer, app.Relayer)
+	assert.Equal(t, mockHttpServer, app.HttpServer)
 	assert.Equal(t, mockDBus, app.DBus)
 	assert.Equal(t, mockMediator, app.Mediator)
 	assert.Equal(t, mockCommand, app.Command)
