@@ -25,3 +25,6 @@ anyhow = "1.0.98"
 semver = "1.0.26"
 regex = "1.0"
 rand = "0.9.1"
+
+[dev-dependencies]
+mockall = "0.13.1"
