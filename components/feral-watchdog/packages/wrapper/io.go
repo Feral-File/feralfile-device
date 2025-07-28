@@ -3,7 +3,7 @@ package wrapper
 
 import "io"
 
-//go:generate mockgen -source=io.go -destination=../mocks/io.go -package=mocks -mock_names=IOInterface=MockIO
+//go:generate mockgen -source=io.go -destination=../mocks/mock_io.go -package=mocks -mock_names=IOInterface=MockIO
 type IOInterface interface {
 	ReadAll(r io.Reader) ([]byte, error)
 	Copy(dst io.Writer, src io.Reader) (int64, error)

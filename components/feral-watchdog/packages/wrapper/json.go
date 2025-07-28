@@ -3,7 +3,7 @@ package wrapper
 
 import go_json "encoding/json"
 
-//go:generate mockgen -source=json.go -destination=../mocks/json.go -package=mocks -mock_names=JSON=MockJSON
+//go:generate mockgen -source=json.go -destination=../mocks/mock_json.go -package=mocks -mock_names=JSON=MockJSON
 type JSON interface {
 	Marshal(v interface{}) ([]byte, error)
 	Unmarshal(data []byte, v interface{}) error

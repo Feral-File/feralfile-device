@@ -26,7 +26,7 @@ type GPUHandler struct {
 	logger          *zap.Logger
 	commandHandler  commands.HandlerInterface
 	clock           wrapper.ClockInterface
-	rebootTimer     *time.Timer
+	rebootTimer     wrapper.TimerInterface
 	rebootScheduled bool
 }
 
@@ -65,7 +65,7 @@ func (g *GPUHandler) ScheduleGPUReboot(ctx context.Context) {
 	g.rebootScheduled = true
 
 	// Create a timer to reboot after 15 seconds
-	g.rebootTimer = time.AfterFunc(REBOOT_DELAY, func() {
+	g.rebootTimer = g.clock.AfterFunc(REBOOT_DELAY, func() {
 		select {
 		case <-ctx.Done():
 			g.logger.Info("GPU: context canceled, skipping reboot")

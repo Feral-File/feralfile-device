@@ -149,6 +149,12 @@ func (m *Mediator) handleDBusSignal(
 	return nil, nil
 }
 
+// HandleDBusSignalForTesting exposes the private handleDBusSignal method for testing purposes
+// This method should only be used in tests
+func (m *Mediator) HandleDBusSignalForTesting(ctx context.Context, payload godbus.DBusPayload) ([]interface{}, error) {
+	return m.handleDBusSignal(ctx, payload)
+}
+
 func (m *Mediator) ProcessMetrics(ctx context.Context, metrics *types.SysMetrics) {
 	m.mu.Lock()
 	if m.isProcessingMetrics {

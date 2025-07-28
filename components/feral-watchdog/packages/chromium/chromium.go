@@ -25,7 +25,6 @@ const (
 //go:generate mockgen -source=chromium.go -destination=../mocks/mock_chromium.go -package=mocks -mock_names=MonitorInterface=MockChromiumMonitor
 type MonitorInterface interface {
 	Start(ctx context.Context)
-	Stop()
 }
 
 // ChromiumMonitor monitors Chromium browser health via Chrome DevTools Protocol
@@ -99,12 +98,6 @@ func (m *ChromiumMonitor) Start(ctx context.Context) {
 			}
 		}
 	}
-}
-
-func (m *ChromiumMonitor) Stop() {
-	// The HTTP wrapper doesn't expose CloseIdleConnections,
-	// but it's not critical for functionality
-	m.logger.Info("Chromium: Monitor stopped")
 }
 
 // check performs a single CDP health check

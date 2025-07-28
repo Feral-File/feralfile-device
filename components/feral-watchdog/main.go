@@ -116,7 +116,6 @@ func main() {
 
 	// Start Chromium monitor
 	chromiumMonitor := chromium.NewDefaultChromiumMonitor(config.CDPEndpoint, logger, commandHandler)
-	defer chromiumMonitor.Stop()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

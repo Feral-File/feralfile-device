@@ -43,6 +43,9 @@ type ClientInterface interface {
 	Init(ctx context.Context) error
 	Send(method string, params map[string]interface{}) (interface{}, error)
 	SendCriticalCPUTemperatureNotification(ctx context.Context) error
+	Initialized() bool
+	IsReconnectionError(err error) bool
+	Reconnect(ctx context.Context) error
 	Close()
 }
 
