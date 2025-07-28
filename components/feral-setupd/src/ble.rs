@@ -431,15 +431,15 @@ async fn notify_central<T: Notifier>(
     if let Some(notifier) = guard.as_mut() {
         let payload = encoding::encode_payload(payload);
         match notifier.notify(payload).await {
-            Ok(_) => return Ok(()),
+            Ok(_) => Ok(()),
             Err(e) => {
                 eprintln!("BLE: Failed to notify central: {e}");
-                return Err(anyhow::anyhow!("Failed to notify central: {e}"));
+                Err(anyhow::anyhow!("Failed to notify central: {e}"))
             }
         }
     } else {
         eprintln!("BLE: Notifier not yet available; skipping reply");
-        return Err(anyhow::anyhow!("Notifier not yet available"));
+        Err(anyhow::anyhow!("Notifier not yet available"))
     }
 }
 
