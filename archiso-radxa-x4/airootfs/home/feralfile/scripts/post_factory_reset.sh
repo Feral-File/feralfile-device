@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Define file paths
-BOOT_STATE_FILE="/root/.boot_state"
+BOOT_STATE_FILE="/boot/.boot_state"
 LOADER_CONF_FILE="/boot/loader/loader.conf"
 TRANSACTION_DIR="/tmp/boot_state_transaction.$$"
 LOCK_FILE="/var/lock/boot_state_transition.lock"

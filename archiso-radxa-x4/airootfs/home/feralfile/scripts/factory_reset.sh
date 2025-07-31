@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- Configuration ---
-BOOT_STATE_FILE="/root/.boot_state"
+BOOT_STATE_FILE="/boot/.boot_state"
 LOADER_CONF_FILE="/boot/loader/loader.conf"
 TRANSACTION_DIR="/tmp/boot_state_transaction.$$"
 LOCK_FILE="/var/lock/boot_state_transition.lock"
@@ -106,5 +106,7 @@ echo "Transaction completed successfully. State is now 'factory_reset'."
 # Mark transaction as complete to prevent rollback on successful exit.
 TRANSACTION_ACTIVE=false
 
+sleep 5
+
 # The 'trap cleanup EXIT' will handle the final cleanup automatically.
-exit 0
+systemctl reboot

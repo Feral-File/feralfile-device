@@ -3,7 +3,7 @@ Description=Run a status sync after factory reset.
 
 [Service]
 Type=simple
-ExecStart=/root/post_factory_reset.sh
+ExecStart=/home/feralfile/scripts/post_factory_reset.sh
 
 [Install]
 WantedBy=multi-user.target
