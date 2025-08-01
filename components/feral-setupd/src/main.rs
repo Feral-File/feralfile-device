@@ -1,6 +1,7 @@
 mod ble;
 mod cache;
 mod cdp;
+mod cfg;
 mod connectivity;
 mod constant;
 mod dbus_utils;
@@ -105,7 +106,7 @@ async fn main() -> Result<()> {
     let ble_service = Arc::new(Ble::new());
     let app_state = Arc::new(AppState {
         device_id: ble_service.get_device_id().await,
-        current_version: updater::current_version().await.unwrap_or_default(),
+        current_version: cfg::current_version().await?.to_string(),
         app_cache: Cache::new(constant::CACHE_FILEPATH)?,
         internet: Connectivity::spawn().await,
         page: Mutex::new(Page::None(unix_s())),
@@ -506,14 +507,9 @@ async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<Cdp>) -> Result<()>
     // This is to avoid Err Network Changed from Chrome
     time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
 
-    // Get the custom webapp URL if it exists, otherwise use the default one
-    let webapp_url = match updater::custom_webapp_url().await {
-        Ok(Some(url)) => url,
-        Ok(None) => constant::WEBAPP_URL.to_string(),
-        Err(e) => {
-            eprintln!("MAIN: Error getting custom webapp URL: {e}");
-            constant::WEBAPP_URL.to_string()
-        }
+    let webapp_url = match cfg::webapp_url().await? {
+        Some(url) => url,
+        None => constant::WEBAPP_URL.to_string(),
     };
     chrome
         .navigate(&webapp_url)
