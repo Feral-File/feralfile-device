@@ -128,8 +128,25 @@ async fn main() -> Result<()> {
         .context("starting Bluetooth advertising")?;
     println!("MAIN: Bluetooth advertising started successfully");
 
-    let has_internet = app_state.internet.is_online(true).await;
     let used_to_connect = app_state.app_cache.get(cache::CONNECTED);
+
+    // If the device used to be able to connect to the internet
+    // It's likely that it will have internet again really soon
+    // We aggressively poll for internet for a few seconds to
+    // go directly to the webapp instead of the QRCode
+    if used_to_connect.is_some() {
+        app_state
+            .internet
+            .wait_until_online(
+                Duration::from_millis(constant::AGGRESSIVE_INTERNET_CHECK_INTERVAL),
+                Some(Duration::from_millis(
+                    constant::INITIAL_INTERNET_CHECK_TIMEOUT,
+                )),
+            )
+            .await;
+    }
+
+    let has_internet = app_state.internet.is_online(true).await;
     if !has_internet {
         // Show the QRCode so the user can do something with the internet
         ssids_cacher.trigger_refresh();
@@ -142,11 +159,11 @@ async fn main() -> Result<()> {
             // We should be more aggressive with the polling (we want to take action as soon as users fix the internet)
             // Otherwise, we should be more conservative as users might plug in the LAN cable, but this is rare
             let urgency = if used_to_connect.is_some() {
-                Duration::from_secs(2)
+                Duration::from_millis(constant::AGGRESSIVE_INTERNET_CHECK_INTERVAL)
             } else {
-                Duration::from_secs(10)
+                Duration::from_millis(constant::RELAXED_INTERNET_CHECK_INTERVAL)
             };
-            app_state.internet.wait_until_online(urgency).await;
+            app_state.internet.wait_until_online(urgency, None).await;
             if used_to_connect.is_none() {
                 app_state.app_cache.set(cache::CONNECTED, "true");
                 app_state.app_cache.save(constant::CACHE_FILEPATH).unwrap();

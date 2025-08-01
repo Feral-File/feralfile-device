@@ -7,6 +7,9 @@ pub const TIMEZONE_INSTRUCTION: &str = "set-time";
 pub const SSID_CACHE_TTL: u64 = 10 * 60 * 1000; // 10 minutes
 pub const BLE_SHUTDOWN_DELAY: u64 = 1000; // 1 second
 pub const WIFI_WEBAPP_DELAY: u64 = 3 * 1000; // 3 seconds
+pub const INITIAL_INTERNET_CHECK_TIMEOUT: u64 = 3 * 1000; // 10 seconds
+pub const AGGRESSIVE_INTERNET_CHECK_INTERVAL: u64 = 2 * 1000; // 2 seconds
+pub const RELAXED_INTERNET_CHECK_INTERVAL: u64 = 10 * 1000; // 10 seconds
 
 // Updater configuration
 pub const UPDATER_LOCAL_CONFIG_PATH: &str = "/home/feralfile/x1-config.json";
