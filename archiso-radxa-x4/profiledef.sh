@@ -22,8 +22,6 @@ file_permissions=(
   ["/root/.automated_script.sh"]="0:0:755"
   ["/root/install-to-disk.sh"]="0:0:755"
   ["/root/install-to-emmc.sh"]="0:0:755"
-  ["/root/post_factory_reset.sh"]="0:0:755"
-  ["/root/factory_reset.sh"]="0:0:755"
   ["/home/feralfile/"]="1000:1000:755"
   ["/home/feralfile/scripts/feral-updater.sh"]="1000:1000:755"
   ["/home/feralfile/scripts/feral-service-update.sh"]="1000:1000:755"
@@ -32,4 +30,6 @@ file_permissions=(
   ["/home/feralfile/scripts/feral-timesyncd.sh"]="1000:1000:755"
   ["/home/feralfile/scripts/log-rotation.sh"]="1000:1000:755"
   ["/home/feralfile/scripts/cdp-ready-check.sh"]="1000:1000:755"
+  ["/home/feralfile/scripts/factory_reset.sh"]="1000:1000:755"
+  ["/home/feralfile/scripts/post_factory_reset.sh"]="1000:1000:755"
 )
