@@ -301,8 +301,6 @@ jobs:
             } + (if $webapp_url != "" then {webapp_url: $webapp_url} else {} end)' \
             > /build/archiso-radxa-x4/airootfs/home/feralfile/x1-config.json
           chmod 755 /build/archiso-radxa-x4/airootfs/home/feralfile/x1-config.json
-          # DEBUG
-          cat /build/archiso-radxa-x4/airootfs/home/feralfile/x1-config.json
 
       - name: Setup pacman
         run: |
