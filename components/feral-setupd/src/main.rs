@@ -506,11 +506,20 @@ async fn show_webapp(app_state: &Arc<AppState>, chrome: &Arc<Cdp>) -> Result<()>
     // This is to avoid Err Network Changed from Chrome
     time::sleep(Duration::from_millis(constant::WIFI_WEBAPP_DELAY)).await;
 
+    // Get the custom webapp URL if it exists, otherwise use the default one
+    let webapp_url = match updater::custom_webapp_url().await {
+        Ok(Some(url)) => url,
+        Ok(None) => constant::WEBAPP_URL.to_string(),
+        Err(e) => {
+            eprintln!("MAIN: Error getting custom webapp URL: {e}");
+            constant::WEBAPP_URL.to_string()
+        }
+    };
     chrome
-        .navigate(constant::WEBAPP_URL)
+        .navigate(&webapp_url)
         .await
-        .with_context(|| format!("navigating to {}", constant::WEBAPP_URL))?;
-    println!("MAIN: Navigated to {}", constant::WEBAPP_URL);
+        .with_context(|| format!("navigating to {webapp_url}"))?;
+    println!("MAIN: Navigated to {webapp_url}");
     *page = Page::WebApp(unix_s());
     Ok(())
 }

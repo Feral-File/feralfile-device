@@ -45,6 +45,12 @@ pub async fn is_update_required() -> Result<bool> {
     Ok(current.version < min_version)
 }
 
+/// Return the custom webapp URL if it exists, otherwise return `None`.
+pub async fn custom_webapp_url() -> Result<Option<String>> {
+    let current = read_local_cfg().await?;
+    Ok(current.webapp_url)
+}
+
 /// Spawn the updater in a background task and return a channel receiver that
 /// yields each `[progress] …` payload or error. The caller can `recv().await` and forward
 /// the message however it likes (e.g. to CDP).
@@ -170,6 +176,7 @@ struct LocalConfigJSON {
     distribution_acc: String,
     distribution_pass: String,
     endpoint: String,
+    webapp_url: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -179,6 +186,7 @@ struct RunningBuild {
     acc: String,
     pwd: String,
     endpoint: String,
+    webapp_url: Option<String>,
 }
 
 async fn read_local_cfg() -> Result<RunningBuild> {
@@ -197,6 +205,7 @@ async fn read_local_cfg() -> Result<RunningBuild> {
         acc: cfg.distribution_acc,
         pwd: cfg.distribution_pass,
         endpoint: cfg.endpoint,
+        webapp_url: cfg.webapp_url,
     };
     CURRENT_BUILD.set(build.clone()).unwrap();
     Ok(build)
