@@ -44,11 +44,11 @@
             width: auto;
             height: auto;
         }
+        
         .logo {
-            max-width: 50vw;
-            max-height: 50vh;
-            width: auto;
-            height: auto;
+            width: 50vw;
+            height: 50vh;
+            object-fit: contain;
             display: block;
             margin: 0 auto;
         }
@@ -58,7 +58,9 @@
 <body style="display: none;">
     <!-- Screens -->
     <div id="logoScreen" class="hidden">
-        <img src="assets/portal.svg" alt="Logo" class="logo" />
+        <div class="logo-container">
+            <img src="assets/feralfile_logo.svg" alt="Logo" class="logo" />
+        </div>
     </div>
     <div id="initScreen" class="hidden">Initializing...</div>
     <div id="qrScreen" class="hidden">
