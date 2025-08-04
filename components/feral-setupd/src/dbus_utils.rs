@@ -15,7 +15,7 @@ use crate::constant;
 pub type ListenCallback = Box<dyn Fn(Message) + Send + Sync>;
 
 pub trait PageStateProvider: Send + Sync {
-    fn get_page_state(&self) -> (String, i64);
+    fn get_page_state(&self) -> (String, String, i64);
 }
 
 pub fn start_dbus_service<T: PageStateProvider + 'static>(state_provider: Arc<T>) {
@@ -34,11 +34,13 @@ pub fn start_dbus_service<T: PageStateProvider + 'static>(state_provider: Arc<T>
             b.method(
                 constant::DBUS_GET_PAGE_STATE,
                 (),
-                ("page", "page_changed_unix"),
+                ("id", "page", "page_changed_unix"),
                 move |_, (), ()| {
-                    let (page, timestamp) = p.get_page_state();
-                    println!("DBUS: debug page state: page={page}, timestamp={timestamp}",);
-                    Ok((page, timestamp))
+                    let (id, page, timestamp) = p.get_page_state();
+                    println!(
+                        "DBUS: debug page state: device_id={id} page={page}, timestamp={timestamp}",
+                    );
+                    Ok((id, page, timestamp))
                 },
             );
         });
@@ -295,7 +297,7 @@ pub fn get_relayer_info() -> Result<String> {
         constant::DBUS_RELAYER_CHECK_TIMEOUT,
     ) {
         Ok(response) => {
-            let topic_id = response.read1::<String>()?;
+            let topic_id: String = response.read1::<String>()?;
             println!(
                 "DBUS: Relayer info received in {:?} ms",
                 start_time.elapsed().as_millis()

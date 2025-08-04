@@ -11,9 +11,9 @@ import (
 
 // HeartbeatData represents the data part of the payload.
 type HeartbeatData struct {
-	MACAddress string `json:"mac"`
-	Timestamp  int64  `json:"ts"`
-	Build      string `json:"build"`
+	ID        string `json:"id"`
+	Timestamp int64  `json:"ts"`
+	Build     string `json:"build"`
 
 	ScreenInfo  string  `json:"screen_info"`
 	CPUTemp     float64 `json:"cpu_temp"`
@@ -59,9 +59,9 @@ func SendHeartbeat() {
 	logger.Info("Gathered pageState data", zap.Any("pageState", pageState))
 
 	message := &HeartbeatData{
-		MACAddress: config.MAC,
-		Timestamp:  time.Now().UnixMilli(),
-		Build:      fmt.Sprintf("%s-%s", config.Branch, config.Version),
+		ID:        pageState.ID,
+		Timestamp: time.Now().UnixMilli(),
+		Build:     fmt.Sprintf("%s-%s", config.Branch, config.Version),
 
 		ScreenInfo: fmt.Sprintf(
 			"%dx%d@%.0fHz",
