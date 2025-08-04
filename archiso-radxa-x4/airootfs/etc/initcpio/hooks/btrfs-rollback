@@ -96,4 +96,5 @@ run_hook() {
   echo "-----------------------------------" >> $LOG
   umount /run/rollback
   umount /boot 2>/dev/null
+  /bin/bash
 }
