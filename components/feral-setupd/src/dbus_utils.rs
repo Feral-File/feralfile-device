@@ -297,7 +297,7 @@ pub fn get_relayer_info() -> Result<String> {
         constant::DBUS_RELAYER_CHECK_TIMEOUT,
     ) {
         Ok(response) => {
-            let topic_id: String = response.read1::<String>()?;
+            let topic_id = response.read1::<String>()?;
             println!(
                 "DBUS: Relayer info received in {:?} ms",
                 start_time.elapsed().as_millis()

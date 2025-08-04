@@ -92,7 +92,7 @@ func GetPageState() (*PageState, error) {
 
 	err := dbusClient.Scan(
 		deadlineCtx,
-		[]interface{}{&pg.Page, &pg.PageChangedUnix},
+		[]interface{}{&pg.ID, &pg.Page, &pg.PageChangedUnix},
 		SETUPD_DBUS_NAME,
 		SETUPD_DBUS_PATH,
 		SETUPD_DBUS_INTERFACE,
