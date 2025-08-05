@@ -119,7 +119,7 @@ curl -u "$auth_user:$auth_pass" --silent --show-error -fL "$ENDPOINT$IMAGE_URL" 
 
 kill "$PROGRESS_PID" 2>/dev/null || true
 
-log_progress "90" "Extracting the new image..."
+log_progress "90" "Installing FF OS update..."
 
 unzip -o "$ZIP_FILE" -d "$TMP_DIR"
 ISO_FILE=$(find "$TMP_DIR" -name '*.iso' | head -n1)
