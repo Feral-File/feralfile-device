@@ -89,9 +89,10 @@ struct AppState {
 }
 
 impl PageStateProvider for AppState {
-    fn get_page_state(&self) -> (String, i64) {
+    fn get_page_state(&self) -> (String, String, i64) {
+        let id = self.device_id.clone();
         let page = self.page.blocking_lock();
-        (page.page_type().to_string(), page.timestamp())
+        (id, page.page_type().to_string(), page.timestamp())
     }
 }
 
