@@ -45,6 +45,53 @@ flowchart TD
     LastVersion --> |Force Update| Latest
 ```
 
+### Command Processing Flow
+
+```mermaid
+flowchart TD
+    %% Command Flow from Mobile
+    Mobile[Mobile Controller] --> |Send Command| Relayer[Relayer Service]
+    Relayer --> |WebSocket Message| Connectd[Connectd Service]
+    
+    %% Command Processing
+    Connectd --> Mediator[Mediator]
+    Mediator --> |Parse Message| Parse{Message Type}
+    
+    Parse --> |System Message| System[Handle System Message<br/>Save Topic ID]
+    Parse --> |Command Message| CmdType{Command Type}
+    
+    CmdType --> |Device Command| DeviceCmd[Command Handler<br/>Execute Device Commands]
+    CmdType --> |Web Command| WebCmd[Chrome DevTools Protocol]
+    
+    DeviceCmd --> |Available Commands| Commands[Device Commands:<br/>• connect<br/>• showPairingQRCode<br/>• deviceMetrics<br/>• sendKeyboardEvent<br/>• dragGesture<br/>• tapGesture<br/>• rotate<br/>• shutdown<br/>• getDeviceStatus<br/>• updateToLatestVersion]
+    
+    WebCmd --> |Forward to Browser| Browser[Chromium Browser]
+    Browser --> |Execute JavaScript| WebApp[Web Application]
+    
+    %% Response Flow
+    Commands --> |Return Result| Response[Send Response]
+    WebApp --> |Return Result| Response
+    
+    Response --> |RPC Response| Relayer
+    Relayer --> |WebSocket Response| Mobile
+    
+    %% Error Handling
+    DeviceCmd --> |Error| Error[Error Response]
+    WebCmd --> |Error| Error
+    Error --> Response
+    
+    %% Styling
+    classDef service fill:#e1f5fe
+    classDef component fill:#f3e5f5
+    classDef decision fill:#fff3e0
+    classDef external fill:#e8f5e8
+    
+    class Connectd,Relayer service
+    class Mediator,Commands,Browser,WebApp component
+    class Parse,CmdType decision
+    class Mobile external
+```
+
 ## Telemetry (Heartbeat)
 
 All the events should only consider network connected scenario otherwise it can't be sent over heartbeat.
