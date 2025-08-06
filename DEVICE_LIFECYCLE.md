@@ -80,12 +80,6 @@ flowchart TD
     WebCmd --> |Error| Error
     Error --> Response
     
-    %% Styling
-    classDef service fill:#e1f5fe
-    classDef component fill:#f3e5f5
-    classDef decision fill:#fff3e0
-    classDef external fill:#e8f5e8
-    
     class Connectd,Relayer service
     class Mediator,Commands,Browser,WebApp component
     class Parse,CmdType decision
