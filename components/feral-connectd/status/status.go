@@ -18,31 +18,38 @@ const (
 	POLL_INTERVAL = 5 * time.Second
 )
 
-//go:generate mockgen -source=status.go -destination=../mocks/mock_status.go -package=mocks -mock_names=PollerInterface=MockStatusPoller
+//go:generate mockgen -source=status.go -destination=../mocks/status.go -package=mocks -mock_names=Poller=MockStatusPoller
 
-type PollerInterface interface {
+type Poller interface {
 	Start(ctx context.Context)
 	Stop()
 	ForceRefresh()
 }
 
-// Poller handles periodic polling of both player status via CDP and device status
-type Poller struct {
+// poller handles periodic polling of both player status via CDP and device status
+type poller struct {
 	sync.RWMutex
-	cdp         cdp.ClientInterface
-	relayer     relayer.ClientInterface
-	logger      *zap.Logger
-	stopChan    chan struct{}
-	refreshChan chan struct{}
+	cdp          cdp.CDP
+	relayer      relayer.Relayer
+	deviceStatus DeviceStatus
+	logger       *zap.Logger
+	stopChan     chan struct{}
+	refreshChan  chan struct{}
 
 	// Store last status hashes for each notification type to avoid duplicate notifications
 	lastStatusHashes map[relayer.NotificationType]string
 }
 
-func NewPoller(cdp cdp.ClientInterface, relay relayer.ClientInterface, logger *zap.Logger) *Poller {
-	return &Poller{
+func NewPoller(
+	cdp cdp.CDP,
+	r relayer.Relayer,
+	ds DeviceStatus,
+	logger *zap.Logger,
+) Poller {
+	return &poller{
 		cdp:              cdp,
-		relayer:          relay,
+		relayer:          r,
+		deviceStatus:     ds,
 		logger:           logger,
 		stopChan:         make(chan struct{}),
 		refreshChan:      make(chan struct{}, 10), // Buffered channel to prevent blocking
@@ -51,7 +58,7 @@ func NewPoller(cdp cdp.ClientInterface, relay relayer.ClientInterface, logger *z
 }
 
 // computeStatusHash computes a fast MD5 hash of the status data for comparison
-func (s *Poller) computeStatusHash(data interface{}) (string, error) {
+func (s *poller) computeStatusHash(data interface{}) (string, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return "", err
@@ -64,7 +71,7 @@ func (s *Poller) computeStatusHash(data interface{}) (string, error) {
 
 // shouldSendNotification checks if the status has changed since last notification
 // Returns true if status changed or if this is the first time checking this status type
-func (s *Poller) shouldSendNotification(notificationType relayer.NotificationType, data interface{}) bool {
+func (s *poller) shouldSendNotification(notificationType relayer.NotificationType, data interface{}) bool {
 	if data == nil {
 		return false
 	}
@@ -93,7 +100,7 @@ func (s *Poller) shouldSendNotification(notificationType relayer.NotificationTyp
 	return false
 }
 
-func (s *Poller) Start(ctx context.Context) {
+func (s *poller) Start(ctx context.Context) {
 	s.logger.Info("Starting status polling (player and device)")
 
 	// Ticker for player and device status (every 10 seconds)
@@ -123,13 +130,13 @@ func (s *Poller) Start(ctx context.Context) {
 	}
 }
 
-func (s *Poller) Stop() {
+func (s *poller) Stop() {
 	s.logger.Info("Stopping status polling")
 	close(s.stopChan)
 }
 
 // ForceRefresh triggers an immediate status poll
-func (s *Poller) ForceRefresh() {
+func (s *poller) ForceRefresh() {
 	select {
 	case s.refreshChan <- struct{}{}:
 		// Successfully queued refresh
@@ -139,7 +146,7 @@ func (s *Poller) ForceRefresh() {
 	}
 }
 
-func (s *Poller) pollPlayerStatus(ctx context.Context) {
+func (s *poller) pollPlayerStatus(ctx context.Context) {
 	// Check if relayer is connected before polling
 	if !s.relayer.IsConnected() {
 		s.logger.Debug("Relayer not connected, skipping player status poll")
@@ -199,7 +206,7 @@ func (s *Poller) pollPlayerStatus(ctx context.Context) {
 	}
 }
 
-func (s *Poller) pollDeviceStatus(ctx context.Context) {
+func (s *poller) pollDeviceStatus(ctx context.Context) {
 	// Check if relayer is connected before polling
 	if !s.relayer.IsConnected() {
 		s.logger.Debug("Relayer not connected, skipping device status poll")
@@ -209,7 +216,7 @@ func (s *Poller) pollDeviceStatus(ctx context.Context) {
 	s.logger.Debug("Polling device status")
 
 	// Get device status using the shared function
-	deviceStatus, err := GetDeviceStatus(ctx)
+	deviceStatus, err := s.deviceStatus.GetStatus(ctx)
 	if err != nil {
 		s.logger.Error("Failed to get device status", zap.Error(err))
 		return

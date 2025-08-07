@@ -10,7 +10,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockJSON is a mock of JSONInterface interface.
+// MockJSON is a mock of JSON interface.
 type MockJSON struct {
 	ctrl     *gomock.Controller
 	recorder *MockJSONMockRecorder

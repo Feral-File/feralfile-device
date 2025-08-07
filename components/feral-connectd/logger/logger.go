@@ -3,6 +3,7 @@ package logger
 import (
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -177,7 +178,28 @@ func (s *SentryCore) FindErrorField(fields []zapcore.Field) error {
 	return nil
 }
 
-func New(debug bool) (*zap.Logger, error) {
+//go:generate mockgen -source=logger.go -destination=../mocks/logger.go -package=mocks -mock_names=LoggerManager=MockLoggerManager
+type LoggerManager interface {
+	New(debug bool) (*zap.Logger, error)
+	NewWithSentry(debug bool, sentryConfig *SentryConfig) (*zap.Logger, error)
+	NewDefault() (*zap.Logger, error)
+	InitSentry(sentryConfig *SentryConfig) error
+	SetGlobalTopicID(topicID string)
+	FlushSentry(timeout time.Duration)
+}
+
+type defaultLoggerManager struct {
+	loggerLock sync.Mutex
+}
+
+func NewLoggerManager() LoggerManager {
+	return &defaultLoggerManager{}
+}
+
+func (m *defaultLoggerManager) New(debug bool) (*zap.Logger, error) {
+	m.loggerLock.Lock()
+	defer m.loggerLock.Unlock()
+
 	var config zap.Config
 	if debug {
 		config = zap.NewDevelopmentConfig()
@@ -199,23 +221,15 @@ func New(debug bool) (*zap.Logger, error) {
 }
 
 // NewWithSentry creates a logger with Sentry integration
-func NewWithSentry(debug bool, sentryConfig *SentryConfig) (*zap.Logger, error) {
-	var config zap.Config
-	if debug {
-		config = zap.NewDevelopmentConfig()
-		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	} else {
-		config = zap.NewProductionConfig()
-	}
-	config.EncoderConfig.StacktraceKey = ""
-	config.EncoderConfig.TimeKey = "timestamp"
-	config.EncoderConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
-
-	// Build the original core
-	core, err := config.Build(zap.Fields())
+func (m *defaultLoggerManager) NewWithSentry(debug bool, sentryConfig *SentryConfig) (*zap.Logger, error) {
+	// Create the logger
+	core, err := m.New(debug)
 	if err != nil {
 		return nil, err
 	}
+
+	m.loggerLock.Lock()
+	defer m.loggerLock.Unlock()
 
 	// Wrap with Sentry core
 	sentryCore := NewSentryCore(core.Core(), sentryConfig)
@@ -226,12 +240,15 @@ func NewWithSentry(debug bool, sentryConfig *SentryConfig) (*zap.Logger, error) 
 	return logger, nil
 }
 
-func NewDefault() (*zap.Logger, error) {
-	return New(true)
+func (m *defaultLoggerManager) NewDefault() (*zap.Logger, error) {
+	return m.New(true)
 }
 
 // InitSentry initializes Sentry with the provided configuration
-func InitSentry(sentryConfig *SentryConfig) error {
+func (m *defaultLoggerManager) InitSentry(sentryConfig *SentryConfig) error {
+	m.loggerLock.Lock()
+	defer m.loggerLock.Unlock()
+
 	if !sentryConfig.IsEnabled() {
 		return nil // Skip Sentry initialization if DSN is empty or not configured
 	}
@@ -251,7 +268,10 @@ func InitSentry(sentryConfig *SentryConfig) error {
 
 // SetGlobalTopicID sets the topic ID in the global Sentry scope
 // This ensures all Sentry events include the topic ID for better filtering and debugging
-func SetGlobalTopicID(topicID string) {
+func (m *defaultLoggerManager) SetGlobalTopicID(topicID string) {
+	m.loggerLock.Lock()
+	defer m.loggerLock.Unlock()
+
 	if topicID == "" {
 		return
 	}
@@ -265,6 +285,52 @@ func SetGlobalTopicID(topicID string) {
 }
 
 // FlushSentry flushes any pending Sentry events
-func FlushSentry(timeout time.Duration) {
+func (m *defaultLoggerManager) FlushSentry(timeout time.Duration) {
+	m.loggerLock.Lock()
+	defer m.loggerLock.Unlock()
+
 	sentry.Flush(timeout)
+}
+
+// Global instance for backward compatibility
+var globalLoggerManager LoggerManager = NewLoggerManager()
+
+// Backward compatible functions
+func New(debug bool) (*zap.Logger, error) {
+	return globalLoggerManager.New(debug)
+}
+
+// NewWithSentry creates a logger with Sentry integration
+func NewWithSentry(debug bool, sentryConfig *SentryConfig) (*zap.Logger, error) {
+	return globalLoggerManager.NewWithSentry(debug, sentryConfig)
+}
+
+func NewDefault() (*zap.Logger, error) {
+	return globalLoggerManager.NewDefault()
+}
+
+// InitSentry initializes Sentry with the provided configuration
+func InitSentry(sentryConfig *SentryConfig) error {
+	return globalLoggerManager.InitSentry(sentryConfig)
+}
+
+// SetGlobalTopicID sets the topic ID in the global Sentry scope
+// This ensures all Sentry events include the topic ID for better filtering and debugging
+func SetGlobalTopicID(topicID string) {
+	globalLoggerManager.SetGlobalTopicID(topicID)
+}
+
+// FlushSentry flushes any pending Sentry events
+func FlushSentry(timeout time.Duration) {
+	globalLoggerManager.FlushSentry(timeout)
+}
+
+// For testing - inject a mock logger manager
+func InjectLoggerManagerForTesting(lm LoggerManager) {
+	globalLoggerManager = lm
+}
+
+// Reset for testing
+func ResetForTesting() {
+	globalLoggerManager = NewLoggerManager()
 }

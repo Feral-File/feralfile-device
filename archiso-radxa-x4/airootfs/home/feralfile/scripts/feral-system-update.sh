@@ -119,7 +119,7 @@ curl -u "$auth_user:$auth_pass" --silent --show-error -fL "$ENDPOINT$IMAGE_URL" 
 
 kill "$PROGRESS_PID" 2>/dev/null || true
 
-log_progress "90" "Extracting the new image..."
+log_progress "90" "Installing FF OS update..."
 
 unzip -o "$ZIP_FILE" -d "$TMP_DIR"
 ISO_FILE=$(find "$TMP_DIR" -name '*.iso' | head -n1)
@@ -150,9 +150,6 @@ rm -rf /home/soaktest
 rm -f /usr/local/bin/websocat
 
 id soaktest &>/dev/null && sudo userdel soaktest || true
-
-echo -n > /etc/machine-id
-rm -f /var/lib/systemd/random-seed
 
 log_progress "95" "Preparing the system for restart..."
 
@@ -185,7 +182,7 @@ title   Feral File X1
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
+options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw quiet loglevel=3 systemd.show_status=auto rd.udev.log_level=3
 EOF
 
 cat > /boot/loader/entries/factory_reset.conf <<EOF
@@ -193,7 +190,7 @@ title   Feral File X1 - Factory Reset
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
+options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw quiet loglevel=3 systemd.show_status=auto rd.udev.log_level=3
 EOF
 
 cat > /boot/loader/entries/ota_prev.conf <<EOF
@@ -201,7 +198,7 @@ title   Feral File X1 - Rollback to previous version
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
+options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw quiet loglevel=3 systemd.show_status=auto rd.udev.log_level=3
 EOF
 
 log_info "Overwriting mkinitcpio.conf HOOKS..."

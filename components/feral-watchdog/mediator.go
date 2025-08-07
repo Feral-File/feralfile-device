@@ -83,6 +83,7 @@ type Mediator struct {
 	diskHandler         *DiskHandler
 	memoryHandler       *MemoryHandler
 	gpuHandler          *GPUHandler
+	cpuHandler          *CPUHandler
 }
 
 func NewMediator(
@@ -90,6 +91,7 @@ func NewMediator(
 	disk *DiskHandler,
 	ram *MemoryHandler,
 	gpu *GPUHandler,
+	cpu *CPUHandler,
 	logger *zap.Logger) *Mediator {
 	return &Mediator{
 		dbus:          dbus,
@@ -97,6 +99,7 @@ func NewMediator(
 		diskHandler:   disk,
 		memoryHandler: ram,
 		gpuHandler:    gpu,
+		cpuHandler:    cpu,
 	}
 }
 
@@ -188,4 +191,7 @@ func (m *Mediator) ProcessMetrics(ctx context.Context, metrics *SysMetrics) {
 
 	// Check disk usage
 	m.diskHandler.checkDiskUsage(ctx, metrics)
+
+	// Check CPU temperature
+	m.cpuHandler.checkCPUTemperature(ctx, metrics.CPU.CurrentTemperature)
 }

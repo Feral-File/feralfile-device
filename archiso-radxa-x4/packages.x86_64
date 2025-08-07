@@ -64,4 +64,5 @@ lm_sensors
 feral-connectd
 feral-setupd
 feral-sys-monitord
+feral-app-monitord
 feral-watchdog

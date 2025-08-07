@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Feral-File/feralfile-device/components/feral-sys-monitord/metric"
 	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
@@ -73,17 +74,17 @@ func main() {
 		_ = dbusClient.Stop()
 	}()
 
+	// Initialize Monitor
+	monitor := metric.NewSysResMonitor(ctx, logger)
+	monitor.Start()
+	defer monitor.Stop()
+
 	// Initialize SysMonitordDBus
-	sysMonitordDBus := NewSysMonitordDBus(connectivity, logger)
+	sysMonitordDBus := NewSysMonitordDBus(connectivity, monitor, logger)
 	err = dbusClient.Export(sysMonitordDBus, DBUS_PATH, DBUS_INTERFACE)
 	if err != nil {
 		logger.Fatal("DBus export failed", zap.Error(err))
 	}
-
-	// Initialize Monitor
-	monitor := NewSysResMonitor(ctx, logger)
-	monitor.Start()
-	defer monitor.Stop()
 
 	// Initialize SysEventWatcher
 	eventWatcher := NewSysEventWatcher(ctx, logger)
