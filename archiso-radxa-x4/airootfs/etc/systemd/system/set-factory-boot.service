@@ -1,0 +1,6 @@
+[Unit]
+Description=Set systemd-boot to factory_reset.conf on next boot
+
+[Service]
+Type=simple
+ExecStart=/home/feralfile/scripts/factory_reset.sh

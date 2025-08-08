@@ -165,7 +165,7 @@ title   Feral File X1
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
+options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw quiet loglevel=3 systemd.show_status=auto rd.udev.log_level=3
 EOF
 
 cat > /mnt/boot/loader/entries/factory_reset.conf <<EOF
@@ -173,7 +173,7 @@ title   Feral File X1 - Factory Reset
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
+options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw quiet loglevel=3 systemd.show_status=auto rd.udev.log_level=3
 EOF
 
 chmod 644 /mnt/boot/loader/entries/*.conf
@@ -182,7 +182,7 @@ mount --bind /dev /mnt/dev
 mount --bind /proc /mnt/proc
 mount --bind /sys /mnt/sys
 
-arch-chroot /mnt /bin/bash <<EOF
+arch-chroot /mnt /bin/bash <<'EOF'
 echo "Removing soaktest account..."
 id soaktest &>/dev/null && userdel soaktest || true
 
@@ -198,6 +198,35 @@ chmod 600 /boot/loader/random-seed 2>/dev/null || true
 
 echo "Installing systemd-boot to disk..."
 bootctl install
+
+echo "Setting up hostname..."
+DEVICE_ID_PREFIX="FF-X1-"
+MD5_LENGTH=8
+
+# Get MAC address or fallback
+MAC_ADDRESS=$(ip link | grep -o -E 'link/ether ([0-9a-fA-F:]{17})' | head -n1 | awk '{print $2}')
+if [ -z "$MAC_ADDRESS" ]; then
+    echo "Warning: No MAC address found. Using default hostname."
+else
+  # Convert MAC to raw bytes and hash
+  MAC_HEX=$(echo "$MAC_ADDRESS" | tr -d ':')
+  MD5_DIGEST=$(echo -n "$MAC_HEX" | xxd -r -p | md5sum | awk '{print $1}')
+
+  # Encode first 8 bytes of hash into base36
+  ALPHABET="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  RESULT_STRING=""
+  for (( i=0; i<MD5_LENGTH*2; i+=2 )); do
+      BYTE_HEX="${MD5_DIGEST:i:2}"
+      DEC=$((0x$BYTE_HEX))
+      CHAR=${ALPHABET:$((DEC % 36)):1}
+      RESULT_STRING+=$CHAR
+  done
+
+  FINAL_DEVICE_ID="${DEVICE_ID_PREFIX}${RESULT_STRING}"
+
+  # Write to /etc/hostname
+  echo "$FINAL_DEVICE_ID" > /etc/hostname
+fi
 EOF
 
 # ─── Create Factory Reset Snapshot ─────────────────────────────────────

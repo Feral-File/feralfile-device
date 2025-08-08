@@ -1,19 +1,19 @@
 //nolint:gosec
 package wrapper
 
-import "io"
+import go_io "io"
 
-//go:generate mockgen -source=io.go -destination=../mocks/io.go -package=mocks -mock_names=IOInterface=MockIO
-type IOInterface interface {
-	ReadAll(r io.Reader) ([]byte, error)
+//go:generate mockgen -source=io.go -destination=../mocks/io.go -package=mocks -mock_names=IO=MockIO
+type IO interface {
+	ReadAll(r go_io.Reader) ([]byte, error)
 }
 
-type IO struct{}
+type io struct{}
 
 func NewIO() IO {
-	return IO{}
+	return io{}
 }
 
-func (i IO) ReadAll(r io.Reader) ([]byte, error) {
-	return io.ReadAll(r)
+func (i io) ReadAll(r go_io.Reader) ([]byte, error) {
+	return go_io.ReadAll(r)
 }

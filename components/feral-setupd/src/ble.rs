@@ -1,5 +1,6 @@
 use crate::constant;
 use crate::encoding;
+use crate::system;
 use crate::wifi_utils::SSIDsCacher;
 use bluer::{
     Adapter, Session,
@@ -21,13 +22,11 @@ use bluer::{
 };
 use futures_util::future::FutureExt;
 use std::pin::Pin;
-use std::process::Command;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
-use tokio::task;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 pub type BTConnectedCallback =
     Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>;
@@ -37,6 +36,8 @@ pub type ConnectWifiCallback = Box<
 pub type KeepWifiCallback =
     Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<String, u8>> + Send>> + Send + Sync>;
 pub type GetInfoCallback = Option<Box<dyn Fn() -> Vec<String> + Send + Sync>>;
+pub type FactoryResetCallback =
+    Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>;
 
 #[derive(Default)]
 struct Inner {
@@ -65,6 +66,7 @@ impl Ble {
     pub async fn start(
         &self,
         bt_connected_cb: BTConnectedCallback,
+        factory_reset_cb: FactoryResetCallback,
         connect_wifi_cb: ConnectWifiCallback,
         keep_wifi_cb: KeepWifiCallback,
         get_info_cb: GetInfoCallback,
@@ -102,6 +104,7 @@ impl Ble {
             characteristics: vec![
                 self.create_cmd_char(
                     bt_connected_cb,
+                    factory_reset_cb,
                     connect_wifi_cb,
                     keep_wifi_cb,
                     get_info_cb,
@@ -169,6 +172,7 @@ impl Ble {
     async fn create_cmd_char(
         &self,
         bt_connected_cb: BTConnectedCallback,
+        factory_reset_cb: FactoryResetCallback,
         connect_wifi_cb: ConnectWifiCallback,
         keep_wifi_cb: KeepWifiCallback,
         get_info_cb: GetInfoCallback,
@@ -180,6 +184,7 @@ impl Ble {
         let notifier_for_notify = notifier.clone();
 
         let bt_connected_callback = Arc::new(bt_connected_cb);
+        let factory_reset_callback = Arc::new(factory_reset_cb);
         let connect_wifi_callback = Arc::new(connect_wifi_cb);
         let keep_wifi_callback = Arc::new(keep_wifi_cb);
         let get_info_callback = Arc::new(get_info_cb);
@@ -210,6 +215,7 @@ impl Ble {
                     println!("BLE: Received bluetooth data {data:?}");
                     let notifier = notifier_for_write.clone();
                     let connect_wifi_callback = connect_wifi_callback.clone();
+                    let factory_reset_callback = factory_reset_callback.clone();
                     let keep_wifi_callback = keep_wifi_callback.clone();
                     let get_info_callback = get_info_callback.clone();
                     let ssids_cacher = ssids_cacher.clone();
@@ -252,6 +258,10 @@ impl Ble {
                             }
                             constant::CMD_SET_TIME => {
                                 handle_set_time(notifier, reply_id, params).await
+                            }
+                            constant::CMD_FACTORY_RESET => {
+                                handle_factory_reset(notifier, reply_id, factory_reset_callback)
+                                    .await
                             }
                             _ => {
                                 eprintln!("BLE: Unknown command: {cmd}");
@@ -392,32 +402,38 @@ async fn handle_set_time(
         );
         return Ok(());
     }
-    if let Err(e) = task::spawn_blocking(move || {
-        let timezone = &params[0];
-        let time = &params[1];
-        let result = Command::new(constant::TIMEZONE_CMD)
-            .args([constant::TIMEZONE_INSTRUCTION, timezone, time])
-            .output();
-        println!("BLE: Result: {result:?}");
-        if result.is_ok() {
-            println!("BLE: Time set successfully");
-            Ok::<(), anyhow::Error>(())
-        } else {
-            println!("BLE: Failed to set time");
-            Err(anyhow!("failed to set time"))
-        }
-    })
-    .await
-    {
-        eprintln!("BLE: Failed to start time setting thread: {e}");
-    };
+    if let Err(e) = system::set_time(&params[0], &params[1]).await {
+        eprintln!("BLE: Failed to set time: {e:#?}");
+    }
     Ok(())
+}
+
+async fn handle_factory_reset(
+    notifier: Arc<Mutex<Option<CharacteristicNotifier>>>,
+    reply_id: String,
+    cb: Arc<FactoryResetCallback>,
+) -> Result<(), ReqError> {
+    println!("BLE: Factory resetting");
+    if let Some(cb) = cb.as_ref() {
+        cb().await;
+    }
+    let status_code = if let Err(e) = system::factory_reset().await {
+        eprintln!("BLE: Failed to factory reset: {e:#?}");
+        [constant::BLE_ERR_CODE_UNKNOWN_ERROR]
+    } else {
+        [constant::BLE_SUCCESS_CODE]
+    };
+    let mut payload = Vec::with_capacity(3);
+    payload.push(reply_id.as_bytes());
+    payload.push(&status_code);
+    notify_central(notifier, payload).await
 }
 
 async fn notify_central(
     notifier: Arc<Mutex<Option<CharacteristicNotifier>>>,
     payload: Vec<&[u8]>,
 ) -> Result<(), ReqError> {
+    println!("BLE: Notifying central with payload: {payload:?}");
     let mut guard = notifier.lock().await;
     if let Some(notifier) = guard.as_mut() {
         let payload = encoding::encode_payload(&payload);

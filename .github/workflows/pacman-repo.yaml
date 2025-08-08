@@ -61,7 +61,10 @@ jobs:
       - name: Generate Pacman Database - repo feralfile
         working-directory: repo/x86_64
         run: |
-          repo-add feralfile.db.tar.gz *.pkg.tar.zst
+          sorted_pkgs=$(printf '%s\n' *.pkg.tar.zst | sort -V)
+          echo "Adding packages in order:"
+          printf '  %s\n' $sorted_pkgs
+          repo-add feralfile.db.tar.gz $sorted_pkgs
 
       - name: Upload Repo Database
         working-directory: repo/x86_64

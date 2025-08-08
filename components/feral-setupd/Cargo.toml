@@ -9,6 +9,7 @@ tokio         = { version = "1.45.0", features = ["full"] }
 uuid          = "1.16.0"
 futures-util  = "0.3"
 dbus          = "0.9"
+dbus-crossroads = "0.5.2"
 mac_address   = "1.1.8"
 md5 = "0.7.0"
 serde = { version = "1.0.219", features = ["derive"] }

@@ -7,6 +7,9 @@ pub const TIMEZONE_INSTRUCTION: &str = "set-time";
 pub const SSID_CACHE_TTL: u64 = 10 * 60 * 1000; // 10 minutes
 pub const BLE_SHUTDOWN_DELAY: u64 = 1000; // 1 second
 pub const WIFI_WEBAPP_DELAY: u64 = 3 * 1000; // 3 seconds
+pub const INITIAL_INTERNET_CHECK_TIMEOUT: u64 = 3 * 1000; // 10 seconds
+pub const AGGRESSIVE_INTERNET_CHECK_INTERVAL: u64 = 2 * 1000; // 2 seconds
+pub const RELAXED_INTERNET_CHECK_INTERVAL: u64 = 10 * 1000; // 10 seconds
 
 // Updater configuration
 pub const UPDATER_LOCAL_CONFIG_PATH: &str = "/home/feralfile/x1-config.json";
@@ -23,6 +26,7 @@ pub const CMD_SCAN_WIFI: &str = "scan_wifi";
 pub const CMD_GET_INFO: &str = "get_info";
 pub const CMD_SET_TIME: &str = "set_time";
 pub const CMD_KEEP_WIFI: &str = "keep_wifi";
+pub const CMD_FACTORY_RESET: &str = "factory_reset";
 pub const MAX_SSIDS: usize = 9;
 pub const MD5_LENGTH: usize = 8; // Used for conversion to device ID
 pub const DEVICE_ID_PREFIX: &str = "FF-X1-";
@@ -40,7 +44,7 @@ pub const BLE_ERR_CODE_UNKNOWN_ERROR: u8 = 255;
 pub const CDP_URL: &str = "http://127.0.0.1:9222/json";
 pub const CDP_ID_START: u64 = 1_000_000;
 pub const WEBAPP_URL: &str = "https://display.feralfile.com";
-pub const QRCODE_URL_PREFIX: &str = "file:///opt/feral/ui/launcher/index.html?step=qr&device_id=";
+pub const QRCODE_URL_PREFIX: &str = "file:///opt/feral/ui/launcher/index.html?step=qr";
 pub const MSG_URL_PREFIX: &str = "file:///opt/feral/ui/launcher/index.html?step=message&message=";
 pub const WELCOME_MSG: &str = "Welcome to the Portal (FF-X1)";
 pub const WIFI_CONNECTING_MSG_PREFIX: &str = "Connecting to ";
@@ -48,20 +52,22 @@ pub const WIFI_FAILED_TO_CONNECT_MSG: &str =
     "Failed to connect to the wifi network, please try again.";
 pub const INTERNET_FAILED_TO_CONNECT_MSG: &str =
     "Failed to connect to the internet, please try again.";
-pub const UPDATING_MSG_PREFIX: &str = "Updating your device to the version ";
+pub const UPDATING_MSG_PREFIX: &str = "Updating your FF1 to the version ";
 pub const UPDATING_MSG_SUBTEXT: &str =
     "This process may take 5–10 minutes depending on your internet speed.";
 pub const SETUP_SUCCESSFULLY_MSG: &str = "Bringing art to your screen…";
+pub const FACTORY_RESET_MSG: &str = "Factory resetting…";
 
 // D-Bus configuration
-// pub const DBUS_SETUPD_OBJECT: &str = "/com/feralfile/setupd";
+pub const DBUS_SETUPD_OBJECT: &str = "/com/feralfile/setupd";
 pub const DBUS_CONNECTD_OBJECT: &str = "/com/feralfile/connectd";
 pub const DBUS_SYSMONITORD_OBJECT: &str = "/com/feralfile/sysmonitord";
 
+pub const DBUS_SETUPD_DESTINATION: &str = "com.feralfile.setupd";
 pub const DBUS_SYSMONITORD_DESTINATION: &str = "com.feralfile.sysmonitord";
 pub const DBUS_CONNECTD_DESTINATION: &str = "com.feralfile.connectd";
 
-// pub const DBUS_SETUPD_INTERFACE: &str = "com.feralfile.setupd.general";
+pub const DBUS_SETUPD_INTERFACE: &str = "com.feralfile.setupd.general";
 pub const DBUS_CONNECTD_INTERFACE: &str = "com.feralfile.connectd.general";
 pub const DBUS_SYSMONITORD_INTERFACE: &str = "com.feralfile.sysmonitord";
 
@@ -70,6 +76,8 @@ pub const DBUS_SYSMONITORD_INTERFACE: &str = "com.feralfile.sysmonitord";
 pub const DBUS_EVENT_QRCODE_SWITCH: &str = "show_pairing_qr_code";
 pub const DBUS_CONNECTIVITY_METHOD: &str = "GetConnectivityStatus";
 pub const DBUS_RELAYER_TOPIC_ID_METHOD: &str = "GetRelayerTopicID";
+
+pub const DBUS_GET_PAGE_STATE: &str = "GetPageState";
 
 // pub const DBUS_CONNECTD_TIMEOUT: u64 = 30 * 1000; // 30 seconds
 pub const DBUS_MAX_RETRIES: usize = 6;

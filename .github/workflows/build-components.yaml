@@ -47,6 +47,7 @@ on:
           - feral-connectd
           - feral-setupd
           - feral-sys-monitord
+          - feral-app-monitord
           - feral-watchdog
           - launcher-ui
       version:

@@ -13,56 +13,60 @@ import (
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/state"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/status"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/wrapper"
 	"github.com/feral-file/godbus"
 	"go.uber.org/zap"
 )
 
-//go:generate mockgen -source=mediator.go -destination=../mocks/mock_mediator.go -package=mocks -mock_names=Interface=MockMediator
+//go:generate mockgen -source=mediator.go -destination=../mocks/mediator.go -package=mocks -mock_names=Mediator=MockMediator
 
-type Interface interface {
+type Mediator interface {
 	Start()
 	Stop()
-	SetStatusPoller(statusPoller status.PollerInterface)
+	SetStatusPoller(statusPoller status.Poller)
 }
 
-type Mediator struct {
-	relayer      relayer.ClientInterface
-	dbus         dbus.ClientInterface
-	cdp          cdp.ClientInterface
-	cmd          command.HandlerInterface
-	statusPoller status.PollerInterface
+type mediator struct {
+	relayer      relayer.Relayer
+	dbus         dbus.DBus
+	cdp          cdp.CDP
+	cmd          command.CommandHandler
+	statusPoller status.Poller
+	clock        wrapper.Clock
 	logger       *zap.Logger
 	tracer       *logger.RelayerMessageTracer
 }
 
 func New(
-	relayer relayer.ClientInterface,
-	dbus dbus.ClientInterface,
-	cdp cdp.ClientInterface,
-	cmd command.HandlerInterface,
+	relayer relayer.Relayer,
+	dbus dbus.DBus,
+	cdp cdp.CDP,
+	cmd command.CommandHandler,
+	clock wrapper.Clock,
 	l *zap.Logger,
-) *Mediator {
-	return &Mediator{
+) Mediator {
+	return &mediator{
 		relayer: relayer,
 		dbus:    dbus,
 		cdp:     cdp,
 		cmd:     cmd,
+		clock:   clock,
 		logger:  l,
 		tracer:  logger.NewRelayerMessageTracer(l),
 	}
 }
 
-func (m *Mediator) Start() {
+func (m *mediator) Start() {
 	m.dbus.OnBusSignal(m.handleDBusSignal)
 	m.relayer.OnRelayerMessage(m.handleRelayerMessage)
 }
 
-func (m *Mediator) Stop() {
+func (m *mediator) Stop() {
 	m.relayer.RemoveRelayerMessage(m.handleRelayerMessage)
 	m.dbus.RemoveBusSignal(m.handleDBusSignal)
 }
 
-func (m *Mediator) handleDBusSignal(
+func (m *mediator) handleDBusSignal(
 	ctx context.Context,
 	payload godbus.DBusPayload) ([]interface{}, error) {
 	if payload.Member.IsACK() {
@@ -124,7 +128,7 @@ func (m *Mediator) handleDBusSignal(
 	return nil, nil
 }
 
-func (m *Mediator) handleRelayerMessage(ctx context.Context, payload relayer.Payload) error {
+func (m *mediator) handleRelayerMessage(ctx context.Context, payload relayer.Payload) error {
 	m.logger.Info("handle received relayer message", zap.Any("payload", payload))
 
 	// Start Sentry transaction for this relayer message
@@ -246,7 +250,7 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload relayer.Pay
 			m.tracer.FinishSpanWithError(cdpSpan, nil)
 
 			// Add brief pause as in original code
-			time.Sleep(500 * time.Millisecond)
+			m.clock.Sleep(500 * time.Millisecond)
 
 			// Force refresh status poller
 			if m.statusPoller != nil {
@@ -269,6 +273,6 @@ func (m *Mediator) handleRelayerMessage(ctx context.Context, payload relayer.Pay
 }
 
 // SetStatusPoller sets the StatusPoller reference after initialization
-func (m *Mediator) SetStatusPoller(statusPoller status.PollerInterface) {
+func (m *mediator) SetStatusPoller(statusPoller status.Poller) {
 	m.statusPoller = statusPoller
 }
