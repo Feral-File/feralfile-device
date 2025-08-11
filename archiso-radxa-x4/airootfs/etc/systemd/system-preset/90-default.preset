@@ -1,6 +1,7 @@
 enable sshd.service
 enable bluetooth.service
 enable NetworkManager.service
+enable post-factory-boot.service
 enable feral-sys-monitord.service
 enable feral-app-monitord.service
 enable feral-watchdog.service

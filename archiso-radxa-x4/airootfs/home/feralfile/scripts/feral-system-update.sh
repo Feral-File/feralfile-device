@@ -119,7 +119,7 @@ curl -u "$auth_user:$auth_pass" --silent --show-error -fL "$ENDPOINT$IMAGE_URL" 
 
 kill "$PROGRESS_PID" 2>/dev/null || true
 
-log_progress "90" "Extracting the new image..."
+log_progress "90" "Installing FF OS update..."
 
 unzip -o "$ZIP_FILE" -d "$TMP_DIR"
 ISO_FILE=$(find "$TMP_DIR" -name '*.iso' | head -n1)
@@ -143,7 +143,7 @@ log_progress "92" "Installing the new update..."
 # --- Step 5: Rsync selective update from SquashFS ------------------------------
 log_info "Syncing filesystem (excluding persistent & sensitive paths) into '/' (subvol @)..."
 rsync -aAX --delete --info=progress2 \
-  --exclude={"/dev/*","/.snapshots/*","/proc/*","/boot/*","/root/*","/sys/*","/tmp/*","/var/tmp/*","/run/*","/mnt/*","/media/*","/live-efi/*","/lost+found","/etc/fstab","/etc/machine-id","/etc/ssh/ssh_host_*","/etc/NetworkManager/system-connections/*","/var/lib/systemd/random-seed","/home/feralfile/.config/*","/home/feralfile/.logs/*","/home/feralfile/.state/*"} \
+  --exclude={"/dev/*","/.snapshots/*","/proc/*","/boot/*","/root/*","/sys/*","/tmp/*","/var/tmp/*","/run/*","/mnt/*","/media/*","/live-efi/*","/lost+found","/etc/fstab","/etc/machine-id","/etc/hostname","/etc/ssh/ssh_host_*","/etc/NetworkManager/system-connections/*","/var/lib/systemd/random-seed","/home/feralfile/.config/*","/home/feralfile/.logs/*","/home/feralfile/.state/*"} \
   "$SFS_MOUNT"/ /
 
 rm -rf /home/soaktest
@@ -182,7 +182,7 @@ title   Feral File X1
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
+options root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw quiet loglevel=3 systemd.show_status=auto rd.udev.log_level=3
 EOF
 
 cat > /boot/loader/entries/factory_reset.conf <<EOF
@@ -190,7 +190,7 @@ title   Feral File X1 - Factory Reset
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
+options rollback=factory root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw quiet loglevel=3 systemd.show_status=auto rd.udev.log_level=3
 EOF
 
 cat > /boot/loader/entries/ota_prev.conf <<EOF
@@ -198,7 +198,7 @@ title   Feral File X1 - Rollback to previous version
 linux   /vmlinuz-linux
 initrd  /initramfs-linux.img
 initrd  /intel-ucode.img
-options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw
+options rollback=ota root=PARTUUID=$PARTUUID root_partuuid=$PARTUUID ipv6.disable=1 rw quiet loglevel=3 systemd.show_status=auto rd.udev.log_level=3
 EOF
 
 log_info "Overwriting mkinitcpio.conf HOOKS..."

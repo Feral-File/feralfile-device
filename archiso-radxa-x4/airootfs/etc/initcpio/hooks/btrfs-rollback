@@ -99,6 +99,8 @@ run_hook() {
   fi
   echo "[btrfs-rollback] Default subvol set to @ (ID $new_id)" >> $LOG
 
+  sync
+
   echo "[btrfs-rollback] Booting into new @"  >> $LOG
   umount /run/rollback
 }

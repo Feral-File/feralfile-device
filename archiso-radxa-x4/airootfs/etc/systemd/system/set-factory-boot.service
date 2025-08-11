@@ -3,4 +3,4 @@ Description=Set systemd-boot to factory_reset.conf on next boot
 
 [Service]
 Type=simple
-ExecStart=bash -c 'bootctl set-oneshot factory_reset.conf && sync && sleep 5 && systemctl reboot'
+ExecStart=/home/feralfile/scripts/factory_reset.sh

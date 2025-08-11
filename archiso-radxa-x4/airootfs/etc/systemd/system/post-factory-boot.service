@@ -1,0 +1,9 @@
+[Unit]
+Description=Run a status sync after factory reset. 
+
+[Service]
+Type=simple
+ExecStart=/home/feralfile/scripts/post_factory_reset.sh
+
+[Install]
+WantedBy=multi-user.target

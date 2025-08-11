@@ -41,6 +41,10 @@ on:
         options:
           - "2025/05/31"
           - "latest"
+      webapp_url:
+        description: "Optional: WebApp URL to include in x1-config.json"
+        required: false
+        default: ""
 
 jobs:
   build-feral-connectd:
@@ -278,16 +282,24 @@ jobs:
           }
           EOF
 
-          cat > /build/archiso-radxa-x4/airootfs/home/feralfile/x1-config.json << EOF
-          {
-            "branch": "${{ github.ref_name }}",
-            "version": "${{ inputs.version || github.event.inputs.version }}",
-            "distribution_acc": "${{ secrets.DISTRIBUTION_AUTH_USER }}",
-            "distribution_pass": "${{ secrets.DISTRIBUTION_AUTH_PASSWORD }}",
-            "endpoint": "${ENDPOINT}",
-            "heartbeat_endpoint": "${{ secrets.HEARTBEAT_ENDPOINT }}"
-          }
-          EOF
+          WEBAPP_URL="${{ inputs.webapp_url || github.event.inputs.webapp_url }}"
+          jq -n \
+            --arg branch "${{ github.ref_name }}" \
+            --arg version "${{ inputs.version || github.event.inputs.version }}" \
+            --arg dist_acc "${{ secrets.DISTRIBUTION_AUTH_USER }}" \
+            --arg dist_pass "${{ secrets.DISTRIBUTION_AUTH_PASSWORD }}" \
+            --arg endpoint "${ENDPOINT}" \
+            --arg heartbeat "${{ secrets.HEARTBEAT_ENDPOINT }}" \
+            --arg webapp_url "${WEBAPP_URL}" \
+            '{
+              branch: $branch,
+              version: $version,
+              distribution_acc: $dist_acc,
+              distribution_pass: $dist_pass,
+              endpoint: $endpoint,
+              heartbeat_endpoint: $heartbeat
+            } + (if $webapp_url != "" then {webapp_url: $webapp_url} else {} end)' \
+            > /build/archiso-radxa-x4/airootfs/home/feralfile/x1-config.json
           chmod 755 /build/archiso-radxa-x4/airootfs/home/feralfile/x1-config.json
 
       - name: Setup pacman
