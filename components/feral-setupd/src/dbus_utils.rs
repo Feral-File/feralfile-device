@@ -1,4 +1,5 @@
 use dbus::arg::Append;
+use dbus::blocking::stdintf::org_freedesktop_dbus::Introspectable;
 use dbus::blocking::{BlockingSender, Connection};
 use dbus::channel::Sender;
 use dbus::message::Message;
@@ -309,4 +310,14 @@ pub fn get_relayer_info() -> Result<String> {
             Err(e)
         }
     }
+}
+
+pub fn check_dbus_connection(destination: &str, object_path: &str) -> Result<()> {
+    let conn = Connection::new_session()?;
+    let proxy = conn.with_proxy(destination, object_path, Duration::from_millis(1000));
+
+    let _: () = proxy.method_call("org.freedesktop.DBus.Peer", "Ping", ())?;
+
+    println!("DBUS: Connection check successful via Peer.Ping");
+    Ok(())
 }

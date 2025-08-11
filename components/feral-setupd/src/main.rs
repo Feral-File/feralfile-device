@@ -101,7 +101,10 @@ impl PageStateProvider for AppState {
 async fn wait_for_connectd_dbus() {
     println!("MAIN: Waiting for connectd D-Bus connection...");
     loop {
-        match dbus_utils::get_relayer_info() {
+        match dbus_utils::check_dbus_connection(
+            constant::DBUS_CONNECTD_DESTINATION,
+            constant::DBUS_CONNECTD_OBJECT,
+        ) {
             Ok(_) => {
                 println!("MAIN: connectd D-Bus connection established successfully");
                 break;
