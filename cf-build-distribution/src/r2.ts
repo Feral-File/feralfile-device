@@ -44,10 +44,29 @@ export async function listFiles(bucket: R2Bucket): Promise<FileInfo[]> {
     const branch = parts.join('/');
     if (!filename) continue;
 
-    const match = filename.match(/^radxa-x4-arch-(dev-)?(\d+\.\d+\.\d+)\.zip$/);
-    if (match) {
-      const isDev = !!match[1];
-      const version = match[2];
+    const newMatch = filename.match(/^FF-X1-(release|demo|develop|other)-(dev-)?(\d+\.\d+\.\d+)\.zip$/);
+    const oldMatch = filename.match(/^radxa-x4-arch-(dev-)?(\d+\.\d+\.\d+)\.zip$/);
+    
+    if (newMatch) {
+      const imageTag = newMatch[1]; // release, demo, develop, other
+      const isDev = !!newMatch[2];
+      const version = newMatch[3];
+
+      files.push({
+        branch,
+        version,
+        zipUrl: obj.key,
+        zipSize: formatFileSize(obj.size),
+        zipEtag: obj.etag?.replace(/['"]/g, ''),
+        debUrl: '',
+        debSize: undefined,
+        debEtag: undefined,
+        lastUpdated: obj.uploaded?.getTime(),
+        tag: isDev ? 'development' : 'production',
+      });
+    } else if (oldMatch) {
+      const isDev = !!oldMatch[1];
+      const version = oldMatch[2];
 
       files.push({
         branch,
