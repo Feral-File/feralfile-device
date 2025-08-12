@@ -1,5 +1,4 @@
 use dbus::arg::Append;
-use dbus::blocking::stdintf::org_freedesktop_dbus::Introspectable;
 use dbus::blocking::{BlockingSender, Connection};
 use dbus::channel::Sender;
 use dbus::message::Message;
