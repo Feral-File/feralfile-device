@@ -10,6 +10,8 @@ mod system;
 mod updater;
 mod wifi_utils;
 
+mod ble_mock;
+
 use crate::dbus_utils::PageStateProvider;
 use crate::wifi_utils::{Error as WifiError, SSIDsCacher};
 use anyhow::Context;

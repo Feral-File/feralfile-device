@@ -4,6 +4,7 @@
     "connectd",
     "dbus",
     "feralfile",
+    "mockall",
     "monitord",
     "nmcli",
     "QRCODE",

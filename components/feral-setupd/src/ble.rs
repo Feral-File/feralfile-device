@@ -1,7 +1,9 @@
+use crate::ble_mock::Notifier;
 use crate::constant;
 use crate::encoding;
 use crate::system;
 use crate::wifi_utils::SSIDsCacher;
+use anyhow::Result;
 use bluer::{
     Adapter, Session,
     adv::Advertisement,
@@ -25,8 +27,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
-
-use anyhow::Result;
 
 pub type BTConnectedCallback =
     Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>;
@@ -285,11 +285,10 @@ async fn handle_scan_wifi(
 ) -> Result<(), ReqError> {
     // Scan available SSIDs using the helper
     let mut payload = Vec::with_capacity(2);
-    payload.push(reply_id.as_bytes());
+    payload.push(reply_id.as_bytes().to_vec());
 
     let start_time = Instant::now();
     let ssids: Vec<String>; // To own the returned value
-    let error_code: [u8; 1]; // To own the returned value
     match ssids_cacher.get().await {
         Ok(v) => {
             println!(
@@ -297,16 +296,16 @@ async fn handle_scan_wifi(
                 start_time.elapsed().as_millis()
             );
             ssids = v;
-            payload.push(&[constant::BLE_SUCCESS_CODE]);
-            payload.extend(ssids.iter().map(|s| s.as_bytes()));
+            payload.push(vec![constant::BLE_SUCCESS_CODE]);
+            payload.extend(ssids.iter().map(|s| s.as_bytes().to_vec()));
         }
         Err(e) => {
             eprintln!("BLE: Failed to scan wifi: {e}");
-            error_code = [constant::BLE_ERR_CODE_UNKNOWN_ERROR];
-            payload.push(&error_code);
+            payload.push(vec![constant::BLE_ERR_CODE_UNKNOWN_ERROR]);
         }
     };
-    notify_central(notifier, payload).await
+    let _ = notify_central(notifier, payload).await;
+    Ok(())
 }
 
 async fn handle_connect_wifi(
@@ -328,23 +327,19 @@ async fn handle_connect_wifi(
     let pass = &params[1];
 
     let mut payload = Vec::with_capacity(3);
-    payload.push(reply_id.as_bytes());
+    payload.push(reply_id.as_bytes().to_vec());
 
-    // Pre-declare variables to own the returned values
-    let topic_id: String;
-    let error_code: [u8; 1];
     match cb(ssid, pass).await {
         Ok(tid) => {
-            topic_id = tid;
-            payload.push(&[constant::BLE_SUCCESS_CODE]);
-            payload.push(topic_id.as_bytes());
+            payload.push(vec![constant::BLE_SUCCESS_CODE]);
+            payload.push(tid.as_bytes().to_vec());
         }
         Err(e) => {
-            error_code = [e];
-            payload.push(&error_code);
+            payload.push(vec![e]);
         }
     };
-    notify_central(notifier, payload).await
+    let _ = notify_central(notifier, payload).await;
+    Ok(())
 }
 
 async fn handle_keep_wifi(
@@ -353,23 +348,19 @@ async fn handle_keep_wifi(
     cb: Arc<KeepWifiCallback>,
 ) -> Result<(), ReqError> {
     let mut payload = Vec::with_capacity(3);
-    payload.push(reply_id.as_bytes());
+    payload.push(reply_id.as_bytes().to_vec());
 
-    // Pre-declare variables to own the returned values
-    let topic_id: String;
-    let error_code: [u8; 1];
     match cb().await {
         Ok(tid) => {
-            topic_id = tid;
-            payload.push(&[constant::BLE_SUCCESS_CODE]);
-            payload.push(topic_id.as_bytes());
+            payload.push(vec![constant::BLE_SUCCESS_CODE]);
+            payload.push(tid.as_bytes().to_vec());
         }
         Err(e) => {
-            error_code = [e];
-            payload.push(&error_code);
+            payload.push(vec![e]);
         }
     };
-    notify_central(notifier, payload).await
+    let _ = notify_central(notifier, payload).await;
+    Ok(())
 }
 
 async fn handle_get_info(
@@ -383,10 +374,11 @@ async fn handle_get_info(
         vec![]
     };
     let mut reply = Vec::with_capacity(payload.len() + 1);
-    reply.push(reply_id.as_bytes());
-    reply.push(&[constant::BLE_SUCCESS_CODE]);
-    reply.extend(payload.iter().map(|s| s.as_bytes()));
-    notify_central(notifier, reply).await
+    reply.push(reply_id.as_bytes().to_vec());
+    reply.push(vec![constant::BLE_SUCCESS_CODE]);
+    reply.extend(payload.iter().map(|s| s.as_bytes().to_vec()));
+    let _ = notify_central(notifier, reply).await;
+    Ok(())
 }
 
 async fn handle_set_time(
@@ -424,27 +416,62 @@ async fn handle_factory_reset(
         [constant::BLE_SUCCESS_CODE]
     };
     let mut payload = Vec::with_capacity(3);
-    payload.push(reply_id.as_bytes());
-    payload.push(&status_code);
-    notify_central(notifier, payload).await
+    payload.push(reply_id.as_bytes().to_vec());
+    payload.push(status_code.to_vec());
+    let _ = notify_central(notifier, payload).await;
+    Ok(())
 }
 
-async fn notify_central(
-    notifier: Arc<Mutex<Option<CharacteristicNotifier>>>,
-    payload: Vec<&[u8]>,
-) -> Result<(), ReqError> {
+async fn notify_central<T: Notifier>(
+    notifier: Arc<Mutex<Option<T>>>,
+    payload: Vec<Vec<u8>>,
+) -> anyhow::Result<()> {
     println!("BLE: Notifying central with payload: {payload:?}");
     let mut guard = notifier.lock().await;
     if let Some(notifier) = guard.as_mut() {
-        let payload = encoding::encode_payload(&payload);
+        let payload = encoding::encode_payload(payload);
         match notifier.notify(payload).await {
-            Ok(_) => (),
+            Ok(_) => Ok(()),
             Err(e) => {
                 eprintln!("BLE: Failed to notify central: {e}");
+                Err(anyhow::anyhow!("Failed to notify central: {e}"))
             }
         }
     } else {
         eprintln!("BLE: Notifier not yet available; skipping reply");
+        Err(anyhow::anyhow!("Notifier not yet available"))
     }
-    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ble_mock::MockNotifier;
+
+    #[tokio::test]
+    async fn test_notify_central_with_unavailable_notifier() {
+        let notifier = Arc::new(Mutex::<Option<MockNotifier>>::new(None));
+        let payload = vec![vec![1, 2, 3]];
+        let result = notify_central(notifier, payload).await;
+        assert!(result.is_err());
+        assert_eq!(
+            result.err().unwrap().to_string(),
+            "Notifier not yet available"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_notify_central() {
+        let payload = vec![vec![1, 2, 3]];
+        let encoded_payload = encoding::encode_payload(payload.clone());
+
+        let mut mock = MockNotifier::new();
+        mock.expect_notify()
+            .withf(move |p| p == &encoded_payload)
+            .returning(|_| Ok(()));
+
+        let notifier = Arc::new(Mutex::new(Some(mock)));
+        let result = notify_central(notifier, payload).await;
+        assert!(result.is_ok());
+    }
 }
