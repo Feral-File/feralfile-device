@@ -10,6 +10,16 @@ import (
 	"time"
 
 	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/cdp"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/chromium"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/commands"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/config"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/cpu"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/disk"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/gpu"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/logger"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/mediator"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/ram"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/systemd_watchdog"
 	"github.com/feral-file/godbus"
 	"github.com/godbus/dbus/v5"
 	"go.uber.org/zap"
@@ -30,7 +40,7 @@ func main() {
 	flag.Parse()
 
 	// Initialize logger
-	logger, err := New(debug)
+	logger, err := logger.New(debug)
 	if err != nil {
 		panic("Failed to initialize logger: " + err.Error())
 	}
@@ -54,7 +64,7 @@ func main() {
 	}()
 
 	// Load configuration
-	config, err := LoadConfig(logger)
+	config, err := config.LoadConfig(logger)
 	if err != nil {
 		logger.Fatal("Failed to load configuration", zap.Error(err))
 	}
@@ -71,7 +81,7 @@ func main() {
 	}()
 
 	// Initialize system command executor
-	commandHandler := NewCommandHandler(logger)
+	commandHandler := commands.NewDefaultCommandHandler(logger)
 
 	// Initialize CDP client
 	cdpClient := cdp.NewDefault(&cdp.Config{Endpoint: config.CDPEndpoint}, logger)
@@ -82,14 +92,14 @@ func main() {
 	defer cdpClient.Close()
 
 	// Initialize resource monitors
-	ramHandler := NewMemoryHandler(logger, commandHandler)
-	diskHandler := NewDiskHandler(logger, commandHandler)
-	gpuHandler := NewGPUHandler(logger, commandHandler)
-	cpuHandler := NewCPUHandler(logger, cdpClient)
+	ramHandler := ram.NewDefaultMemoryHandler(logger, commandHandler)
+	diskHandler := disk.NewDefaultDiskHandler(logger, commandHandler)
+	gpuHandler := gpu.NewDefaultGPUHandler(logger, commandHandler)
+	cpuHandler := cpu.NewDefaultCPUHandler(logger, cdpClient)
 	defer gpuHandler.GracefulShutdown(ctx)
 
 	// Initialize mediator
-	mediator := NewMediator(dbusClient, diskHandler, ramHandler, gpuHandler, cpuHandler, logger)
+	mediator := mediator.NewDefaultMediator(dbusClient, logger, diskHandler, ramHandler, gpuHandler, cpuHandler)
 	mediator.Start()
 	defer mediator.Stop()
 
@@ -97,7 +107,7 @@ func main() {
 	var wg sync.WaitGroup
 
 	// Start systemd watchdog
-	systemdWatchdog := NewSystemdWatchdog(logger)
+	systemdWatchdog := systemd_watchdog.NewDefaultSystemdWatchdog(logger)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -105,8 +115,7 @@ func main() {
 	}()
 
 	// Start Chromium monitor
-	chromiumMonitor := NewChromiumMonitor(config.CDPEndpoint, logger, commandHandler)
-	defer chromiumMonitor.Stop()
+	chromiumMonitor := chromium.NewDefaultChromiumMonitor(config.CDPEndpoint, logger, commandHandler)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

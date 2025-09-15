@@ -42,6 +42,10 @@ type Config struct {
 type ClientInterface interface {
 	Init(ctx context.Context) error
 	Send(method string, params map[string]interface{}) (interface{}, error)
+	SendCriticalCPUTemperatureNotification(ctx context.Context) error
+	Initialized() bool
+	IsReconnectionError(err error) bool
+	Reconnect(ctx context.Context) error
 	Close()
 }
 
@@ -51,7 +55,7 @@ type Client struct {
 	// Wrappers to be injected
 	dialer wrapper.WebSocketDialerInterface
 	io     wrapper.IOInterface
-	json   wrapper.JSONInterface
+	json   wrapper.JSON
 	http   wrapper.HTTPInterface
 
 	// Internal state
@@ -71,9 +75,9 @@ func NewClient(
 	logger *zap.Logger,
 	dialer wrapper.WebSocketDialerInterface,
 	io wrapper.IOInterface,
-	json wrapper.JSONInterface,
+	json wrapper.JSON,
 	http wrapper.HTTPInterface,
-) *Client {
+) ClientInterface {
 	return &Client{
 		dialer:         dialer,
 		io:             io,
@@ -87,7 +91,7 @@ func NewClient(
 }
 
 // NewDefault creates a new CDP client with the default wrappers
-func NewDefault(config *Config, logger *zap.Logger) *Client {
+func NewDefault(config *Config, logger *zap.Logger) ClientInterface {
 	return NewClient(
 		config,
 		logger,

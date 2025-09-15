@@ -1,4 +1,4 @@
-package main
+package cpu
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/cdp"
+	"github.com/Feral-File/feralfile-device/components/feral-watchdog/packages/wrapper"
 	"go.uber.org/zap"
 )
 
@@ -15,26 +16,41 @@ const (
 	CPU_MONITOR_DURATION_THRESHOLD = 10 * time.Second // Check if temp is above threshold for 10 seconds
 )
 
+//go:generate mockgen -source=cpu.go -destination=../mocks/mock_cpu.go -package=mocks -mock_names=HandlerInterface=MockCPUHandler
+type HandlerInterface interface {
+	CheckCPUTemperature(ctx context.Context, currentTemp float64)
+}
+
 type CPUHandler struct {
 	mu                  sync.Mutex
 	logger              *zap.Logger
-	cdpClient           *cdp.Client
+	cdpClient           cdp.ClientInterface
+	clock               wrapper.ClockInterface
 	highTempMonitoring  bool
 	highTempStartTime   time.Time
 	criticalTemperature float64
 }
 
-func NewCPUHandler(logger *zap.Logger, cdpClient *cdp.Client) *CPUHandler {
+func NewCPUHandler(
+	logger *zap.Logger,
+	cdpClient cdp.ClientInterface,
+	clock wrapper.ClockInterface,
+) HandlerInterface {
 	return &CPUHandler{
 		logger:              logger,
 		cdpClient:           cdpClient,
+		clock:               clock,
 		highTempMonitoring:  false,
 		highTempStartTime:   time.Time{},
 		criticalTemperature: CPU_CRITICAL_TEMPERATURE,
 	}
 }
 
-func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float64) {
+func NewDefaultCPUHandler(logger *zap.Logger, cdpClient cdp.ClientInterface) HandlerInterface {
+	return NewCPUHandler(logger, cdpClient, wrapper.NewClock())
+}
+
+func (c *CPUHandler) CheckCPUTemperature(ctx context.Context, currentTemp float64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -54,12 +70,12 @@ func (c *CPUHandler) checkCPUTemperature(ctx context.Context, currentTemp float6
 			zap.Float64("current_temp", currentTemp),
 			zap.Float64("threshold", c.criticalTemperature))
 		c.highTempMonitoring = true
-		c.highTempStartTime = time.Now()
+		c.highTempStartTime = c.clock.Now()
 		return
 	}
 
 	// Check if temperature has been high for long enough
-	durHigh := time.Since(c.highTempStartTime)
+	durHigh := c.clock.Now().Sub(c.highTempStartTime)
 	if durHigh < CPU_MONITOR_DURATION_THRESHOLD {
 		c.logger.Warn("CPU: Temperature is still above threshold",
 			zap.Float64("current_temp", currentTemp))

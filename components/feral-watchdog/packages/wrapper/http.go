@@ -3,7 +3,7 @@ package wrapper
 
 import "net/http"
 
-//go:generate mockgen -source=http.go -destination=../mocks/http.go -package=mocks -mock_names=HTTPInterface=MockHTTP
+//go:generate mockgen -source=http.go -destination=../mocks/mock_http.go -package=mocks -mock_names=HTTPInterface=MockHTTP
 type HTTPInterface interface {
 	Get(url string) (*http.Response, error)
 }
