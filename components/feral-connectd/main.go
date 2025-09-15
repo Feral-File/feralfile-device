@@ -15,6 +15,7 @@ import (
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/logger"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/mediator"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/relayer"
+	"github.com/Feral-File/feralfile-device/components/feral-connectd/server"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/state"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/status"
 	"github.com/Feral-File/feralfile-device/components/feral-connectd/watchdog"
@@ -29,6 +30,7 @@ import (
 
 const (
 	SHUTDOWN_TIMEOUT = 2 * time.Second
+	HTTP_SERVER_PORT = 1111
 )
 
 var (
@@ -55,6 +57,7 @@ type app struct {
 	// Components
 	CDP          cdp.CDP
 	Relayer      relayer.Relayer
+	HttpServer   server.HttpServer
 	DBus         dbus.DBus
 	Mediator     mediator.Mediator
 	Command      command.CommandHandler
@@ -175,6 +178,15 @@ func (app *app) run(ctx context.Context, conf *config.Config) error {
 	// Start watchdog
 	app.Watchdog.Start(ctx)
 	defer app.Watchdog.Stop()
+
+	// Initialize HttpServer
+	err = app.HttpServer.Start()
+	if err != nil {
+		app.Logger.Error("Failed to start HttpServer", zap.Error(err))
+	}
+	defer func() {
+		_ = app.HttpServer.Stop()
+	}()
 
 	// Initialize DBus client
 	err = app.DBus.Start()
@@ -318,6 +330,24 @@ func initializeApp(
 	// CommandHandler
 	commandHandler := command.New(cdp, dbusClient, deviceStatus, json, os, exec, math, logger)
 
+	// HttpServer
+	httpServer := server.New(
+		context,
+		&server.Config{
+			Port:         HTTP_SERVER_PORT,
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 30 * time.Second,
+			IdleTimeout:  120 * time.Second,
+		},
+		cdp,
+		commandHandler,
+		poller,
+		json,
+		io,
+		http,
+		clock,
+		logger)
+
 	// Mediator
 	mediator := mediator.New(relayer, dbusClient, cdp, commandHandler, clock, logger)
 
@@ -336,6 +366,7 @@ func initializeApp(
 		Math:         math,
 		CDP:          cdp,
 		Relayer:      relayer,
+		HttpServer:   httpServer,
 		DBus:         dbusClient,
 		Mediator:     mediator,
 		Command:      commandHandler,
@@ -361,6 +392,7 @@ func initializeTestApp(
 	math wrapper.Math,
 	cdp cdp.CDP,
 	relayer relayer.Relayer,
+	httpServer server.HttpServer,
 	dbus dbus.DBus,
 	deviceStatus status.DeviceStatus,
 	statusPoller status.Poller,
@@ -382,6 +414,7 @@ func initializeTestApp(
 		Math:         math,
 		CDP:          cdp,
 		Relayer:      relayer,
+		HttpServer:   httpServer,
 		DBus:         dbus,
 		Mediator:     mediator,
 		Command:      command,

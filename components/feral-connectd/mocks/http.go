@@ -5,6 +5,7 @@
 package mocks
 
 import (
+	context "context"
 	http "net/http"
 	reflect "reflect"
 
@@ -47,4 +48,55 @@ func (m *MockHTTP) Get(url string) (*http.Response, error) {
 func (mr *MockHTTPMockRecorder) Get(url interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockHTTP)(nil).Get), url)
+}
+
+// MockHTTPServer is a mock of HTTPServer interface.
+type MockHTTPServer struct {
+	ctrl     *gomock.Controller
+	recorder *MockHTTPServerMockRecorder
+}
+
+// MockHTTPServerMockRecorder is the mock recorder for MockHTTPServer.
+type MockHTTPServerMockRecorder struct {
+	mock *MockHTTPServer
+}
+
+// NewMockHTTPServer creates a new mock instance.
+func NewMockHTTPServer(ctrl *gomock.Controller) *MockHTTPServer {
+	mock := &MockHTTPServer{ctrl: ctrl}
+	mock.recorder = &MockHTTPServerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockHTTPServer) EXPECT() *MockHTTPServerMockRecorder {
+	return m.recorder
+}
+
+// ListenAndServe mocks base method.
+func (m *MockHTTPServer) ListenAndServe() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListenAndServe")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ListenAndServe indicates an expected call of ListenAndServe.
+func (mr *MockHTTPServerMockRecorder) ListenAndServe() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListenAndServe", reflect.TypeOf((*MockHTTPServer)(nil).ListenAndServe))
+}
+
+// Shutdown mocks base method.
+func (m *MockHTTPServer) Shutdown(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Shutdown", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Shutdown indicates an expected call of Shutdown.
+func (mr *MockHTTPServerMockRecorder) Shutdown(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Shutdown", reflect.TypeOf((*MockHTTPServer)(nil).Shutdown), ctx)
 }
